@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>SaigenBio — analysis flow</title>
+<style>
+:root{--paper:#f7f7f2;--ink:#263d35;--muted:#7b857c;--line:#d9dfd4;--green:#3e7b61;--soft:#eaf1e8;--blue:#7a9aab;--shadow:0 12px 45px #273e3515;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink)}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);overflow:hidden}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer}button:disabled{cursor:default;opacity:.35}button,a,input,textarea,select{outline-color:var(--green)}button:focus-visible,a:focus-visible{outline:2px solid var(--green);outline-offset:4px}button{border:0;background:none}button,.state{touch-action:manipulation}button.quiet{padding:7px 12px;border-radius:6px}button.quiet:hover{background:#263d3509}.primary{background:var(--ink);color:white;border-radius:6px;padding:9px 16px}.outline{border:1px solid var(--line);border-radius:6px;padding:8px 14px;background:#fff9}.mono,code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}button svg{vertical-align:middle}h1,h2,h3,p{margin:0}small{font-size:11px}a{color:var(--green)}[hidden]{display:none!important}
+#topbar{height:76px;padding:0 30px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #d9dfd477;background:#f7f7f2f5;position:relative;z-index:10;gap:16px}.brand{font-family:Georgia,serif;font-size:26px;letter-spacing:-1px}.project{display:flex;align-items:center;gap:20px}.project .slash{color:#bcc5b9;font-size:24px;font-weight:200}.project-name{font-size:13px}.mock{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:3px 6px}.header-actions{display:flex;align-items:center;gap:12px}#edit-toggle{border:1px solid var(--line);border-radius:6px;background:#fff7;padding:7px 13px;font-size:12px}#edit-toggle[aria-pressed=true]{background:var(--ink);color:white;border-color:var(--ink)}
+#flow-view{height:calc(100dvh - 76px);position:relative;overflow:hidden}#viewport{position:absolute;inset:0;overflow:hidden;cursor:grab;touch-action:none;background-image:radial-gradient(#617f6b22 .7px,transparent .7px);background-size:22px 22px}#viewport.panning{cursor:grabbing}#scene{position:absolute;left:0;top:0;transform-origin:0 0;width:2200px;height:1100px;will-change:transform}#edges{position:absolute;overflow:visible;left:0;top:0;width:100%;height:100%;pointer-events:none}.edge-group{pointer-events:auto}.edge-line{fill:none;stroke:#abb8a9;stroke-width:1.4}.edge-hit{fill:none;stroke:transparent;stroke-width:19;cursor:pointer}.edge-group:hover .edge-line{stroke:var(--green);stroke-width:2}.edge-label{font:10px ui-monospace,SFMono-Regular,Menlo,monospace;fill:#657666;paint-order:stroke;stroke:var(--paper);stroke-width:7px;stroke-linejoin:round;cursor:pointer}.edge-sub{font:9px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#819080;paint-order:stroke;stroke:var(--paper);stroke-width:5px}.running-edge{stroke:#6d9681;stroke-dasharray:2 6}.planned-edge{stroke-dasharray:5 5;stroke:#bec5b8}.particle{pointer-events:none}
+.state{width:192px;height:132px;position:absolute;text-align:left;background:#fffffff2;border:1px solid #d5dece;border-radius:10px;box-shadow:0 2px 4px #20372b03;padding:13px 15px;transition:box-shadow .16s,border-color .16s;cursor:pointer;user-select:none;display:flex;flex-direction:column;color:var(--ink)}.state:hover,.state:focus-visible,.state.selected{border-color:#7c9b7c;box-shadow:0 5px 18px #35583b13}.node-top{display:flex;align-items:center;justify-content:space-between;gap:4px;color:#899181;font-size:9px;letter-spacing:.3px}.state-id{font-family:ui-monospace,monospace}.node-title{font-size:13px;font-weight:550;margin-top:5px;letter-spacing:-.1px;line-height:1.3}.node-bottom{margin-top:auto;font-size:10px;color:#87917e}.mini-plot svg{width:100%;height:100%;display:block}.mini-plot{width:100%;height:40px;margin-top:7px;overflow:visible}.file-lines{height:34px;margin-top:10px;display:grid;gap:5px;align-content:start}.file-lines span{height:4px;border-radius:2px;background:#e5eadd;width:70%}.file-lines span:nth-child(2){width:89%}.file-lines span:nth-child(3){width:51%;background:#cfdccc}
+.state.running,.state.planned{background:transparent;border:0;box-shadow:none;align-items:center;text-align:center;justify-content:center;padding:0}.state.running .ring,.state.planned .ring{width:76px;height:76px;border:1.5px dashed #70927a;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#f7f7f2;font-family:ui-monospace,monospace;font-size:14px;color:#477356}.state.planned .ring{border-color:#b1baa9;color:#94a08b;width:60px;height:60px}.state.running .ring:after{content:"";position:absolute;width:62px;height:62px;border:1px solid #9ab19844;border-radius:50%;animation:breathe 2.8s ease-in-out infinite}.state.running .node-title,.state.planned .node-title{margin-top:9px;font-weight:500}.state.running .node-bottom,.state.planned .node-bottom{margin-top:3px}.state.planned .node-title{color:#83927c}.port{display:none;position:absolute;right:-7px;top:60px;width:13px;height:13px;border-radius:50%;border:2px solid #fff;background:var(--green);box-shadow:0 0 0 1px #7d9d81;z-index:2;cursor:crosshair}.editing .state{cursor:move}.editing .state.selected .port{display:block}.connecting .state:not(.selected){cursor:crosshair}.connecting .state:not(.selected):hover{outline:2px solid #759b76;outline-offset:3px}
+.state.running .ring{position:absolute;top:8px;left:58px}.state.planned .ring{position:absolute;top:16px;left:66px}.state.running .node-title,.state.planned .node-title{position:absolute;top:86px;left:0;width:100%;margin:0}.state.running .node-bottom,.state.planned .node-bottom{position:absolute;top:108px;left:0;width:100%;margin:0}
+@keyframes breathe{50%{opacity:.35;transform:scale(.87)}}#intro{position:absolute;top:25px;left:30px;pointer-events:none;z-index:2}#intro .eyebrow{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#82917d}#intro p{font-size:13px;color:#697963;margin-top:4px}.canvas-controls{position:absolute;bottom:24px;right:26px;display:flex;align-items:center;background:#fffffff0;border:1px solid var(--line);border-radius:7px;box-shadow:0 2px 6px #243f2c05;overflow:hidden;z-index:4}.canvas-controls button{height:34px;min-width:34px;font-size:16px}.canvas-controls button:hover{background:var(--soft)}.canvas-controls #fit{font-size:11px;padding:0 12px;border-left:1px solid var(--line)}#zoom-label{font-size:10px;color:var(--muted);padding:0 2px;min-width:37px;text-align:center}#canvas-hint{position:absolute;bottom:30px;left:30px;font-size:11px;color:#899180;pointer-events:none}#edit-tools{position:absolute;top:22px;right:26px;display:flex;gap:8px;z-index:4;background:#f7f7f2d9;padding:5px;border-radius:8px;font-size:12px}#selection-tools{position:fixed;display:flex;align-items:center;gap:1px;z-index:15;border:1px solid var(--line);border-radius:7px;background:white;padding:4px;box-shadow:var(--shadow);font-size:11px}#selection-tools button{padding:5px 8px;border-radius:4px}#selection-tools button:hover{background:var(--soft)}#selection-tools .separator{height:15px;border-left:1px solid var(--line);margin:0 3px}
+#preview,#action-preview{position:fixed;width:296px;z-index:20;background:#fff;border:1px solid #d6dfd0;border-radius:11px;box-shadow:var(--shadow);overflow:hidden}#preview .preview-inner,#action-preview .preview-inner{padding:18px}.preview-label{font-size:10px;color:#8b9583;text-transform:uppercase;letter-spacing:.8px}.preview-title{font-weight:550;font-size:15px;margin:4px 0 8px}.preview-note{font-size:12px;color:#74806c;line-height:1.6}.preview-plot{height:120px;background:#f9faf6;padding:15px;border-top:1px solid #eef1e8;border-bottom:1px solid #eef1e8}.preview-plot svg{width:100%;height:100%}.preview-files{list-style:none;padding:0;margin:9px 0;font:10px/1.8 ui-monospace,monospace;overflow-wrap:anywhere}.preview-files li:before{content:"+";color:var(--green);padding-right:7px}.preview-open{display:block;text-align:left;padding:11px 18px;background:#f7f9f3;width:100%;font-size:11px;color:#51734e;border-top:1px solid #e8edde}.preview-open span{float:right}#action-preview pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#f7f9f3;padding:12px;border-radius:5px;margin:10px 0}#action-preview .close-pop{float:right;color:#85917d}
+#detail-view{height:calc(100dvh - 76px);overflow:auto;background:#fafbf7}#detail-content{max-width:1000px;padding:30px 40px 90px;margin:auto}.detail-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:40px}.back{padding:4px 0;color:#6a7d61;font-size:12px}.detail-kicker{font-size:11px;color:#899681;letter-spacing:.8px;text-transform:uppercase}.detail-title{font:38px/1.2 Georgia,serif;letter-spacing:-1px;margin:9px 0 12px}.detail-note{color:#718067;max-width:680px;font-size:14px;line-height:1.75}.detail-meta{display:flex;flex-wrap:wrap;gap:18px;color:#8a9580;font-size:11px;margin:20px 0 30px}.figure{background:white;border:1px solid var(--line);border-radius:9px;padding:26px 32px;margin-top:25px}.figure svg{width:100%;height:250px;display:block}.figure-title{font-size:12px;font-weight:500;margin-bottom:20px}.figure figcaption{font-size:10px;color:#93a087;text-align:right;margin-top:16px}.detail-section{margin-top:38px}.section-label{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#8a9680;margin-bottom:12px}.files{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}.files li{border-bottom:1px solid #e4e9dd;display:flex;align-items:center;justify-content:space-between;gap:15px;padding:12px 0;font-size:11px}.files .filename{overflow-wrap:anywhere}.file-type{font:10px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#97a18c;white-space:nowrap}.action-row{padding:20px 0;border-top:1px solid var(--line)}.action-row .action-heading{display:flex;justify-content:space-between;align-items:center;gap:14px;font-size:12px}.source-link{border-bottom:1px solid #bdcdb4;color:#54764d;padding:0;margin:0 3px}.action-row pre{background:#f0f3eb;border:1px solid #e1e7d8;border-radius:6px;white-space:pre-wrap;overflow-wrap:anywhere;padding:17px;font-size:11px;line-height:1.8;margin:15px 0}.action-row p{font-size:12px;color:#74836a;line-height:1.7}.action-meta{font-size:10px;color:#8b9880;margin-top:12px}.origin-note{padding-top:20px;border-top:1px solid var(--line);font-size:11px;color:#849477;line-height:1.8;margin-top:35px}.data-preview{border:1px solid var(--line);background:white;border-radius:8px;padding:25px;margin-top:25px}.data-preview table{width:100%;border-collapse:collapse;font-size:12px}.data-preview th,.data-preview td{text-align:left;border-bottom:1px solid #edf0e7;padding:12px}.data-preview th{font-weight:500;color:#839177}.data-preview .caption{font-size:10px;color:#939f89;padding:16px 12px 0}.run-display{padding:38px 30px;border:1px dashed #9db093;border-radius:9px;margin-top:28px;text-align:center;background:#f4f8ee}.run-display p{font-size:12px;color:#7b8f6f;margin:14px 0 20px}
+dialog{border:1px solid var(--line);border-radius:12px;padding:0;max-width:min(470px,calc(100vw - 30px));width:470px;box-shadow:0 24px 90px #1d3b2e25;background:#fafbf7;color:var(--ink)}dialog::backdrop{background:#23372f30;backdrop-filter:blur(3px)}.modal-top{display:flex;justify-content:space-between;align-items:center;padding:24px 26px 12px}.modal-top h2{font:25px Georgia,serif}#editor-fields{padding:0 26px 10px}label.field{display:block;font-size:11px;color:#708367;margin-top:16px}label.field input,label.field textarea,label.field select{display:block;width:100%;margin-top:5px;border:1px solid #d8e0d0;border-radius:5px;padding:9px 11px;background:white;font-size:13px;color:var(--ink);resize:vertical}label.field textarea{min-height:70px;font-size:12px}.field-hint{font-size:10px;color:#91a086;margin-top:5px}.modal-bottom{padding:17px 26px 24px;display:flex;justify-content:flex-end;gap:10px}.modal-bottom .remove{margin-right:auto;color:#9a6a56;padding:7px 0;font-size:11px}#form-error{font-size:11px;color:#a2543a;padding:0 26px}.edit-notice{font-size:10px;color:#8c9a81;padding:10px 26px 0}#toast{position:fixed;bottom:77px;left:50%;transform:translateX(-50%);background:#263d35;color:#f5f8f0;padding:10px 18px;border-radius:7px;font-size:12px;z-index:100;box-shadow:var(--shadow);max-width:90vw}
+@media(max-width:700px){#topbar{height:64px;padding:0 17px}.brand{font-size:23px}.project{gap:10px}.project-name{font-size:11px}.header-actions{gap:7px}.mock{font-size:8px}#flow-view,#detail-view{height:calc(100dvh - 64px)}#intro{left:20px;top:20px}#intro p{max-width:250px;font-size:11px}#intro .eyebrow{font-size:9px}#canvas-hint{left:18px;bottom:28px;font-size:9px;max-width:50%}.canvas-controls{right:16px;bottom:20px}#edit-tools{top:80px;right:16px}#detail-content{padding:20px 22px 60px}.detail-nav{margin-bottom:28px}.detail-title{font-size:31px}.figure{padding:20px 15px;margin-left:0;margin-right:0}.figure svg{height:200px}.action-row .action-heading{align-items:start;flex-direction:column}.project .slash{font-size:18px}#preview,#action-preview{max-width:calc(100vw - 20px)}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}.particle{display:none}}
+</style>
+</head>
+<body>
+<header id="topbar">
+  <div class="project"><span class="brand">SaigenBio</span><span class="slash">/</span><span class="project-name">ecoli-evol</span></div>
+  <div class="header-actions"><span class="mock" title="An interactive mock. No analysis is executed.">Mock</span><button id="edit-toggle" aria-pressed="false">Edit flow</button></div>
+</header>
+<main id="flow-view">
+  <div id="intro"><div class="eyebrow">One question, several paths</div><p>How does the depth threshold change what we review?</p></div>
+  <div id="viewport" aria-label="Analysis flow. Drag the background to pan; scroll to zoom.">
+    <div id="scene"><svg id="edges" aria-label="Analysis actions"></svg><div id="nodes"></div></div>
+  </div>
+  <div id="edit-tools" hidden><button id="undo" class="outline" disabled>Undo</button><button id="add-state" class="outline">+ State</button></div>
+  <div id="canvas-hint">Drag to pan · Scroll to zoom · Select a state to explore</div>
+  <div class="canvas-controls"><button id="zoom-out" aria-label="Zoom out">−</button><span id="zoom-label">100%</span><button id="zoom-in" aria-label="Zoom in">+</button><button id="fit">Fit</button></div>
+</main>
+<main id="detail-view" hidden><div id="detail-content"></div></main>
+<div id="selection-tools" hidden><button data-edit-action="open">Open</button><button data-edit-action="edit">Edit</button><span class="separator"></span><button data-edit-action="branch">+ Branch</button><button data-edit-action="connect">Connect →</button></div>
+<aside id="preview" hidden aria-label="State preview"></aside>
+<aside id="action-preview" hidden aria-label="Action details"></aside>
+<dialog id="editor"><form id="editor-form"><div class="modal-top"><h2 id="editor-title">Edit state</h2><button type="button" id="close-editor" aria-label="Close editor">×</button></div><div id="editor-fields"></div><p id="form-error" role="alert"></p><p class="edit-notice">Flow edits stay in this browser. They do not run an analysis.</p><div class="modal-bottom"><button type="button" class="remove" id="delete-item" hidden>Delete</button><button type="button" class="quiet" id="cancel-editor">Cancel</button><button class="primary" type="submit">Save</button></div></form></dialog>
+<div id="toast" role="status" hidden></div>
+<script>
+"use strict";
+
+const $ = s => document.querySelector(s);
+const esc = value => String(value ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const copy = value => JSON.parse(JSON.stringify(value));
+const W=192,H=132,KEY="saigenbio.mock.v1";
+const baseNote="Example state. The baseline repository is a3e7519; the mock does not assert that this analysis was run.";
+function state(id,title,x,y,files,note,plot=null,extra={}) {
+  return {id,title,x,y,files,note,plot,status:"example",codeRef:"a3e7519",writtenBy:"AI agent · example",performedBy:null,origin:"mock",...extra};
+}
+function action(id,from,to,label,command,reason,extra={}) {
+  return {id,from:Array.isArray(from)?from:[from],to,label,command,reason,status:"example",writtenBy:"AI agent · example",performedBy:null,methodSource:"Proposed helper script; not present in the source repository.",...extra};
+}
+const seed = {schemaVersion:1,project:"ecoli-evol",revisions:[],states:[
+  state("V","Unfiltered variants",0,420,["calls/5000.vcf","calls/15000.vcf","calls/50000.vcf"],"The shared starting point: haploid variant calls against the REL606 reference. The same calls enter both depth branches.",null,{kind:"input"}),
+  state("B","Depth 2",290,180,["depth-2/5000.vcf","depth-2/15000.vcf","depth-2/50000.vcf"],"Keep calls supported by at least two reads. Preserve this permissive branch so that we can examine the extra calls.",null,{branch:"d2"}),
+  state("C","Depth 10",290,620,["depth-10/5000.vcf","depth-10/15000.vcf","depth-10/50000.vcf"],"Use the same inputs with a stricter minimum depth. The changed option is recorded on the incoming action.",null,{branch:"d10"}),
+  state("D","Variant statistics",580,60,["depth-2/stats/summary.txt"],"Summarize the filtered calls before interpreting any differences across samples.","bars",{branch:"d2"}),
+  state("E","Site-level evidence",580,280,["depth-2/evidence.tsv"],"Collect the depth, quality and position of each retained call into a reviewable table.","scatter",{branch:"d2"}),
+  state("F","Variant statistics",580,500,["depth-10/stats/summary.txt"],"Generate the same statistics for the stricter branch so the outputs can be compared.","bars",{branch:"d10"}),
+  state("G","Site-level evidence",580,720,["depth-10/evidence.tsv"],"Keep the same evidence columns and sample identities as the depth-2 branch.","scatter",{branch:"d10"}),
+  state("H","Counts in context",870,60,["depth-2/counts-by-generation.tsv"],"Join counts to the sample metadata: 5,000, 15,000 and 50,000 generations. The late sample is annotated as a mutator.",null,{branch:"d2",kind:"metadata"}),
+  state("L","Sites to review",870,280,["depth-2/review-sites.tsv"],"Select sites for visual review. A place in this list is a review decision, not a validated biological finding.",null,{branch:"d2"}),
+  state("O","Counts in context",870,500,["depth-10/counts-by-generation.tsv"],"Repeat the metadata join using the depth-10 outputs. Keep the original sample labels and generation values.",null,{branch:"d10",kind:"metadata"}),
+  state("U","Sites to review",870,720,["depth-10/review-sites.tsv"],"Preserve the candidate list from the stricter branch before comparing the two review lists.",null,{branch:"d10"}),
+  state("I","Counts · linear scale",1160,60,["depth-2/counts-linear.svg"],"View absolute differences on a shared linear axis. All plotted values in this mock are illustrative.","bars",{branch:"d2"}),
+  state("P","Counts · linear scale",1160,500,["depth-10/counts-linear.svg"],"Use the same chart design for the depth-10 branch. This is a proposed visualization, not an observed result.","bars",{branch:"d10"}),
+  state("X","Shared & changed sites",1160,280,["comparison/shared-sites.tsv","comparison/branch-specific.tsv"],"Compare the two review lists by sample, position and allele. Both parent states are inputs; neither replaces the other.","overlap"),
+  state("J","Counts · log scale",1450,60,["depth-2/counts-log.svg"],"Replot the preserved count table on a log scale so the early samples remain visible. The scale change is recorded.","log",{branch:"d2"}),
+  state("Q","Counts · log scale",1450,500,["depth-10/counts-log.svg"],"Apply the same alternate scale to the stricter branch. This changes the view, not the underlying count table.","log",{branch:"d10"}),
+  state("M","Read evidence",1450,280,["review/read-evidence.svg","review/site-notes.tsv"],"Inspect selected sites alongside the existing alignments and reference. Record observations before drawing a biological conclusion.","reads"),
+  state("N","Review notes",1740,280,[],"An example AI action is assembling observations and open questions. The animation indicates activity, not a completion percentage.",null,{status:"running",expectedFiles:["review/notes.md"]}),
+  state("R","Follow-up plan",1740,500,[],"A separate branch for unresolved sites and the additional evidence needed to assess them.",null,{status:"planned",expectedFiles:["review/follow-up.md"]})
+],actions:[
+  action("ab","V","B","varFilter · -d 2","vcfutils.pl varFilter -d 2 SAMPLE.vcf > depth-2/SAMPLE.vcf","Retain a permissive comparison branch.",{methodSource:"Command pattern from scripts/run_variant_calling.sh. The script defaults to minimum depth 2.",option:"-d 2"}),
+  action("ac","V","C","varFilter · -d 10","vcfutils.pl varFilter -d 10 SAMPLE.vcf > depth-10/SAMPLE.vcf","Compare the minimum depth of 10 proposed in docs/decisions.md.",{methodSource:"Command pattern from scripts/run_variant_calling.sh; the comparison is described in docs/decisions.md.",option:"-d 10"}),
+  action("bd","B","D","bcftools stats","bcftools stats depth-2/SAMPLE.vcf > depth-2/stats/SAMPLE.txt","Summarize the retained variants for each sample.",{methodSource:"Command pattern from scripts/run_variant_calling.sh."}),
+  action("be","B","E","site_evidence.py","python site_evidence.py --vcf depth-2/ --out depth-2/evidence.tsv","Make site-level evidence available for review."),
+  action("cf","C","F","bcftools stats","bcftools stats depth-10/SAMPLE.vcf > depth-10/stats/SAMPLE.txt","Keep the summary method consistent between branches.",{methodSource:"Command pattern from scripts/run_variant_calling.sh."}),
+  action("cg","C","G","site_evidence.py","python site_evidence.py --vcf depth-10/ --out depth-10/evidence.tsv","Collect equivalent evidence from the stricter calls."),
+  action("dh","D","H","join_metadata.py","python join_metadata.py --stats depth-2/stats/ --metadata data/metadata.csv --out depth-2/counts-by-generation.tsv","Connect the statistics to sampling time and the recorded mutator status."),
+  action("el","E","L","select_sites.py","python select_sites.py --evidence depth-2/evidence.tsv --out depth-2/review-sites.tsv","Prepare a small set of sites for closer examination; selection criteria would be recorded in a real run."),
+  action("fo","F","O","join_metadata.py","python join_metadata.py --stats depth-10/stats/ --metadata data/metadata.csv --out depth-10/counts-by-generation.tsv","Use identical metadata for a meaningful branch comparison."),
+  action("gu","G","U","select_sites.py","python select_sites.py --evidence depth-10/evidence.tsv --out depth-10/review-sites.tsv","Apply the same review procedure to the second branch."),
+  action("hi","H","I","plot_counts.py","python plot_counts.py --input depth-2/counts-by-generation.tsv --scale linear --out depth-2/counts-linear.svg","First examine the absolute differences.",{option:"--scale linear"}),
+  action("op","O","P","plot_counts.py","python plot_counts.py --input depth-10/counts-by-generation.tsv --scale linear --out depth-10/counts-linear.svg","Compare the same view across depth thresholds.",{option:"--scale linear"}),
+  action("ij","I","J","plot_counts.py","python plot_counts.py --input depth-2/counts-by-generation.tsv --scale log --out depth-2/counts-log.svg","The linear view makes early samples difficult to see; preserve it and add a log view.",{option:"--scale log"}),
+  action("pq","P","Q","plot_counts.py","python plot_counts.py --input depth-10/counts-by-generation.tsv --scale log --out depth-10/counts-log.svg","Keep both scales available for the stricter branch.",{option:"--scale log"}),
+  action("lx",["L","U"],"X","compare_sites.py","python compare_sites.py --left depth-2/review-sites.tsv --right depth-10/review-sites.tsv --out comparison/","Identify the sites shared by the review lists and those included in only one branch."),
+  action("xm","X","M","review_reads.py","python review_reads.py --sites comparison/ --alignments results/bam/ --reference REL606.fasta --out review/","Use the saved alignments and reference as additional inputs to review the candidate calls."),
+  action("mn","M","N","AI · draft notes","agent action: draft review/notes.md from review/site-notes.tsv and saved read views","Keep observations, assumptions and unresolved questions connected to the evidence.",{status:"running",methodSource:"Simulated agent action. No model or server is connected."}),
+  action("mr","M","R","AI · plan follow-up","agent action: propose follow-up checks for unresolved sites","Record a possible next step without implying that it has been executed.",{status:"planned",methodSource:"Planned agent action. No model or server is connected."})
+]};
+let flow=copy(seed), history=[], editing=false, selected=null, connecting=null, editorContext=null;
+let camera={x:70,y:90,scale:.72}, savedCamera=null, drag=null, hoverTimer=null, hideTimer=null, toastTimer=null;
+function validFlow(f) {
+  if(!f||f.schemaVersion!==1||!Array.isArray(f.states)||!Array.isArray(f.actions)||!Array.isArray(f.revisions)||f.states.length>300||f.actions.length>600)return false;
+  const ids=new Set();
+  for(const n of f.states){if(typeof n.id!=="string"||ids.has(n.id)||!Number.isFinite(n.x)||!Number.isFinite(n.y)||typeof n.title!=="string"||!Array.isArray(n.files)||!n.files.every(v=>typeof v==="string"))return false;ids.add(n.id);}
+  const aids=new Set();
+  for(const a of f.actions){if(typeof a.id!=="string"||aids.has(a.id)||!ids.has(a.to)||!Array.isArray(a.from)||!a.from.length||!a.from.every(id=>ids.has(id)&&id!==a.to)||typeof a.label!=="string")return false;aids.add(a.id);}
+  const seen=new Set(),active=new Set();
+  const visit=id=>{if(active.has(id))return false;if(seen.has(id))return true;active.add(id);for(const a of f.actions.filter(a=>a.from.includes(id)))if(!visit(a.to))return false;active.delete(id);seen.add(id);return true;};
+  return [...ids].every(visit);
+}
+try {const f=JSON.parse(localStorage.getItem(KEY));if(validFlow(f))flow=f;} catch {}
+const getState=id=>flow.states.find(n=>n.id===id);
+const getAction=id=>flow.actions.find(a=>a.id===id);
+function toast(message){$("#toast").textContent=message;$("#toast").hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$("#toast").hidden=true,2600);}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(flow));}catch{toast("Browser storage is unavailable. Changes will last for this session.");}}
+function checkpoint(){history.push(copy(flow));if(history.length>30)history.shift();}
+function changed(description){flow.revisions.push({at:new Date().toISOString(),actor:"Human",description});save();render();if(!$("#detail-view").hidden)renderDetail(getState(decodeURIComponent(location.hash.slice(7))));}
+function newId(prefix){let n=1;while(flow.states.some(v=>v.id===prefix+n)||flow.actions.some(v=>v.id===prefix+n))n++;return prefix+n;}
+function plotSVG(type,branch="d2",small=false){
+ const bars=branch==="d10"?[17,40,142]:[28,62,225];
+ const color=branch==="d10"?"#7894a6":"#7e9e6b";
+ let body="";
+ if(type==="bars"||type==="log"){
+   const vals=type==="log"?bars.map(v=>Math.log10(v)/Math.log10(250)*125):bars.map(v=>v/250*125);
+   body='<path d="M35 15V151H342" fill="none" stroke="#dce4d4"/>';
+   if(!small)for(let i=1;i<=3;i++)body+='<path d="M35 '+(151-i*40)+'H342" stroke="#edf1e7" stroke-dasharray="3 4"/>';
+   vals.forEach((v,i)=>body+='<rect x="'+(62+i*96)+'" y="'+(150-v)+'" width="43" height="'+v+'" rx="2" fill="'+color+'" opacity="'+(.65+i*.16)+'"/>'+(small?"":'<text x="'+(83+i*96)+'" y="172" text-anchor="middle" fill="#8b9782" font-size="11">'+["5k","15k","50k"][i]+'</text>'));
+   if(!small)body+='<text x="188" y="192" text-anchor="middle" fill="#8b9782" font-size="10">Generation · '+(type==="log"?"log scale":"linear scale")+'</text>';
+ }else if(type==="scatter"){
+   body='<path d="M35 15V151H342" fill="none" stroke="#dce4d4"/>';
+   for(let i=0;i<38;i++){const x=43+((i*43)%287),y=128-(x/4)+Math.sin(i*9)*35;body+='<circle cx="'+x+'" cy="'+Math.max(18,y)+'" r="'+(i%5===0?3.8:2.8)+'" fill="'+color+'" opacity=".65"/>';}
+   if(!small)body+='<text x="188" y="178" text-anchor="middle" fill="#8b9782" font-size="11">Read depth</text><text x="12" y="88" transform="rotate(-90 12 88)" fill="#8b9782" font-size="11">Call quality</text>';
+ }else if(type==="overlap"){
+   body='<circle cx="148" cy="89" r="60" fill="#9fb68c" fill-opacity=".35" stroke="#9fb68c"/><circle cx="226" cy="89" r="60" fill="#89a5b4" fill-opacity=".3" stroke="#89a5b4"/>';
+   if(!small)body+='<text x="115" y="91" font-size="11" text-anchor="middle" fill="#6a8258">Depth 2</text><text x="253" y="91" font-size="11" text-anchor="middle" fill="#648293">Depth 10</text><text x="188" y="178" font-size="11" text-anchor="middle" fill="#8b9782">Shared and branch-specific review sites</text>';
+ }else if(type==="reads"){
+   body='<path d="M22 25H350" stroke="#b9c8ae" stroke-width="4"/><rect x="183" y="14" width="12" height="146" fill="#eee2be" opacity=".7"/>';
+   for(let i=0;i<10;i++){let x=22+(i*23)%110,w=155+(i*17)%85,y=42+i*11;body+='<rect x="'+x+'" y="'+y+'" width="'+w+'" height="6" rx="1" fill="'+(i%3?"#a5b898":"#92adba")+'"/><rect x="186" y="'+y+'" width="5" height="6" fill="'+(i%4?"#b09060":"#92adba")+'"/>';}
+   if(!small)body+='<text x="188" y="187" font-size="11" text-anchor="middle" fill="#8b9782">Illustrative read pileup · highlighted site</text>';
+ }
+ return '<svg viewBox="0 0 375 200" preserveAspectRatio="'+(small?"none":"xMidYMid meet")+'" role="img" aria-label="'+esc(type)+' — illustrative preview">'+body+'</svg>';
+}
+function nodeContent(n) {
+ if(n.status==="running"||n.status==="planned")return '<span class="ring">'+esc(n.id)+'</span><span class="node-title">'+esc(n.title)+'</span><span class="node-bottom">'+(n.status==="running"?"Demo · running":"Planned")+'</span>';
+ return '<span class="node-top"><span class="state-id">'+esc(n.id)+'</span><span title="Reference repository version">ref '+esc(n.codeRef||"—")+'</span></span><span class="node-title">'+esc(n.title)+'</span>'+(n.plot?'<span class="mini-plot">'+plotSVG(n.plot,n.branch,true)+'</span>':'<span class="file-lines"><span></span><span></span><span></span></span>')+'<span class="node-bottom">'+n.files.length+' new '+(n.files.length===1?"file":"files")+(n.branch?' · depth '+(n.branch==="d2"?"2":"10"):"")+'</span>';
+}
+function renderNodes(){
+ $("#nodes").innerHTML=flow.states.map(n=>'<button class="state '+esc(n.status)+(selected===n.id?" selected":"")+'" data-state="'+esc(n.id)+'" style="left:'+n.x+'px;top:'+n.y+'px" aria-label="'+esc(n.id+': '+n.title)+'">'+nodeContent(n)+'<span class="port" title="Connect to another state" aria-hidden="true"></span></button>').join("");
+}
+function edgePath(from,to){const special=n=>n.status==="running"||n.status==="planned",x1=from.x+(special(from)?from.status==="running"?134:126:W),y1=from.y+(special(from)?46:H/2),x2=to.x+(special(to)?to.status==="running"?58:66:0),y2=to.y+(special(to)?46:H/2),dx=Math.max(35,(x2-x1)*.5);return {d:"M "+x1+" "+y1+" C "+(x1+dx)+" "+y1+", "+(x2-dx)+" "+y2+", "+x2+" "+y2,x:(x1+x2)/2,y:(y1+y2)/2};}
+function renderEdges(){
+ let html='<defs><marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M1 1L7 4L1 7" fill="none" stroke="#a0b097" stroke-width="1.2"/></marker></defs>';
+ for(const a of flow.actions){const t=getState(a.to);a.from.forEach((id,index)=>{const s=getState(id),p=edgePath(s,t),running=a.status==="running",planned=a.status==="planned";html+='<g class="edge-group" data-action="'+esc(a.id)+'" role="button" tabindex="0" aria-label="'+esc(a.label+' from '+id+' to '+a.to)+'"><path class="edge-line '+(running?"running-edge":planned?"planned-edge":"")+'" d="'+p.d+'"'+(!running?' marker-end="url(#arrow)"':"")+'/><path class="edge-hit" d="'+p.d+'"/>';
+ if(index===0)html+='<text class="edge-label" x="'+p.x+'" y="'+(p.y-14)+'" text-anchor="middle">'+esc(a.label)+'</text>'+(a.option&&!a.label.includes(a.option)?'<text class="edge-sub" x="'+p.x+'" y="'+(p.y+2)+'" text-anchor="middle">'+esc(a.option)+'</text>':"");
+ if(running)html+='<g class="particle"><path d="M-27 0H-2M-8 -4L-2 0L-8 4" stroke="#44815e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/><animateMotion dur="2.5s" repeatCount="indefinite" rotate="auto" path="'+p.d+'"/></g>';
+ html+='</g>';});}
+ $("#edges").innerHTML=html;
+}
+function render(){renderNodes();renderEdges();$("#undo").disabled=!history.length;positionSelection();}
+function applyCamera(){ $("#scene").style.transform="translate("+camera.x+"px,"+camera.y+"px) scale("+camera.scale+")";$("#zoom-label").textContent=Math.round(camera.scale*100)+"%";positionSelection();}
+function bounds(){const ns=flow.states;if(!ns.length)return {x:0,y:0,w:1000,h:600};const x=Math.min(...ns.map(n=>n.x)),y=Math.min(...ns.map(n=>n.y));return {x,y,w:Math.max(...ns.map(n=>n.x+W))-x,h:Math.max(...ns.map(n=>n.y+H))-y};}
+function fit(initial=false){const v=$("#viewport"),b=bounds(),w=v.clientWidth,h=v.clientHeight;let scale=Math.min(1,(w-100)/b.w,(h-170)/b.h);if(initial)scale=Math.max(scale,w<800?.67:.62);scale=Math.max(.22,scale);camera={scale,x:w>b.w*scale?(w-b.w*scale)/2-b.x*scale:65-b.x*scale,y:Math.max(90,(h-b.h*scale)/2)-b.y*scale};applyCamera();}
+function zoom(factor,cx,cy){const v=$("#viewport").getBoundingClientRect();cx=cx??v.width/2;cy=cy??v.height/2;const next=Math.max(.22,Math.min(1.8,camera.scale*factor)),ratio=next/camera.scale;camera.x=cx-(cx-camera.x)*ratio;camera.y=cy-(cy-camera.y)*ratio;camera.scale=next;hidePopups();applyCamera();}
+function positionSelection(){const el=$("#selection-tools"),n=getState(selected);if(!editing||!n||!$("#detail-view").hidden||connecting){el.hidden=true;return;}const r=$("#viewport").getBoundingClientRect(),left=r.left+camera.x+(n.x+W/2)*camera.scale,top=r.top+camera.y+n.y*camera.scale;el.hidden=false;el.style.left=Math.max(10,Math.min(innerWidth-250,left-115))+"px";el.style.top=Math.max(r.top+10,Math.min(innerHeight-52,top-43))+"px";}
+function hidePopups(){clearTimeout(hoverTimer);clearTimeout(hideTimer);$("#preview").hidden=true;$("#action-preview").hidden=true;}
+function placePopup(el,rect){el.hidden=false;const pr=el.getBoundingClientRect();let x=rect.right+13;if(x+pr.width>innerWidth-12)x=rect.left-pr.width-13;if(x<12)x=Math.max(12,Math.min(innerWidth-pr.width-12,rect.left));let y=Math.max(85,Math.min(innerHeight-pr.height-15,rect.top));el.style.left=x+"px";el.style.top=y+"px";}
+function showPreview(id,anchor){if(editing||drag||!$("#detail-view").hidden)return;const n=getState(id);if(!n)return;const el=$("#preview");el.innerHTML='<div class="preview-inner"><div class="preview-label">State '+esc(n.id)+(n.status==="running"?" · demo running":n.status==="planned"?" · planned":"")+'</div><div class="preview-title">'+esc(n.title)+'</div><p class="preview-note">'+esc(n.note)+'</p></div>'+(n.plot?'<div class="preview-plot">'+plotSVG(n.plot,n.branch)+'</div>':"")+'<div class="preview-inner"><div class="preview-label">'+(n.status==="running"||n.status==="planned"?"Expected files":"New files · mock references")+'</div><ul class="preview-files">'+(n.expectedFiles||n.files).slice(0,4).map(f=>'<li>'+esc(f)+'</li>').join("")+'</ul></div><button class="preview-open" data-open="'+esc(n.id)+'">Open state <span>↗</span></button>';placePopup(el,anchor.getBoundingClientRect());}
+function showAction(id,anchor){hidePopups();const a=getAction(id);if(!a)return;if(editing){openActionEditor(a);return;}const el=$("#action-preview");el.innerHTML='<div class="preview-inner"><button class="close-pop" aria-label="Close action details">×</button><div class="preview-label">'+esc(a.from.join(" + ")+" → "+a.to)+'</div><div class="preview-title">'+esc(a.label)+'</div><pre>'+esc(a.command)+'</pre><p class="preview-note">'+esc(a.reason)+'</p><div class="action-meta">'+esc(a.methodSource)+'</div></div>';placePopup(el,anchor.getBoundingClientRect());el.querySelector(".close-pop").onclick=()=>el.hidden=true;}
+
+function openState(id){if(!getState(id))return;hidePopups();if($("#detail-view").hidden)savedCamera={...camera};location.hash="state/"+encodeURIComponent(id);}
+function renderDetail(n){
+ if(!n)return;
+ const incoming=flow.actions.filter(a=>a.to===n.id),files=n.expectedFiles||n.files,expected=n.status==="running"||n.status==="planned";
+ let visual="";
+ if(n.status==="running")visual='<div class="run-display"><div class="preview-label">Simulated agent action</div><p>The action is still running. No output has been created yet.</p><button id="finish-run" class="outline">Finish demo run</button></div>';
+ else if(n.status==="planned")visual='<div class="run-display"><div class="preview-label">A possible next step</div><p>This state is planned. No command has been executed.</p></div>';
+ else if(n.plot)visual='<figure class="figure"><div class="figure-title">'+esc(n.title)+'</div>'+plotSVG(n.plot,n.branch)+'<figcaption>Illustrative preview · values are not measured results</figcaption></figure>';
+ else if(n.kind==="metadata"||n.kind==="input")visual='<div class="data-preview"><table><thead><tr><th>Sample</th><th>Generation</th><th>Mutator</th></tr></thead><tbody><tr><td>SRR2589044</td><td>5,000</td><td>None</td></tr><tr><td>SRR2584863</td><td>15,000</td><td>None</td></tr><tr><td>SRR2584866</td><td>50,000</td><td>Plus</td></tr></tbody></table><p class="caption">Sample metadata from the ecoli-evol teaching dataset.</p></div>';
+ $("#detail-content").innerHTML='<nav class="detail-nav"><button class="back" id="back-flow">← Back to flow</button><button class="quiet" id="edit-detail">Edit state</button></nav><div class="detail-kicker">State '+esc(n.id)+(n.branch?" · depth "+(n.branch==="d2"?"2":"10"):"")+'</div><h1 class="detail-title">'+esc(n.title)+'</h1><p class="detail-note">'+esc(n.note)+'</p><div class="detail-meta"><span class="mono">Reference code '+esc(n.codeRef||"not linked")+'</span><span>'+esc(n.writtenBy)+'</span><span>'+esc(n.updatedAt?"Edited "+new Date(n.updatedAt).toLocaleString():"Example · no execution recorded")+'</span></div>'+visual+
+ '<section class="detail-section"><div class="section-label">'+(expected?"Expected outputs":"New files at this state")+'</div><ul class="files">'+(files.length?files.map(f=>'<li><span class="filename mono">'+esc(f)+'</span><span class="file-type">'+(expected?"expected":"mock reference")+'</span></li>').join(""):'<li>No files attached.</li>')+'</ul></section>'+
+ '<section class="detail-section"><div class="section-label">'+(incoming.length?"How this state is reached":"Starting point")+'</div>'+
+ (incoming.length?incoming.map(a=>'<article class="action-row"><div class="action-heading"><span>From '+a.from.map(id=>'<button class="source-link" data-open="'+esc(id)+'">'+esc(id+' · '+getState(id).title)+'</button>').join(" + ")+'</span><span class="preview-label">'+esc(a.status==="example"?"Example action":a.status)+'</span></div><pre>'+esc(a.command)+'</pre><p><strong>Why:</strong> '+esc(a.reason)+'</p><div class="action-meta">Recorded by '+esc(a.writtenBy)+' · Execution '+(a.performedBy?esc(a.performedBy):"not recorded")+'</div><div class="action-meta">'+esc(a.methodSource)+'</div></article>').join(""):'<article class="action-row"><p>Three samples from the Ara-3 E. coli long-term evolution population. The teaching dataset contains 175,000 paired reads per sample, already trimmed and subsampled. The reference is E. coli B REL606 (CP000819.1).</p><pre>bwa mem → samtools sort → bcftools mpileup\n→ bcftools call --ploidy 1 -m -v</pre><p>The shared upstream analysis is summarized here so the canvas can focus on the two depth thresholds.</p><div class="action-meta">Command patterns and data context: ecoli-evol README.md and scripts/run_variant_calling.sh.</div></article>')+'</section><p class="origin-note">'+(n.origin==="manual"?"This record was added or edited by a human. That does not change who performed the analysis.":baseNote)+' '+(n.id==="V"?"The repository output files do not establish which filter setting produced them. This mock therefore does not assign observed counts to either branch.":"File paths and plots in this mock are illustrative; selecting them does not access or execute the source analysis.")+'</p>';
+ $("#back-flow").onclick=()=>{location.hash="";};
+ $("#edit-detail").onclick=()=>openStateEditor(n);
+ $("#detail-content").querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openState(b.dataset.open));
+ if($("#finish-run"))$("#finish-run").onclick=()=>{checkpoint();n.status="example";n.files=n.expectedFiles||["review/notes.md"];delete n.expectedFiles;n.note="The simulated action has finished. These notes would separate observations, assumptions and open questions, with links back to the evidence.";const a=flow.actions.find(a=>a.to===n.id&&a.status==="running");if(a)a.status="example";changed("Finished a simulated run");toast("Demo complete. The arrow and state are now solid.");};
+}
+function route(){
+ hidePopups();const match=location.hash.match(/^#state\/(.+)$/);let n;
+ try{n=match?getState(decodeURIComponent(match[1])):null;}catch{}
+ if(n){$("#flow-view").hidden=true;$("#detail-view").hidden=false;$("#edit-toggle").hidden=true;$("#selection-tools").hidden=true;renderDetail(n);$("#detail-view").scrollTop=0;}
+ else{$("#flow-view").hidden=false;$("#detail-view").hidden=true;$("#edit-toggle").hidden=false;if(savedCamera){camera={...savedCamera};savedCamera=null;}applyCamera();}
+}
+function setEditing(value){
+ editing=value;selected=null;connecting=null;hidePopups();
+ $("#edit-toggle").setAttribute("aria-pressed",String(value));$("#edit-toggle").textContent=value?"Done":"Edit flow";
+ $("#edit-tools").hidden=!value;$("#viewport").classList.toggle("editing",value);$("#viewport").classList.remove("connecting");
+ $("#canvas-hint").textContent=value?"Drag states · Select a state to edit or add a branch":"Drag to pan · Scroll to zoom · Select a state to explore";
+ render();
+}
+function field(name,label,value="",type="input",placeholder=""){
+ const c=type==="textarea"?'<textarea name="'+name+'" rows="3" placeholder="'+esc(placeholder)+'">'+esc(value)+'</textarea>':'<input name="'+name+'" value="'+esc(value)+'" '+(name==="title"||name==="label"?"required":"")+' maxlength="'+(name==="title"?80:1000)+'" placeholder="'+esc(placeholder)+'">';
+ return '<label class="field">'+label+c+'</label>';
+}
+function showEditor(context,title,fields,deletable=false){
+ hidePopups();editorContext=context;$("#editor-title").textContent=title;$("#editor-fields").innerHTML=fields;$("#form-error").textContent="";$("#delete-item").hidden=!deletable;$("#editor").showModal();$("#editor-fields input")?.focus();
+}
+function openStateEditor(n){
+ showEditor({type:"state",id:n.id},"Edit state",field("title","State name",n.title)+field("note","What does this state mean?",n.note,"textarea")+field("files",n.status==="planned"||n.status==="running"?"Expected files · one per line":"New file references · one per line",(n.expectedFiles||n.files).join("\n"),"textarea")+ '<p class="field-hint">References only. Files are not uploaded or changed.</p>',true);
+}
+function addState(parent=null){
+ showEditor({type:"add",parent:parent?.id},""+(parent?"Add a branch":"Add a state"),field("title","State name","")+field("note","What does this state mean?","","textarea")+field("files","New file references · one per line","","textarea","results/example.tsv")+(parent?field("label","Action label","","input","plot_counts.py · --scale log")+field("command","Command or action","","textarea")+field("reason","Why take this branch?","","textarea"):""));
+}
+function openActionEditor(a){
+ showEditor({type:"action",id:a.id},"Edit action",field("label","Label on the arrow",a.label)+field("command","Command or action",a.command,"textarea")+field("reason","Why was this action taken?",a.reason,"textarea"),true);
+}
+function startConnecting(id){selected=id;connecting=id;hidePopups();$("#viewport").classList.add("connecting");$("#canvas-hint").textContent="Choose a state to the right · Escape to cancel";render();}
+function connectTo(id){
+ const source=getState(connecting),target=getState(id);
+ if(!source||!target)return;
+ if(source.id===target.id){toast("Choose a different state.");return;}
+ if(target.x<source.x+W+25){toast("Place the target to the right of the source first.");return;}
+ if(flow.actions.some(a=>a.from.includes(source.id)&&a.to===target.id)){toast("These states are already connected.");return;}
+ const seen=new Set();function reaches(n){if(n===source.id)return true;if(seen.has(n))return false;seen.add(n);return flow.actions.filter(a=>a.from.includes(n)).some(a=>reaches(a.to));}
+ if(reaches(target.id)){toast("This connection would create a cycle.");return;}
+ const from=source.id,to=target.id;connecting=null;$("#viewport").classList.remove("connecting");
+ $("#canvas-hint").textContent="Drag states · Select a state to edit or add a branch";
+ showEditor({type:"connect",from,to},"Connect "+from+" → "+to,field("label","Label on the arrow","","input","Script or tool")+field("command","Command or action","","textarea")+field("reason","Why are these states connected?","","textarea"));
+}
+function freePosition(x,y){
+ for(let i=0;i<100;i++){if(!flow.states.some(n=>Math.abs(n.x-x)<W+35&&Math.abs(n.y-y)<H+35))return {x,y};y+=175;}return{x,y};
+}
+$("#editor-form").onsubmit=e=>{
+ e.preventDefault();const data=new FormData(e.currentTarget),v=k=>String(data.get(k)||"").trim(),ctx=editorContext,stamp=new Date().toISOString();
+ if((ctx.type==="state"||ctx.type==="add")&&!v("title"))return;
+ if((ctx.type==="action"||ctx.type==="connect"||(ctx.type==="add"&&ctx.parent))&&!v("label")){$("#form-error").textContent="Add a label for the action.";return;}
+ checkpoint();
+ const files=v("files").split("\n").map(v=>v.trim()).filter(Boolean);
+ if(ctx.type==="state"){
+   const n=getState(ctx.id);n.title=v("title");n.note=v("note");if(n.status==="running"||n.status==="planned")n.expectedFiles=files;else n.files=files;n.updatedAt=stamp;n.writtenBy="Human";n.origin="manual";
+ }else if(ctx.type==="add"){
+   const parent=getState(ctx.parent),r=$("#viewport").getBoundingClientRect(),pos=freePosition(parent?parent.x+290:(r.width/2-camera.x)/camera.scale,parent?parent.y+190:(r.height/2-camera.y)/camera.scale),id=newId("S");
+   flow.states.push(state(id,v("title"),pos.x,pos.y,files,v("note"),null,{writtenBy:"Human",origin:"manual",updatedAt:stamp,codeRef:parent?.codeRef||null}));
+   if(parent)flow.actions.push(action(newId("a"),parent.id,id,v("label"),v("command"),v("reason"),{writtenBy:"Human",methodSource:"Manually supplied action. No execution is recorded.",updatedAt:stamp}));
+   selected=id;
+ }else if(ctx.type==="action"){
+   const a=getAction(ctx.id);a.label=v("label");a.command=v("command");a.reason=v("reason");a.writtenBy="Human";a.updatedAt=stamp;delete a.option;a.methodSource="Manually edited action. No execution is recorded.";
+ }else if(ctx.type==="connect"){
+   flow.actions.push(action(newId("a"),ctx.from,ctx.to,v("label"),v("command"),v("reason"),{writtenBy:"Human",methodSource:"Manually supplied connection. No execution is recorded.",updatedAt:stamp}));
+ }
+ $("#editor").close();changed(ctx.type==="state"?"Edited state "+ctx.id:ctx.type==="action"?"Edited action "+ctx.id:ctx.type==="add"?"Added state "+selected:"Connected "+ctx.from+" to "+ctx.to);toast("Saved in this browser.");
+};
+$("#delete-item").onclick=()=>{
+ const ctx=editorContext;checkpoint();
+ if(ctx.type==="state"){flow.states=flow.states.filter(n=>n.id!==ctx.id);flow.actions=flow.actions.filter(a=>a.to!==ctx.id&&!a.from.includes(ctx.id));if(selected===ctx.id)selected=null;}
+ else if(ctx.type==="action")flow.actions=flow.actions.filter(a=>a.id!==ctx.id);
+ $("#editor").close();changed("Deleted "+ctx.type+" "+ctx.id);if(ctx.type==="state"&&!$("#detail-view").hidden)location.hash="";toast("Removed. Undo is available in Edit flow.");
+};
+$("#close-editor").onclick=$("#cancel-editor").onclick=()=>$("#editor").close();
+$("#editor").addEventListener("click",e=>{if(e.target===$("#editor")){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();}});
+$("#edit-toggle").onclick=()=>setEditing(!editing);
+$("#undo").onclick=()=>{if(!history.length)return;flow=history.pop();selected=null;connecting=null;$("#viewport").classList.remove("connecting");save();render();toast("Change undone.");};
+$("#add-state").onclick=()=>addState();
+$("#selection-tools").onclick=e=>{const mode=e.target.closest("[data-edit-action]")?.dataset.editAction,n=getState(selected);if(!n)return;if(mode==="open")openState(n.id);if(mode==="edit")openStateEditor(n);if(mode==="branch")addState(n);if(mode==="connect")startConnecting(n.id);};
+$("#fit").onclick=()=>{hidePopups();fit();};
+$("#zoom-in").onclick=()=>zoom(1.2);$("#zoom-out").onclick=()=>zoom(1/1.2);
+$("#viewport").addEventListener("wheel",e=>{e.preventDefault();const r=e.currentTarget.getBoundingClientRect();zoom(Math.exp(-e.deltaY*.0015),e.clientX-r.left,e.clientY-r.top);},{passive:false});
+$("#nodes").addEventListener("pointerover",e=>{const n=e.target.closest("[data-state]");if(!n||n.contains(e.relatedTarget))return;clearTimeout(hideTimer);clearTimeout(hoverTimer);hoverTimer=setTimeout(()=>showPreview(n.dataset.state,n),220);});
+$("#nodes").addEventListener("pointerout",e=>{const n=e.target.closest("[data-state]");if(!n||n.contains(e.relatedTarget))return;clearTimeout(hoverTimer);hideTimer=setTimeout(()=>$("#preview").hidden=true,150);});
+$("#preview").onpointerenter=()=>clearTimeout(hideTimer);
+$("#preview").onpointerleave=()=>{hideTimer=setTimeout(()=>$("#preview").hidden=true,150);};
+$("#preview").onclick=e=>{const b=e.target.closest("[data-open]");if(b)openState(b.dataset.open);};
+let suppressClick=false;
+$("#viewport").addEventListener("pointerdown",e=>{
+ if(e.button!==0)return;
+ const card=e.target.closest("[data-state]");
+ if(e.target.closest(".port")){e.preventDefault();startConnecting(card.dataset.state);return;}
+ if(e.target.closest(".edge-group"))return;
+ if(connecting&&card)return;
+ if(card&&!editing)return;
+ hidePopups();e.preventDefault();$("#viewport").setPointerCapture(e.pointerId);
+ drag={id:card?.dataset.state||null,startX:e.clientX,startY:e.clientY,x:card?getState(card.dataset.state).x:camera.x,y:card?getState(card.dataset.state).y:camera.y,moved:false,before:card?copy(flow):null};
+ if(!card){$("#viewport").classList.add("panning");selected=null;positionSelection();}
+});
+$("#viewport").addEventListener("pointermove",e=>{
+ if(!drag)return;const dx=e.clientX-drag.startX,dy=e.clientY-drag.startY;if(Math.abs(dx)+Math.abs(dy)>5)drag.moved=true;
+ if(!drag.moved)return;
+ if(drag.id){const n=getState(drag.id);n.x=Math.round(drag.x+dx/camera.scale);n.y=Math.round(drag.y+dy/camera.scale);const el=$("#nodes").querySelector('[data-state="'+CSS.escape(drag.id)+'"]');el.style.left=n.x+"px";el.style.top=n.y+"px";renderEdges();positionSelection();}
+ else{camera.x=drag.x+dx;camera.y=drag.y+dy;applyCamera();}
+});
+function endDrag(e){
+ if(!drag)return;const d=drag;drag=null;$("#viewport").classList.remove("panning");if($("#viewport").hasPointerCapture(e.pointerId))$("#viewport").releasePointerCapture(e.pointerId);
+ if(d.moved){suppressClick=true;setTimeout(()=>suppressClick=false,50);if(d.id){history.push(d.before);if(history.length>30)history.shift();selected=d.id;changed("Moved state "+d.id+" on the canvas");}}
+ else if(d.id){selected=d.id;render();}
+}
+$("#viewport").addEventListener("pointerup",endDrag);
+$("#viewport").addEventListener("pointercancel",endDrag);
+$("#nodes").addEventListener("click",e=>{
+ if(suppressClick||e.target.closest(".port"))return;const n=e.target.closest("[data-state]");if(!n)return;
+ if(connecting){connectTo(n.dataset.state);return;}
+ if(editing){selected=n.dataset.state;render();}else openState(n.dataset.state);
+});
+$("#edges").addEventListener("click",e=>{const g=e.target.closest("[data-action]");if(g)showAction(g.dataset.action,g);});
+$("#edges").addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){const g=e.target.closest("[data-action]");if(g){e.preventDefault();showAction(g.dataset.action,g);}}});
+document.addEventListener("pointerdown",e=>{if(!e.target.closest("#action-preview")&&!e.target.closest(".edge-group"))$("#action-preview").hidden=true;});
+document.addEventListener("keydown",e=>{
+ if(e.key==="Escape"){hidePopups();if(connecting){connecting=null;$("#viewport").classList.remove("connecting");$("#canvas-hint").textContent="Drag states · Select a state to edit or add a branch";}else selected=null;positionSelection();}
+ if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="z"&&editing&&!e.target.closest("input,textarea")&&!$("#editor").open){e.preventDefault();$("#undo").click();}
+});
+window.addEventListener("hashchange",route);
+window.addEventListener("resize",()=>{hidePopups();applyCamera();});
+render();fit(true);route();
+window.SaigenMock={getSnapshot:()=>copy(flow),getCamera:()=>({...camera}),validate:()=>validFlow(flow)};
+</script>
+</body>
+</html>
