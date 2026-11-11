@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "saigenbio"
+version = "0.2.0"
+description = "Local biological analysis records and a visual flow viewer"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+saigen = "saigen.__main__:main"
+
+[tool.setuptools]
+packages = ["saigen"]
+
+[tool.setuptools.package-data]
+saigen = ["shell/*.zsh"]
+
+[tool.setuptools.data-files]
+"share/saigenbio/web" = ["web/index.html", "web/app.js", "web/style.css"]
+"share/saigenbio/skills/saigen-record" = ["skills/saigen-record/SKILL.md"]

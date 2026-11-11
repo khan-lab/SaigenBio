@@ -1,0 +1,92 @@
+"""SaigenBio CLI; also available as python3 -m saigen."""
+import argparse
+import json
+import os
+from pathlib import Path
+import sys
+from . import __version__
+from .store import Store, RecordError
+from .runner import run, code_info
+from .server import serve
+from . import sessions
+
+def main():
+    parser=argparse.ArgumentParser(prog="saigen",description="Record analysis states and view their history.")
+    parser.add_argument("--version",action="version",version="%(prog)s "+__version__)
+    parser.add_argument("--project",default=os.environ.get("SAIGEN_PROJECT","."))
+    parser.add_argument("--actor",default=None,help="Declared identity; not authenticated")
+    sub=parser.add_subparsers(dest="command",required=True,metavar="{init,snapshot,run,serve,flow,history,recover,export,start,save,pause,resume,status,commands}")
+    def command(name,**kwargs):
+        p=sub.add_parser(name,**kwargs)
+        p.add_argument("--project",default=argparse.SUPPRESS)
+        p.add_argument("--actor",default=argparse.SUPPRESS)
+        return p
+    p=command("init");p.add_argument("--name")
+    p=command("snapshot");p.add_argument("--title",required=True);p.add_argument("--id");p.add_argument("--note",default="");p.add_argument("--file",action="append",default=[]);p.add_argument("--reference",action="append",default=[]);p.add_argument("--source-repo")
+    p=command("run")
+    p.add_argument("--from",dest="parents",action="append",required=True)
+    p.add_argument("--title",required=True);p.add_argument("--id");p.add_argument("--label");p.add_argument("--reason",default="")
+    p.add_argument("--input",action="append",default=[]);p.add_argument("--output",action="append",default=[]);p.add_argument("--stdout");p.add_argument("--script",action="append",default=[]);p.add_argument("--environment",action="append",default=[]);p.add_argument("--tool-version",action="append",default=[]);p.add_argument("--source-repo")
+    p.add_argument("argv",nargs=argparse.REMAINDER)
+    p=command("serve");p.add_argument("--port",type=int,default=8765)
+    for name in ("flow","history","recover"):command(name)
+    p=command("export");p.add_argument("destination")
+    p=command("start")
+    p.add_argument("--from",dest="parent",help="Unique state title or ID; omit for an empty project")
+    p.add_argument("--record-output",action="store_true",help="Opt in to an unredacted output transcript")
+    p=command("save")
+    p.add_argument("--title",required=True);p.add_argument("--reason",default="")
+    p.add_argument("--output",action="append",required=True);p.add_argument("--script",action="append",default=[])
+    p.add_argument("--source-repo");p.add_argument("--from",dest="parent")
+    for name in ("pause","resume","status","commands"):command(name)
+    p=command("_shell-event")
+    p.add_argument("event",choices=["begin","end"]);p.add_argument("--cwd")
+    p.add_argument("--exit-code",type=int,default=0);p.add_argument("--pipeline",type=int,nargs="*",default=[])
+    args=parser.parse_args()
+    store=Store(args.project)
+    def resolve(value):
+        p=Path(value).expanduser()
+        return p if p.is_absolute() else store.root/p
+    def current_session():
+        ident=os.environ.get("SAIGEN_SESSION")
+        if not ident or Path(os.environ.get("SAIGEN_PROJECT","")).resolve()!=store.root:
+            raise RecordError("Use this command inside the project's saigen start session")
+        return ident
+    try:
+        if args.command=="init":result=store.init(args.name)
+        elif args.command=="snapshot":
+            result=store.snapshot(args.title,[resolve(p) for p in args.file],args.actor or "AI agent",args.note,args.id,[resolve(p) for p in args.reference],code_info(args.source_repo or store.root))
+        elif args.command=="run":
+            argv=args.argv[1:] if args.argv[:1]==["--"] else args.argv
+            actor=args.actor or (sessions.session(store.flow(),os.environ["SAIGEN_SESSION"])["actor"] if os.environ.get("SAIGEN_SESSION") and Path(os.environ.get("SAIGEN_PROJECT","")).resolve()==store.root else "AI agent")
+            parents=[sessions.resolve_state(store.flow(),p) for p in args.parents]
+            result=run(store,parents,args.title,argv,inputs=args.input,outputs=args.output,actor=actor,reason=args.reason,label=args.label,ident=args.id,stdout_name=args.stdout,source_repo=args.source_repo,scripts=args.script,environment_files=args.environment,tool_versions=args.tool_version)
+            print(json.dumps(result,indent=2))
+            return 0 if result["status"]=="completed" else 130 if result["status"]=="cancelled" else 1
+        elif args.command=="serve":serve(store,args.port);return 0
+        elif args.command=="flow":result=store.flow()
+        elif args.command=="history":result=store.events()
+        elif args.command=="recover":store.recover();result=store.flow()
+        elif args.command=="export":result={"export":str(store.export(args.destination))}
+        elif args.command=="start":
+            from .shell_session import start
+            return start(store,args.parent,args.actor or "Human",args.record_output)
+        elif args.command=="save":
+            result=sessions.save(store,current_session(),args.title,args.output,args.reason,args.script,args.source_repo,args.parent)
+        elif args.command in {"pause","resume"}:
+            result=sessions.pause(store,current_session(),args.command=="pause")
+        elif args.command in {"status","commands"}:
+            s=sessions.session(store.flow(),current_session())
+            result=s["commands"][s["cursor"]:] if args.command=="commands" else {k:v for k,v in s.items() if k!="commands"}
+        elif args.command=="_shell-event":
+            ident=current_session()
+            if args.event=="begin":sessions.command_start(store,ident,sys.stdin.read(20001),args.cwd)
+            else:sessions.command_end(store,ident,args.exit_code,args.pipeline)
+            return 0
+        print(json.dumps(result,indent=2))
+        return 0
+    except (RecordError,OSError) as exc:
+        print(json.dumps({"error":str(exc)}),file=sys.stderr)
+        return 2
+
+if __name__=="__main__":raise SystemExit(main())
