@@ -217,7 +217,7 @@ function bindArtifactButtons(el){
 }
 
 function nodeContent(n){
- if(n.status==="running"||n.status==="planned")return '<span class="ring">'+(n.status==="running"?"↗":"·")+'</span><span class="node-title">'+esc(n.title)+'</span><span class="node-bottom">'+(n.status==="running"?"Running":"Planned")+'</span>';
+ if(n.status==="running"||n.status==="planned")return '<span class="ring">'+(n.status==="running"?"↗":"·")+'</span><span class="node-title">'+esc(n.title)+'</span><span class="pending-summary">'+esc(n.expectedSummary||n.note||(n.expectedFiles||[]).join(', '))+'</span><span class="node-bottom">'+(n.status==="running"?"Running":"Planned")+'</span>';
  const plot=firstPlot(n),bad=["failed","cancelled","unknown"].includes(n.status);
  return '<span class="node-title">'+esc(n.title)+'</span>'+(plot?'<span class="mini-plot">'+imagePreview(n)+'</span>':'<span class="node-excerpt">'+esc(decisionSummary(n))+'</span>')+'<span class="node-bottom">'+(bad?esc(n.status):n.status==="imported"?"Imported · "+n.files.length+" files":n.files.length+" saved outputs")+'</span>';
 }
@@ -266,7 +266,7 @@ function placePopup(el,rect){el.hidden=false;const pr=el.getBoundingClientRect()
 function renderPreview(n){
  const items=artifacts(n),pending=n.status==="running"||n.status==="planned",plot=firstPlot(n),note=decisionSummary(n),el=$("#preview");
  el.dataset.state=n.id;el.classList.toggle("has-plot",!!plot);
- const explanation=note?'<p class="preview-note '+(plot?"preview-caption":"preview-summary")+'">'+esc(note)+'</p>':"";
+ const explanation=(pending?n.expectedSummary||note:note)?'<p class="preview-note '+(plot?"preview-caption":"preview-summary")+'">'+esc(pending?n.expectedSummary||note:note)+'</p>':"";
  el.innerHTML='<div class="preview-inner preview-heading"><div class="preview-label">'+esc(n.status)+'</div><div class="preview-title">'+esc(n.title)+'</div></div>'+
    (plot?'<div class="preview-plot">'+imagePreview(n,"","eager")+'</div>':"")+
    '<div class="preview-inner preview-context">'+explanation+'<div class="preview-label">'+(pending?"Expected outputs":n.status==="imported"?"Preserved inputs":"Saved outputs")+'</div><ul class="preview-files">'+(pending?(n.expectedFiles||[]).map(f=>'<li>'+esc(f)+'</li>').join(""):items.slice(0,4).map(a=>'<li>'+esc(a.name)+'</li>').join(""))+'</ul></div><button class="preview-open" data-open="'+esc(n.id)+'">Open state <span>↗</span></button>';

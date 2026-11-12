@@ -25,6 +25,40 @@ class RecorderTests(unittest.TestCase):
         self.parent=self.store.snapshot("Input",[self.input],ident="input")
     def execute(self,code,outputs=(),**kw):
         return run(self.store,["input"],"Attempt",[sys.executable,"-c",code],outputs=outputs,**kw)
+    def test_plan_chain_and_execution_lifecycle(self):
+        a=self.store.plan("First",["input"],"Expected: first table",["out.txt"],ident="first")
+        self.store.plan("Second",["first"],"Expected: figure",ident="second")
+        self.assertEqual(self.store.flow()["actions"],[])
+        self.assertGreater(entity(self.store.flow(),"states","second")["x"],a["x"])
+        with self.assertRaises(RecordError):
+            run(self.store,["first"],"Second",[sys.executable,"-c","pass"],planned="second")
+        seen=[]
+        def observe():
+            for _ in range(100):
+                f=self.store.flow()
+                if f["actions"]:
+                    seen.append(f)
+                    return
+                time.sleep(.01)
+        t=threading.Thread(target=observe);t.start()
+        result=run(self.store,["input"],"First",[sys.executable,"-c",
+            "import time,pathlib;time.sleep(.2);pathlib.Path('out.txt').write_text('ok')"],
+            outputs=["out.txt"],planned="first")
+        t.join()
+        self.assertEqual(seen[0]["actions"][0]["status"],"running")
+        self.assertEqual(entity(seen[0],"states","first")["status"],"running")
+        f=self.store.flow()
+        self.assertEqual(len(f["states"]),3)
+        self.assertEqual(entity(f,"states","first")["status"],"completed")
+        self.assertEqual(entity(f,"states","first")["x"],a["x"])
+        self.assertEqual(entity(f,"states","second")["status"],"planned")
+        self.assertEqual(len(f["actions"]),1)
+        result=run(self.store,["first"],"Second",[sys.executable,"-c","pass"],planned="second")
+        self.assertEqual(result["state"],"second")
+        self.assertEqual(len(self.store.flow()["actions"]),2)
+        with self.assertRaises(RecordError):
+            run(self.store,["input"],"First",[sys.executable,"-c","pass"],planned="first")
+
     def test_preserved_inputs_outputs_and_reopen(self):
         result=run(self.store,["input"],"Copy",[sys.executable,"-c","import pathlib,sys;pathlib.Path('out.txt').write_text(pathlib.Path(sys.argv[1]).read_text())","{input:0}"],inputs=[str(self.input)],outputs=["out.txt"],reason="Test copying")
         self.assertEqual(result["status"],"completed")

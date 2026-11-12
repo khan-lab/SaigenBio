@@ -3,14 +3,14 @@ import argparse
 import json
 from pathlib import Path
 import sys
-sys.path.insert(0,str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 from saigen.store import Store, entity, digest
 from saigen.runner import run, code_info
 
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument("--source",type=Path,required=True)
-    parser.add_argument("--project",type=Path,default=Path(".saigen-projects/ecoli"))
+    parser.add_argument("--project",type=Path,default=Path(__file__).resolve().parents[3]/"SaigenBio-lab"/"projects"/"ecoli")
     args=parser.parse_args()
     source=args.source.expanduser().resolve()
     names=["SRR2589044","SRR2584863","SRR2584866"]

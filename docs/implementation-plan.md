@@ -125,11 +125,11 @@ The original upstream alignment and calling steps remain imported context. Their
 - Restore an edit through Undo without deleting the earlier history.
 - Keep the canvas position while new records arrive.
 - Treat a lost heartbeat as uncertainty.
-- Preserve the existing mock as a separate illustrative reference.
+- Retain the original mock in Git history as an illustrative reference.
 
 ## Initial implementation status
 
-The local recorder, project API, connected viewer, artifact previews, and persistent human editing are implemented. The agent skill is bundled with the repository. The original standalone mock remains available separately.
+The local recorder, project API, connected viewer, artifact previews, and persistent human editing are implemented. The agent skill is bundled with the repository. The original standalone mock is retained in Git history.
 
 Automated checks cover preserved artifacts, real command success and failure, missing outputs, cancellation, stale and concurrent edits, immutable execution facts, Undo, graph validation, heartbeat recovery, exports, and the HTTP artifact API. Browser checks cover file lists on edge labels, file contents, real figure previews, edits surviving reload, planned branches, Undo, and live running-to-completed updates without moving the canvas.
 

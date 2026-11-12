@@ -191,11 +191,40 @@ class Store:
         flow = self.update("snapshot.imported",actor,change)
         return entity(flow,"states",ident)
 
-    def begin(self, title, parents, command, actor, reason, outputs, inputs, code, environment, ident=None, label=None):
+    def plan(self, title, parents, expected, outputs=(), actor="AI agent", ident=None):
         ident = ident or uid("st")
+        def change(f):
+            if any(n["id"] == ident for n in f["states"]):
+                raise RecordError("State ID already exists")
+            ps = [entity(f, "states", i) for i in parents]
+            if not ps:
+                raise RecordError("A planned result needs an input state")
+            x = max(n["x"] for n in ps) + 320
+            y = ps[0]["y"]
+            while any(abs(n["x"]-x)<215 and abs(n["y"]-y)<165 for n in f["states"]):
+                y += 210
+            n = {"id":ident, "title":text(title,"title",120,True),
+                 "note":text(expected,"expected output",20000,True), "expectedSummary":expected,
+                 "planParents":list(parents), "expectedFiles":names(list(outputs)),
+                 "status":"planned", "origin":"agent-plan", "writtenBy":actor,
+                 "performedBy":None, "createdAt":now(), "x":x, "y":y,
+                 "artifactIds":[], "manifest":[], "files":[], "references":[]}
+            f["states"].append(n)
+            return {"state":n}, None
+        return entity(self.update("plan.proposed",actor,change),"states",ident)
+
+    def begin(self, title, parents, command, actor, reason, outputs, inputs, code, environment, ident=None, label=None, planned=None, expected=""):
+        ident = planned or ident or uid("st")
         aid = uid("run")
         def change(f):
-            if any(n["id"]==ident for n in f["states"]): raise RecordError("State ID already exists")
+            existing = next((n for n in f["states"] if n["id"]==ident),None)
+            if planned:
+                if not existing or existing.get("origin")!="agent-plan" or existing["status"]!="planned":
+                    raise RecordError("Select an unexecuted agent plan")
+                if parents != existing["planParents"]:
+                    raise RecordError("Run inputs must match the planned parents")
+            elif existing:
+                raise RecordError("State ID already exists")
             ps = [entity(f,"states",i) for i in parents]
             if not ps: raise RecordError("A run needs at least one parent")
             if any(n["status"] not in {"imported","completed","saved"} for n in ps):
@@ -207,7 +236,14 @@ class Store:
             at = now()
             n = {"id":ident,"title":text(title,"title",120,True),"note":text(reason,"reason"),"x":x,"y":y,"status":"running","origin":"recorded","writtenBy":actor,"performedBy":actor,"createdAt":at,"codeRef":code.get("commit"),"code":code,"artifactIds":[],"manifest":inherited,"files":[],"expectedFiles":outputs,"references":[]}
             a = {"id":aid,"from":parents,"to":ident,"label":text(label or Path(command[0]).name,"label",160,True),"command":"","argvTemplate":command,"reason":reason,"reasonSource":"agent-stated" if actor!="Human" else "human-stated","status":"running","origin":"recorded","writtenBy":actor,"performedBy":actor,"startedAt":at,"heartbeatAt":at,"exitCode":None,"runnerPid":os.getpid(),"inputArtifacts":[i["id"] for i in inputs],"code":code,"environment":environment,"methodSource":"Observed by the SaigenBio execution wrapper."}
-            f["states"].append(n);f["actions"].append(a)
+            n["expectedSummary"] = expected or (existing.get("expectedSummary","") if existing else "")
+            if existing:
+                n["x"], n["y"] = existing["x"], existing["y"]
+                n["plan"] = {k:existing[k] for k in ("title","expectedSummary","planParents","createdAt")}
+                f["states"][f["states"].index(existing)] = n
+            else:
+                f["states"].append(n)
+            f["actions"].append(a)
             f["artifacts"].update({i["id"]:i for i in inputs})
             return {"state":n,"action":a,"inputs":inputs}, None
         self.update("run.started", actor, change)
