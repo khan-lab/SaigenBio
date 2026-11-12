@@ -127,18 +127,27 @@ def main():
         flow = json.loads(run("read-import", [cli, "flow", "--project", project]))
         root = next(n for n in flow["states"] if n["id"] == "input")
         input_id = root["artifactIds"][0]
+        run("publish-plan", [cli, "plan", "--project", project, "--from", "input",
+                             "--id", "summary_plan", "--title", "Installed CLI output",
+                             "--expect", "Expected: an SVG showing the number of input rows",
+                             "--output", "counts.svg"])
+        proposed = json.loads(run("read-plan", [cli, "flow", "--project", project]))
+        require(not proposed["actions"] and
+                next(n for n in proposed["states"] if n["id"] == "summary_plan")["status"] == "planned",
+                "A proposed result must not create an execution edge.")
         result = json.loads(run("record-analysis", [
-            cli, "run", "--project", project, "--actor", "AI agent", "--from", "input",
+            cli, "run", "--project", project, "--plan", "summary_plan", "--approved", "--actor", "AI agent", "--from", "input",
             "--title", "Installed CLI output", "--label", "count_rows.py",
             "--reason", "Verify that an installed CLI preserves inputs, scripts, and an SVG outside its source checkout.",
             "--input", "artifact:" + input_id, "--script", "scripts/count_rows.py", "--output", "counts.svg",
             "--", python, "{project}/scripts/count_rows.py", "{input:0}", "counts.svg"]))
-        require(result["status"] == "completed", "The installed execution wrapper did not complete.")
+        require(result["status"] == "completed" and result["state"] == "summary_plan", "The installed execution wrapper did not finalize the proposed state.")
         flow = json.loads(run("read-result", [cli, "flow", "--project", project]))
         require(len(flow["states"]) == 2 and len(flow["actions"]) == 1, "Unexpected smoke-test flow.")
         state = next(n for n in flow["states"] if n["id"] == result["state"])
         artifact = flow["artifacts"][state["artifactIds"][0]]
         report["checks"]["installed_cli_records_analysis"] = True
+        report["checks"]["planned_state_finalized_without_duplicate"] = True
 
         # A random loopback port avoids the live demo and the report-feature worktree.
         server_log = logs / "viewer.log"
@@ -212,6 +221,24 @@ def main():
                     server.kill()
                     server.wait(timeout=5)
 
+        (workspace / "AGENTS.md").write_text(
+            "# Analysis workspace\n\n"
+            "For requested analysis in this workspace, read and follow "
+            ".agents/skills/saigen-record/SKILL.md even when the user does not name it. "
+            "Use the installed CLI; do not access or edit the source checkout.\n\n"
+            "- Active project: projects/agent-demo-01 (initialize if absent).\n"
+            "- Available input: projects/install-check/data/input.tsv. "
+            "This is a synthetic sample/count table, not raw reads or variant calls; "
+            "upstream execution is unrecorded. Copy it into the active project's data directory before importing.\n"
+            "- Runtime: ../runtime/bin/saigen and ../runtime/bin/python, relative to this workspace.\n"
+            "- Viewer: http://127.0.0.1:8767/, started separately by the user. "
+            "Do not launch a duplicate server; report if it is unavailable.\n"
+            "- Use the Python standard library for this small fixture and produce SVG figures. "
+            "Keep generated analysis files inside the active project.\n"
+            "- Inspect the existing flow before importing or choosing parents. "
+            "Do not rerun completed work unless requested. Stop at the user's requested decision checkpoint.\n"
+        )
+
         instructions = [
             "# External installation trial", "",
             "This workspace uses a regular wheel installation. Its CLI and skill do not depend on the source checkout.", "",
@@ -220,12 +247,17 @@ def main():
             "    source ../runtime/bin/activate", "",
             "Then open a new Codex session in this same directory. The project-local skill is .agents/skills/saigen-record/SKILL.md.",
             "Check that saigen-record appears in the skill selector. Automatic agent discovery has not been tested by this script.", "",
-            "Try this prompt:", "",
-            "> Use $saigen-record. Create a fresh analysis project at projects/agent-trial. Import the synthetic table at projects/install-check/data/input.tsv and create a small SVG summary through saigen run. Record the input, script, output and reason. Use the installed saigen command and your bundled skill instructions; do not read or edit the original source repository.", "",
+            "AGENTS.md selects projects/agent-demo-01 and directs analysis through the recording skill.", "",
+            "Before opening the agent, initialize the project and leave its viewer running in a separate terminal:", "",
+            "    saigen init --project projects/agent-demo-01 --name 'Fresh agent demo'",
+            "    saigen serve --project projects/agent-demo-01 --port 8767", "",
+            "Open http://127.0.0.1:8767/. Then start a fresh agent in this workspace with the runtime activated.", "",
+            "Try this prompt (no explicit skill invocation):", "",
+            "> I want to explore this sample-count table. First, plot the count for each sample in sample-name order and tell me what stands out. Let us inspect that before deciding what to do next.", "",
             "## View the completed installation check", "",
-            "With the environment activated, and port 8767 free:", "",
-            "    saigen serve --project projects/install-check --port 8767", "",
-            "Open http://127.0.0.1:8767/ . The automated check used a temporary port and stopped its server afterward.", "",
+            "To inspect the automated fixture separately, with the environment activated and port 8768 free:", "",
+            "    saigen serve --project projects/install-check --port 8768", "",
+            "Open http://127.0.0.1:8768/ . The automated check used a temporary port and stopped its server afterward.", "",
             "## Files", "",
             "- projects/install-check/: synthetic input, script, recorded result and preserved files.",
             "- .agents/skills/saigen-record/: the skill copied from the installed wheel.",

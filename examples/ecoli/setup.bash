@@ -4,9 +4,9 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: bash setup.bash [PROJECT_DIRECTORY]
+Usage: bash examples/ecoli/setup.bash [PROJECT_DIRECTORY]
 
-Default: demos/advisor-demo (relative to the current directory).
+Default: ../SaigenBio-lab/projects/advisor-demo (relative to the current directory).
 Requires pixi and saigen on PATH. Creates the environment, folders,
 and an empty SaigenBio project. It does not start the viewer or analysis.
 Existing Pixi workspaces are rebuilt from their lock file.
@@ -29,7 +29,7 @@ for tool in pixi saigen; do
   fi
 done
 
-demo_dir="${1:-demos/advisor-demo}"
+demo_dir="${1:-../SaigenBio-lab/projects/advisor-demo}"
 if [[ -z "$demo_dir" ]]; then
   printf 'Specify a non-empty project directory.\n' >&2
   exit 2

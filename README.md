@@ -1,8 +1,10 @@
 # SaigenBio
 
-A local analysis recorder and a plain HTML flow viewer. States contain preserved files. Arrows show recorded commands or explicit plans. The original illustrative version remains in [saigenbio_mock.html](saigenbio_mock.html).
+A local analysis recorder and a plain HTML flow viewer. States contain preserved files. Arrows show recorded commands or explicit plans.
 
 Read the [implementation plan](docs/implementation-plan.md) for the product decisions and delivery order.
+
+For a fresh-session installation and usability test, follow the [step-by-step walkthrough](docs/fresh-agent-walkthrough.md).
 
 ## Start a project
 
@@ -22,18 +24,18 @@ Open http://127.0.0.1:8765. The service reads and writes that project's .saigen 
 From this repository, run:
 
 ```sh
-bash setup.bash
+bash examples/ecoli/setup.bash
 ```
 
-The default location is the visible directory demos/advisor-demo. Pass another directory as the first argument for a new rehearsal. The script requires Pixi and SaigenBio on PATH, installs the analysis tools, creates the folders, and initializes the project. Existing environments use their lock file. Data downloads and analysis are performed afterward by the agent.
+The default location is the external directory ../SaigenBio-lab/projects/advisor-demo. Pass another directory as the first argument for a new rehearsal. The script requires Pixi and SaigenBio on PATH, installs the analysis tools, creates the folders, and initializes the project. Existing environments use their lock file. Data downloads and analysis are performed afterward by the agent.
 
 Start the viewer separately:
 
 ```sh
-saigen serve --project demos/advisor-demo
+saigen serve --project ../SaigenBio-lab/projects/advisor-demo
 ```
 
-The entire demos directory is Git-ignored, including its input data, outputs, environments, and recorded analysis history.
+Demo inputs, outputs, environments, and recorded history live outside this source repository. The default path above assumes commands are run from the repository root.
 
 ## Record a human shell session
 
@@ -48,14 +50,14 @@ The installation provides `saigen`; `python3 -m saigen` remains supported. `--pr
 Start the viewer in one terminal:
 
 ```sh
-saigen init --project .saigen-projects/demo --name "Live demo"
-saigen serve --project .saigen-projects/demo
+saigen init --project ../SaigenBio-lab/projects/demo --name "Live demo"
+saigen serve --project ../SaigenBio-lab/projects/demo
 ```
 
 Open http://127.0.0.1:8765. In another terminal:
 
 ```sh
-saigen start --project .saigen-projects/demo
+saigen start --project ../SaigenBio-lab/projects/demo
 ```
 
 For an existing graph, select a starting state with `--from "Unfiltered variants"`. A title must be unique; a state ID also works. An uninitialized project is created automatically. The session keeps your current directory and runs normal commands there. It loads your zsh configuration and installs temporary hooks in the new shell without editing your configuration files.
@@ -167,17 +169,17 @@ This requires `quarto` on PATH. Generated reports and downloaded copies stay in 
 For biological demonstrations, select an external directory explicitly:
 
 ```sh
-bash setup.bash ../SaigenBio-lab/projects/advisor-demo
+bash examples/ecoli/setup.bash ../SaigenBio-lab/projects/advisor-demo
 saigen serve --project ../SaigenBio-lab/projects/advisor-demo
 ```
 
-Existing `.saigen-projects/ecoli` contains preserved analysis history, including depth 5. Keep each project's complete `.saigen` directory together; deleting individual run or object files can break its record. Git ignore rules prevent commits but do not remove files from disk.
+Existing `../SaigenBio-lab/projects/ecoli` contains preserved analysis history, including depth 5. Keep each project's complete `.saigen` directory together; deleting individual run or object files can break its record. Git ignore rules prevent commits but do not remove files from disk.
 
 ## Real example and checks
 
 ```sh
-python3 scripts/ecoli_example.py --source /path/to/ecoli-evol
-python3 -m saigen --project .saigen-projects/ecoli serve
+python3 examples/ecoli/ecoli_example.py --source /path/to/ecoli-evol
+python3 -m saigen --project ../SaigenBio-lab/projects/ecoli serve
 python3 -m unittest discover -s tests -v
 node tests/test_path_display.cjs
 ```
@@ -201,3 +203,27 @@ quarto render report.qmd --to typst --output report.pdf --no-execute
 The report aliases local paths. Labels embedded inside original figure files are preserved unchanged and can still contain paths or sensitive text. The selected snapshot is a record excerpt, not a full database backup or an analysis replay package; nonfigure source files are referenced by name and hash rather than bundled. The manifest pins source evidence, not a byte-identical PDF across Quarto/font versions.
 
 The first version supports preserved SVG, PNG and JPEG figures, up to 20 MB per figure, 100 MB total, and 50 selected states. SVGs containing embedded/linked content or external declarations are omitted with a warning. External references are never read by reporting. Recorded Markdown is escaped as display text; executable blocks and includes are not interpreted. Rendering uses a fixed Quarto argument list, disabled code execution and a controlled project configuration. One report renders at a time, with a three-minute timeout. Downloads require the viewer session token; download links last for the server session, while saved report files remain on disk. A renderer error leaves its local `render.log` for inspection.
+
+## Repository layout
+
+- saigen/, web/, skills/: installed application and agent integration.
+- tests/, scripts/check_installation.py: reusable checks; generated trials belong outside the checkout.
+- examples/ecoli/: optional example preparation, filtering, statistics, and plotting helpers.
+- docs/, README.md, pyproject.toml: design, usage, and packaging.
+
+Local research notes and media have been moved to the sibling SaigenBio-lab/research/ directory. They are not required to install or develop the application. The original HTML prototype is retained in Git history.
+
+Recorded commands retain the paths used at execution time. After moving a project, those historical paths can point to its former location; preserved files remain accessible through the viewer using their hashes. Project migration is not environment or command replay.
+
+## Planned output states
+
+Agents can publish future results without execution edges:
+
+```sh
+saigen plan --project /path/to/analysis --from input --id summary_plan \
+  --title "Summary" --expect "Expected: sample-count plot" --output counts.svg
+```
+
+Use another planned ID as --from to propose later steps. After user approval, execute into the same placeholder using the normal run options plus --plan summary_plan --approved. Its actual parents must match the proposal and already contain completed or imported evidence. The node retains its position; the incoming edge appears when execution starts. The approval flag is an agent declaration, not an approval interface.
+
+For immediate execution, run --expect describes the expected output on the running placeholder. Completion replaces the placeholder with preserved results. Failed attempts remain recorded.
