@@ -22,6 +22,18 @@ After explicit user approval, execute one step at a time with `saigen run --plan
 
 A failed planned execution remains a failed result. Retry through a new run rather than overwriting it. If the scientific plan changes, explain which remaining proposals are obsolete; do not execute stale proposals automatically.
 
+## When publishing is blocked by permissions
+
+If a planning-record write is blocked, distinguish filesystem permissions from a native plan-mode restriction. Do not infer that all writes are impossible merely because the default sandbox is read-only: a supported command approval may allow this specific operation.
+
+When escalation is supported and the current mode permits it, request approval through the agent's normal approval mechanism for the specific planning command and any necessary input import. Explain the concrete project and effect: "May I save these planned nodes to SaigenBio? This only updates the canvas; analysis will wait for your approval." If importing input files is included, disclose that those files will also be preserved. Keep analysis commands out of this approval request.
+
+If command approval is unavailable, ask whether the user wants to enable workspace writes. In Codex CLI, guide them to type `/permissions` in the current chat and choose the workspace-write preset; labels vary by version. For another agent, use its documented permission controls rather than assuming Codex commands apply. The agent cannot grant itself permissions or change permission configuration on the user's behalf.
+
+If native Plan mode forbids the write, explain that limitation and ask the user to switch to a mode that permits publishing records while retaining the instruction to wait before analysis. Do not use escalation to bypass a plan-mode restriction. If a managed policy prevents the change or the user declines, leave the plan in chat and clearly state that it has not been published.
+
+After approval or confirmation of the settings change, inspect the active project's flow before retrying, so partially published plans are not duplicated. Verify that the proposed states exist without execution edges. Permission to publish records is not approval to execute the scientific plan. Do not ask again when the necessary permission and user authorization are already in place.
+
 ## Required completion check
 
 In a SaigenBio-managed project, a new analysis that produces results is complete only when its execution and outputs are recorded through `saigen run` in the active project. Creating a plot or table directly is not sufficient, even if the file is correct. Reading the skill does not itself record anything.
