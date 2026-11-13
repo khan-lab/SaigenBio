@@ -9,11 +9,11 @@ The installation provides `saigen`; `python3 -m saigen` remains supported. `--pr
 Start the viewer in one terminal:
 
 ```sh
-saigen init --project ../SaigenBio-lab/projects/demo --name "Live demo"
+saigen init --project ../SaigenBio-lab/projects/demo --name "Live demo" --non-interactive
 saigen serve --project ../SaigenBio-lab/projects/demo
 ```
 
-Open http://127.0.0.1:8765. In another terminal:
+Open the printed viewer address (normally http://127.0.0.1:8767/). In another terminal:
 
 ```sh
 saigen start --project ../SaigenBio-lab/projects/demo
