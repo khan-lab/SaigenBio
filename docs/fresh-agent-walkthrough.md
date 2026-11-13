@@ -1,183 +1,106 @@
-# Test SaigenBio in a fresh AI-agent session
+# Explore E. coli variants with SaigenBio
 
-This walkthrough checks that an installed copy works outside the source repository, that a new agent can discover its skill, and that recorded analysis appears in the viewer.
+This walkthrough follows a researcher changing their mind: acquire data, filter at depth 5, plot, try log scaling, revisit depth 10, compare, and interpret. Send each prompt only after inspecting the previous result.
 
-Use a small synthetic example first. This tests the product experience; it is not a biological validation.
+## 1. Prepare a fresh external workspace
 
-## Expected live behavior
-
-Without planning: when the agent starts an analysis through the wrapper, a dotted result node describes its expected output and an animated edge travels toward it. On completion, the same node and edge become solid and the actual figure takes priority. Failed runs remain visibly failed.
-
-With planning: the agent publishes proposed output nodes and presents the scientific plan in chat. Planned nodes have no execution edges. After you approve execution, each step starts its incoming animated edge and finalizes its own result in turn. Remaining proposals stay dotted. Plans reach the canvas through explicit agent recording commands; chat alone does not synchronize them. Native agent modes that forbid writes also prevent publishing canvas proposals until writes are allowed.
-
-## 1. Build a fresh external trial
-
-A verified installation of this version is ready at:
-
-```text
-/path/to/trial/workspace
-```
-
-Use that workspace directly, or build another trial below.
-
-Build the current version so the CLI, web assets, and skill all include the live planning behavior. Run from the source repository:
+From the source checkout, build and check a regular installation:
 
 ```bash
-python3 -B scripts/check_installation.py --with-quarto
+python3 -B scripts/check_installation.py --agent claude --with-quarto
 ```
 
-Use the **Fresh-session workspace** path printed at the end:
+Choose codex, claude, opencode, or antigravity with --agent. The printed trial workspace has an installed runtime, skill, and project instructions. All trial files stay outside the source checkout.
+
+For this biological walkthrough, create a separate workspace alongside that trial's workspace, using the runtime path printed by the check:
 
 ```bash
-cd /path/printed/by/the/check/workspace
+/path/to/trial/runtime/bin/saigen setup --workspace /path/to/trial/exploration --agent claude --analysis-project projects/ecoli --viewer http://127.0.0.1:8767/
+cd /path/to/trial/exploration
 source ../runtime/bin/activate
-saigen --version
-command -v saigen
+saigen init --project projects/ecoli --name "E. coli threshold exploration"
+saigen serve --project projects/ecoli --port 8767
 ```
 
-The executable should be inside this trial's runtime/bin/. Keep the remaining commands in this workspace. Older trials do not automatically receive updated skills or project instructions.
+This workspace has no synthetic fixture configured. Use a new directory for each rehearsal. Setup refuses to replace differing instruction files. Open http://127.0.0.1:8767/ and leave the viewer running. Choose another free port if needed and keep saigen-workspace.json consistent.
 
-The checker prepares two different instruction layers:
+Open a new session in this exploration workspace using your chosen agent. See [agent integrations](agent-integrations.md). Enable workspace writes. Requesting a plan in normal mode lets the agent save proposals while waiting for scientific approval; a native mode that forbids writes cannot publish canvas nodes.
 
-- AGENTS.md: the active analysis project, input location, viewer port, and instruction to use the recording skill.
-- .agents/skills/saigen-record/SKILL.md: how to preserve and record analysis.
+The canvas is editable by default: drag states to arrange them, or click a state to select its editing controls. Hover for about 650 ms to see a preview, then choose **Show detail →** to open its details. Report selection temporarily disables state dragging; cancelling it restores editing.
 
-This is one-time workspace setup. Users do not need to repeat recording instructions in scientific prompts. The workspace AGENTS.md follows [Codex project instruction conventions](https://developers.openai.com/codex/guides/agents-md).
+## 2. Explore and download
 
-## 2. Prepare an empty project and open its viewer
+> I want to explore the E. coli dataset used in the Data Carpentry genomics lesson. Download its public variant-call table and explain what the samples represent. Show me a small sample summary before we decide how to analyze it. Please use the public source rather than copying files from my computer.
 
-```bash
-saigen init --project projects/agent-demo-01 --name "Fresh agent demo"
-saigen serve --project projects/agent-demo-01 --port 8767
-```
+The public teaching table is available at:
+https://raw.githubusercontent.com/datacarpentry/genomics-r-intro/main/episodes/data/combined_tidy_vcf.csv
 
-Leave this terminal running. Open <http://127.0.0.1:8767/>.
+Sources: [lesson dataset and sample descriptions](https://datacarpentry.github.io/organization-genomics/data.html), [lesson download example](https://datacarpentry.github.io/genomics-r-intro/06-data-visualization.html).
 
-This uses a separate port from the existing viewer on 8765. If 8767 is occupied, choose another free port and change the browser address accordingly; do not stop an unrelated server.
+This is a processed variant-call table, not raw sequencing reads. Its acquisition can be recorded; earlier alignment and calling were not performed in this session. The lesson describes samples SRR2589044, SRR2584863, and SRR2584866 from generations 5,000, 15,000, and 50,000 respectively. The agent should verify downloaded columns and sample metadata instead of assuming their names.
 
-For another rehearsal, use a new project name such as `agent-demo-02` throughout these instructions and update AGENTS.md to match. If you change the viewer port, update it there too. Do not overwrite an earlier recorded analysis.
+Expected canvas:
+- A dotted acquiring node appears while the recorded acquisition command runs, with no incoming arrow.
+- The completed dataset node prioritizes a compact sample table if the agent produces one with the acquisition outputs. Otherwise it previews the downloaded CSV.
+- Download command, declared source URL, timestamps, status, file hashes, and logs are in the node details.
+- Unknown upstream execution remains explicitly unknown.
 
-## 3. Start a fresh agent in the same workspace
+CSV/TSV previews show a bounded excerpt, not the full dataset. For a useful sample overview, the agent can produce a samples.tsv with a few biologically meaningful columns during acquisition. Raw FASTQ and VCF text are not automatically turned into sample metadata.
 
-Open another terminal:
+## 3. Filter
 
-```bash
-cd /path/printed/by/the/check/workspace
-source ../runtime/bin/activate
-codex
-```
+> Keep variant calls with reported depth (DP) of at least 5. Show the original count, retained count, and percentage removed for each sample. Then pause before plotting.
 
-Use a new conversation, not a resumed session. If you use a graphical agent application, open this workspace as the project and start a new conversation there. Ask it to verify that it uses the trial's installed CLI; a graphical application may not inherit your terminal environment.
+The agent should inspect the depth field and record the actual method. For this CSV example, a DP >= 5 table filter is appropriate after checking field meaning and missing values. This is not raw-read QC, nor an exact reproduction of vcfutils.pl varFilter, which has additional filtering behavior. Keep missing-depth handling explicit and include all three samples, even if one retains zero records.
 
-The installed skill has already been copied to:
+Expected: dataset -> depth-5 results, including a count table.
 
-```text
-.agents/skills/saigen-record/SKILL.md
-```
+## 4. Plot the three sampled generations
 
-Check whether `saigen-record` appears in the agent's skill selector. If it is missing, record that as a discovery failure. Explicitly reading the file can help diagnose the issue, but does not count as successful automatic discovery.
+> Plot the retained variant counts for the three samples, ordered by generation. Label the samples and generations clearly.
 
-## 4. Ask the agent to create the first result
+Expected: a linear plot derived from the depth-5 count table. These are three sampled clones, not replicated populations; counts are not mutation rates.
 
-Paste this into the fresh conversation:
+## 5. Inspect the imbalance
 
-```text
-I want to explore this sample-count table. First, plot the count
-for each sample in sample-name order and tell me what stands out.
-Let's inspect that before deciding what to do next.
-```
+> One sample dominates the chart. Can we try a logarithmic scale so the smaller counts are easier to see? Keep the original plot too.
 
-The setup identifies the available table as synthetic. The agent should locate it, import it, and record its analysis without being reminded about SaigenBio. No biological interpretation should be invented for these test counts.
+Expected: a separate figure using the same counts. Explain how any zero counts are handled; do not silently drop them or introduce an undisclosed pseudocount. The figure should not rerun variant filtering.
 
+## 6. Revisit the threshold
 
-Watch the browser while the agent works. Completed records should appear without a manual reload. A short command may finish too quickly for its running animation to be noticeable.
+> My PhD TA asked what would happen if we required at least 10 supporting reads. Can we try that and make a comparable plot?
 
-## 5. Ask for a second branch
+Expected: a new depth-10 branch from the original downloaded calls, retaining the depth-5 branch. Use matching sample order and clearly label the scale. Preserve actual script options so the changed threshold is visible in execution details.
 
-After the first result is complete, paste:
+## 7. Compare
 
-```text
-Can you also show the same counts from largest to smallest?
-Keep the first plot so I can compare the two presentations.
-```
+> Compare the two thresholds. Which samples lose the most calls, in absolute numbers and percentages? Which variant calls are removed?
 
+Expected: a comparison with both filtered results as inputs. Match variants by sample and chromosome, position, reference, and alternate allele; check duplicates and multi-allelic representation rather than comparing row numbers. Show retained and removed counts. A stricter numeric threshold should not add calls when other rules are identical.
 
-Expected shape: one imported state with two result branches. The exact labels depend on the table and the agent's script. Reusing the imported table as the parent is appropriate for two independent presentations; a genuinely derived result should follow its actual dependency.
+## 8. Interpret and decide
 
-## Optional: test planning before execution
+> Does changing the threshold change our conclusion? Explain which observations remain consistent and what we would need to check before interpreting the differences biologically.
 
-In a fresh project configured in AGENTS.md, ask:
+Keep conclusions proportional to this teaching dataset. Retained call counts alone do not establish causal variants, mutation rates, or the mechanism of a phenotype. Save the explanation as an annotation on the comparison state; a separate state is useful only if new evidence is generated.
 
-> First, propose a plan to plot this table in sample-name order and then compare it with a plot sorted by count. Wait for my approval before running the analysis.
+The typical flow stays around 8–10 states. Do not create a node for every sentence or inspection command.
 
-Check that proposed results appear as dotted nodes, with descriptions and no edges. Input import may appear as an existing-evidence state. Then say:
+## Alternative: existing data
 
-> Go ahead with that plan.
+If files are already downloaded, configure their paths through --input during setup and ask the agent to inspect them. It should import existing evidence with snapshot and record checksums. It must not invent download commands, dates, or source provenance. If download logs exist, preserve them as evidence without claiming the wrapper observed their execution.
 
-Watch the planned nodes become running and then completed individually. Each executed step adds its actual edge; nodes for later steps remain planned. A fast command may finish between browser polls, so a visible animation is not guaranteed for very short runs.
+## Optional planning test
 
-## 6. Check the viewer
+Before filtering, ask for a plan and require approval before analysis. Proposed result nodes should appear dotted without edges. After approval, each step adds its incoming animated edge and finalizes individually. Very short commands may complete between viewer polls.
 
-- Both independent presentation branches start from the imported state.
-- For direct execution, the wrapper publishes the running state before the command finishes.
-- For a plan, proposals have no edges until execution starts.
-- Arrow labels and details explain the command or option difference.
-- Hovering each result prioritizes its figure.
-- A state without a figure shows its summary.
-- Clicking a state opens its detailed record and preserved files.
-- Reasons and actor information match what the agent actually recorded.
-- Before reporting completion, the agent checked the active project's flow and verified the new state, action, and preserved outputs. A standalone SVG without a recorded state fails this test.
+For permission-blocked publication, the skill should request approval for the specific planning write when supported. Otherwise follow your agent's permission controls. Permission to publish does not approve analysis.
 
-If something is missing, keep the failed attempt and ask the agent to diagnose it. A retry should create a new recorded run.
+## Finish and export
 
-## 7. Export a report
+Select the relevant states through Report, then Create PDF. Inspect plots, comparison notes, and evidence in the PDF and source ZIP. Export must not rerun analysis.
 
-Quarto must be available to the viewer process. It was available during this installation trial.
+Keep the full project directory, including .saigen/. Stop the viewer with Ctrl+C.
 
-1. Click **Report**.
-2. Select the imported state, first result, and alternative result in that order.
-3. Confirm that the numbered selections match your intended order.
-4. Click **Create PDF**.
-5. Download the PDF and source ZIP.
-
-Check that the PDF includes the selected states, both figures, and recorded explanations. Report generation should not rerun the analysis or add analysis nodes.
-
-Reports are retained under:
-
-```text
-projects/agent-demo-01/.saigen/reports/
-```
-
-## 8. Finish and keep the evidence
-
-Press **Ctrl+C** in the terminal running the viewer to stop that test server.
-
-Keep the complete `projects/agent-demo-01/` directory, including its hidden `.saigen/` directory. It contains the preserved files and history.
-
-Record whether these checks passed:
-
-| Check | Result |
-| --- | --- |
-| Installed CLI used outside the source checkout | |
-| Skill used from project instructions without an explicit skill prompt | |
-| Agent stopped at the requested inspection checkpoint | |
-| First recorded analysis and figure appeared live | |
-| Alternative branch preserved a visible command difference | |
-| State previews and file links worked | |
-| Selected-state PDF and source ZIP were correct | |
-
-The automated checks already passed. Skill discovery and the quality of the fresh-agent experience still need this manual walkthrough.
-
-## Use the same experience for biological data
-
-In a workspace configured with actual VCF inputs, the first prompt could be:
-
-> I want to analyze these variant calls. First, remove calls with read depth below 5 and show how many remain in each sample. Then we can decide whether to try a stricter threshold.
-
-For raw FASTQ reads instead:
-
-> I want to analyze these E. coli sequencing reads. First, check their quality and trim low-quality bases. Show me the QC results before we decide what to do next.
-
-These are alternative examples, not actions to run on the synthetic count table. Configure that workspace's actual input paths and analysis project first. Scientific choices that remain ambiguous should be clarified; the recorder should not silently choose a different analysis.
-
-Build logs, temporary environments, demo files, and reports stay outside the source repository.
+Pass criteria: recorded acquisition or honest import; visible table/plot previews; correct branch parents; actual command differences; retained failed attempts; preserved files; and conclusions tied to recorded evidence. Repeat the same scientific prompts in each agent before claiming live compatibility.

@@ -1,5 +1,7 @@
 """Durable project records and immutable artifact snapshots (Python standard library)."""
 from __future__ import annotations
+import csv
+import io
 import copy
 import hashlib
 import json
@@ -56,7 +58,7 @@ def validate(flow):
     aids = set()
     graph = {i: [] for i in ids}
     for a in flow["actions"]:
-        if not ID.fullmatch(a["id"]) or a["id"] in aids or not a["from"] or a["to"] not in ids:
+        if not ID.fullmatch(a["id"]) or a["id"] in aids or (not a["from"] and not a.get("acquisition")) or a["to"] not in ids:
             raise RecordError("Invalid action")
         aids.add(a["id"])
         if len(set(a["from"])) != len(a["from"]):
@@ -79,6 +81,23 @@ def validate(flow):
             if indegree[child] == 0: queue.append(child)
     if visited != len(ids):
         raise RecordError("A connection would create a cycle")
+
+def table_preview(path, filename):
+    if Path(filename).suffix.lower() not in {".csv",".tsv"}:
+        return None
+    try:
+        with Path(path).open("rb") as handle:
+            sample=handle.read(65536)
+        reader=csv.reader(io.StringIO(sample.decode("utf-8-sig")), delimiter="\t" if filename.lower().endswith(".tsv") else ",")
+        rows=[]
+        for row in reader:
+            rows.append([cell[:160] for cell in row[:6]])
+            if len(rows)==6: break
+        if len(rows)>1:
+            return {"columns":rows[0],"rows":rows[1:],"truncated":True}
+    except (UnicodeError,csv.Error,OSError):
+        pass
+    return None
 
 class Store:
     def __init__(self, project):
@@ -162,7 +181,8 @@ class Store:
                 tmp = None
             filename = name or path.name
             mime = mimetypes.guess_type(filename)[0] or ("text/plain" if path.suffix in {".vcf",".tsv",".log",".md",".py",".R",".sh",".lock"} else "application/octet-stream")
-            return {"id":uid("ar"),"name":filename,"sha256":sha,"size":after.st_size,"mime":mime,"role":role,"sourcePath":str(path),"storage":"preserved" if preserve else "reference","capturedAt":now()}
+            preview = table_preview(dest, filename) if preserve else None
+            return {"tablePreview":preview,"id":uid("ar"),"name":filename,"sha256":sha,"size":after.st_size,"mime":mime,"role":role,"sourcePath":str(path),"storage":"preserved" if preserve else "reference","capturedAt":now()}
         finally:
             if tmp and Path(tmp).exists(): os.unlink(tmp)
     def artifact_path(self, artifact, verify=True):
@@ -213,7 +233,7 @@ class Store:
             return {"state":n}, None
         return entity(self.update("plan.proposed",actor,change),"states",ident)
 
-    def begin(self, title, parents, command, actor, reason, outputs, inputs, code, environment, ident=None, label=None, planned=None, expected=""):
+    def begin(self, title, parents, command, actor, reason, outputs, inputs, code, environment, ident=None, label=None, planned=None, expected="", acquisition=False):
         ident = planned or ident or uid("st")
         aid = uid("run")
         def change(f):
@@ -226,16 +246,18 @@ class Store:
             elif existing:
                 raise RecordError("State ID already exists")
             ps = [entity(f,"states",i) for i in parents]
-            if not ps: raise RecordError("A run needs at least one parent")
+            if not ps and not acquisition: raise RecordError("A run needs at least one parent")
+            if acquisition and ps: raise RecordError("Acquisition must be a root state")
             if any(n["status"] not in {"imported","completed","saved"} for n in ps):
                 raise RecordError("Use an imported or completed parent state")
-            x = max(n["x"] for n in ps)+320
-            y = ps[0]["y"]
+            x = max((n["x"] for n in ps),default=-320)+320
+            y = ps[0]["y"] if ps else 0
             while any(abs(n["x"]-x)<215 and abs(n["y"]-y)<165 for n in f["states"]): y += 210
             inherited = list(dict.fromkeys(a for n in ps for a in n.get("manifest",[])))
             at = now()
             n = {"id":ident,"title":text(title,"title",120,True),"note":text(reason,"reason"),"x":x,"y":y,"status":"running","origin":"recorded","writtenBy":actor,"performedBy":actor,"createdAt":at,"codeRef":code.get("commit"),"code":code,"artifactIds":[],"manifest":inherited,"files":[],"expectedFiles":outputs,"references":[]}
             a = {"id":aid,"from":parents,"to":ident,"label":text(label or Path(command[0]).name,"label",160,True),"command":"","argvTemplate":command,"reason":reason,"reasonSource":"agent-stated" if actor!="Human" else "human-stated","status":"running","origin":"recorded","writtenBy":actor,"performedBy":actor,"startedAt":at,"heartbeatAt":at,"exitCode":None,"runnerPid":os.getpid(),"inputArtifacts":[i["id"] for i in inputs],"code":code,"environment":environment,"methodSource":"Observed by the SaigenBio execution wrapper."}
+            a["acquisition"] = acquisition
             n["expectedSummary"] = expected or (existing.get("expectedSummary","") if existing else "")
             if existing:
                 n["x"], n["y"] = existing["x"], existing["y"]

@@ -37,7 +37,7 @@ def local_output(work, name):
 
 def run(store, parents, title, command, *, inputs=(), outputs=(), actor="AI agent",
         reason="", label=None, ident=None, stdout_name=None, source_repo=None,
-        scripts=(), environment_files=(), tool_versions=(), planned=None, expected=""):
+        scripts=(), environment_files=(), tool_versions=(), planned=None, expected="", acquisition=False, source_urls=()):
     if not command or not all(isinstance(v,str) and v for v in command):
         raise RecordError("Supply a command after --")
     outputs=list(outputs)
@@ -71,6 +71,7 @@ def run(store, parents, title, command, *, inputs=(), outputs=(), actor="AI agen
         extra_records.append(store.capture(p if p.is_absolute() else store.root/p,role="environment"))
     executable=shutil.which(command[0])
     environment={"platform":platform.platform(),"recorderPython":sys.version,"recorderVersion":__version__,"executable":executable,"executableSha256":digest(executable) if executable and Path(executable).is_file() else None,"declaredToolVersions":list(tool_versions),"capturedFiles":[r["id"] for r in extra_records]}
+    environment["declaredSourceURLs"]=list(source_urls)
     code["scriptArtifacts"]=[r["id"] for r in extra_records if r["role"]=="code"]
     session_id=os.environ.get("SAIGEN_SESSION")
     if session_id:
@@ -79,7 +80,7 @@ def run(store, parents, title, command, *, inputs=(), outputs=(), actor="AI agen
             session_id=None
         else:
             sessions.active(store.flow(),session_id)
-    aid,sid=store.begin(title,list(parents),list(command),actor,reason,outputs,input_records+extra_records,code,environment,ident,label,planned,expected)
+    aid,sid=store.begin(title,list(parents),list(command),actor,reason,outputs,input_records+extra_records,code,environment,ident,label,planned,expected,acquisition)
     if session_id:sessions.attach_run(store,session_id,aid)
     work=store.home/"runs"/aid/"work"
     work.mkdir(parents=True)

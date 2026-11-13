@@ -15,23 +15,31 @@ def main():
     parser.add_argument("--version",action="version",version="%(prog)s "+__version__)
     parser.add_argument("--project",default=os.environ.get("SAIGEN_PROJECT","."))
     parser.add_argument("--actor",default=None,help="Declared identity; not authenticated")
-    sub=parser.add_subparsers(dest="command",required=True,metavar="{init,snapshot,plan,run,serve,flow,history,recover,export,start,save,pause,resume,status,commands}")
+    sub=parser.add_subparsers(dest="command",required=True,metavar="{annotate,acquire,setup,init,snapshot,plan,run,serve,flow,history,recover,export,start,save,pause,resume,status,commands}")
     def command(name,**kwargs):
         p=sub.add_parser(name,**kwargs)
         p.add_argument("--project",default=argparse.SUPPRESS)
         p.add_argument("--actor",default=argparse.SUPPRESS)
         return p
+    p=command("setup",help="Prepare a workspace for an AI agent")
+    p.add_argument("--workspace",required=True)
+    p.add_argument("--agent",choices=["codex","claude","opencode","antigravity"],required=True)
+    p.add_argument("--analysis-project",required=True)
+    p.add_argument("--input",action="append",default=[])
+    p.add_argument("--viewer",default="http://127.0.0.1:8767/")
+    p=command("annotate");p.add_argument("--state",required=True);p.add_argument("--note",required=True)
     p=command("init");p.add_argument("--name")
     p=command("snapshot");p.add_argument("--title",required=True);p.add_argument("--id");p.add_argument("--note",default="");p.add_argument("--file",action="append",default=[]);p.add_argument("--reference",action="append",default=[]);p.add_argument("--source-repo")
     p=command("plan",help="Publish an expected result without an execution edge")
     p.add_argument("--title",required=True);p.add_argument("--id")
     p.add_argument("--from",dest="parents",action="append",required=True)
     p.add_argument("--expect",required=True);p.add_argument("--output",action="append",default=[])
-    p=command("run")
+    p=command("run",aliases=["acquire"])
     p.add_argument("--plan",help="Reuse a proposed state after user approval")
     p.add_argument("--approved",action="store_true",help="Declare that the user approved executing this plan")
     p.add_argument("--expect",default="",help="Brief description of expected output")
-    p.add_argument("--from",dest="parents",action="append",required=True)
+    p.add_argument("--from",dest="parents",action="append",default=[])
+    p.add_argument("--source-url",action="append",default=[])
     p.add_argument("--title",required=True);p.add_argument("--id");p.add_argument("--label");p.add_argument("--reason",default="")
     p.add_argument("--input",action="append",default=[]);p.add_argument("--output",action="append",default=[]);p.add_argument("--stdout");p.add_argument("--script",action="append",default=[]);p.add_argument("--environment",action="append",default=[]);p.add_argument("--tool-version",action="append",default=[]);p.add_argument("--source-repo")
     p.add_argument("argv",nargs=argparse.REMAINDER)
@@ -60,7 +68,14 @@ def main():
             raise RecordError("Use this command inside the project's saigen start session")
         return ident
     try:
-        if args.command=="init":result=store.init(args.name)
+        if args.command=="setup":
+            from .workspace import setup
+            result=setup(args.workspace,args.agent,args.analysis_project,args.input,args.viewer)
+        elif args.command=="init":result=store.init(args.name)
+        elif args.command=="annotate":
+            f=store.flow()
+            sid=sessions.resolve_state(f,args.state)
+            result=store.edit([{"op":"edit_state","id":sid,"changes":{"note":args.note}}],f["revision"],args.actor or "AI agent")
         elif args.command=="snapshot":
             result=store.snapshot(args.title,[resolve(p) for p in args.file],args.actor or "AI agent",args.note,args.id,[resolve(p) for p in args.reference],code_info(args.source_repo or store.root))
         elif args.command=="plan":
@@ -71,14 +86,16 @@ def main():
                 if len(matches)!=1: raise RecordError("Planned input is missing or ambiguous")
                 parents.append(matches[0]["id"])
             result=store.plan(args.title,parents,args.expect,args.output,args.actor or "AI agent",args.id)
-        elif args.command=="run":
+        elif args.command in {"run","acquire"}:
+            if args.command=="run" and not args.parents: raise RecordError("A run needs --from; use acquire for a root download")
+            if args.command=="acquire" and (args.parents or args.plan): raise RecordError("Acquisition has no parent or planned target")
             if args.plan and not args.approved:
                 raise RecordError("Execute a proposed state only after user approval; supply --approved")
 
             argv=args.argv[1:] if args.argv[:1]==["--"] else args.argv
             actor=args.actor or (sessions.session(store.flow(),os.environ["SAIGEN_SESSION"])["actor"] if os.environ.get("SAIGEN_SESSION") and Path(os.environ.get("SAIGEN_PROJECT","")).resolve()==store.root else "AI agent")
             parents=[sessions.resolve_state(store.flow(),p) for p in args.parents]
-            result=run(store,parents,args.title,argv,inputs=args.input,outputs=args.output,actor=actor,reason=args.reason,label=args.label,ident=args.id,stdout_name=args.stdout,source_repo=args.source_repo,scripts=args.script,environment_files=args.environment,tool_versions=args.tool_version,planned=args.plan,expected=args.expect)
+            result=run(store,parents,args.title,argv,inputs=args.input,outputs=args.output,actor=actor,reason=args.reason,label=args.label,ident=args.id,stdout_name=args.stdout,source_repo=args.source_repo,scripts=args.script,environment_files=args.environment,tool_versions=args.tool_version,planned=args.plan,expected=args.expect,acquisition=args.command=="acquire",source_urls=args.source_url)
             print(json.dumps(result,indent=2))
             return 0 if result["status"]=="completed" else 130 if result["status"]=="cancelled" else 1
         elif args.command=="serve":serve(store,args.port);return 0

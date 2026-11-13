@@ -26,6 +26,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--destination", type=Path, help="A NEW directory outside this checkout")
     parser.add_argument("--with-quarto", action="store_true", help="Also render and download a PDF and its source bundle")
+    parser.add_argument("--agent", choices=["codex","claude","opencode","antigravity"], default="codex")
     args = parser.parse_args()
     tag = datetime.now(timezone.utc).strftime("install-%Y%m%d-%H%M%S")
     target = (args.destination or SOURCE.parent / "SaigenBio-lab" / "installations" / tag).expanduser().resolve()
@@ -97,7 +98,8 @@ def main():
 
         bundled_skill = Path(probe["data"]) / "share" / "saigenbio" / "skills" / "saigen-record"
         require((bundled_skill / "SKILL.md").is_file(), "The wheel did not include the recording skill.")
-        local_skill = workspace / ".agents" / "skills" / "saigen-record"
+        skill_folder = {"claude":".claude", "opencode":".opencode"}.get(args.agent, ".agents")
+        local_skill = workspace / skill_folder / "skills" / "saigen-record"
         local_skill.parent.mkdir(parents=True)
         shutil.copytree(bundled_skill, local_skill)
         skill = (local_skill / "SKILL.md").read_text()
@@ -221,23 +223,12 @@ def main():
                     server.kill()
                     server.wait(timeout=5)
 
-        (workspace / "AGENTS.md").write_text(
-            "# Analysis workspace\n\n"
-            "For requested analysis in this workspace, read and follow "
-            ".agents/skills/saigen-record/SKILL.md even when the user does not name it. "
-            "Use the installed CLI; do not access or edit the source checkout.\n\n"
-            "- Active project: projects/agent-demo-01 (initialize if absent).\n"
-            "- Available input: projects/install-check/data/input.tsv. "
-            "This is a synthetic sample/count table, not raw reads or variant calls; "
-            "upstream execution is unrecorded. Copy it into the active project's data directory before importing.\n"
-            "- Runtime: ../runtime/bin/saigen and ../runtime/bin/python, relative to this workspace.\n"
-            "- Viewer: http://127.0.0.1:8767/, started separately by the user. "
-            "Do not launch a duplicate server; report if it is unavailable.\n"
-            "- Use the Python standard library for this small fixture and produce SVG figures. "
-            "Keep generated analysis files inside the active project.\n"
-            "- Inspect the existing flow before importing or choosing parents. "
-            "Do not rerun completed work unless requested. Stop at the user's requested decision checkpoint.\n"
-        )
+        run("setup-agent-workspace", [cli, "setup", "--workspace", workspace,
+            "--agent", args.agent, "--analysis-project", "projects/agent-demo-01",
+            "--input", "projects/install-check/data/input.tsv",
+            "--viewer", "http://127.0.0.1:8767/"])
+        report["agent"] = args.agent
+        report["checks"]["agent_workspace_setup"] = True
 
         instructions = [
             "# External installation trial", "",
@@ -245,9 +236,9 @@ def main():
             "## Start a fresh agent session", "",
             "From this workspace directory:", "",
             "    source ../runtime/bin/activate", "",
-            "Then open a new Codex session in this same directory. The project-local skill is .agents/skills/saigen-record/SKILL.md.",
+            f"Then open a new {args.agent} session in this same directory. The project-local skill is {skill_folder}/skills/saigen-record/SKILL.md.",
             "Check that saigen-record appears in the skill selector. Automatic agent discovery has not been tested by this script.", "",
-            "AGENTS.md selects projects/agent-demo-01 and directs analysis through the recording skill.", "",
+            "The generated agent instructions select projects/agent-demo-01 through saigen-workspace.json.", "",
             "Before opening the agent, initialize the project and leave its viewer running in a separate terminal:", "",
             "    saigen init --project projects/agent-demo-01 --name 'Fresh agent demo'",
             "    saigen serve --project projects/agent-demo-01 --port 8767", "",

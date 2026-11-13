@@ -1,9 +1,17 @@
 ---
 name: saigen-record
-description: Record an AI agent's biological analysis actions in a local SaigenBio project, preserving parent states, commands, outputs, and stated reasons. Use when a user requests recorded analysis or project instructions designate SaigenBio as the analysis recorder, including ordinary scientific requests that do not name this skill.
+description: Record biological analysis in SaigenBio, preserving inputs, scripts, commands, outputs, and scientific decisions. Publish expected results during planning and update their states during execution. Use when a user requests recorded analysis or project instructions designate SaigenBio as the analysis recorder, including ordinary scientific requests that do not name this skill.
 ---
 
 # Record an analysis
+
+## Acquire or import a dataset
+
+For a user-requested download, use `saigen acquire` with the same execution options as run, but no --from. Supply --source-url for each public source, --expect for the dataset preview, and declare downloaded files and scripts. The root acquisition state has no incoming edge; its details retain the observed command, timing, status, logs, hashes, and declared source URLs. Record the real download command when it executes; do not reconstruct a download history afterward.
+
+If useful, have the acquisition script create a compact samples.tsv alongside the data, with metadata grounded in the public source. Preserve it as an output. Plots take preview priority, then bounded CSV/TSV table excerpts, then the summary. Do not invent sample descriptions from filenames. Use `saigen annotate --project PATH --state STATE --note TEXT` to add a biological summary after inspection; this changes annotations, not execution facts.
+
+For files already present, use snapshot and describe unknown upstream provenance honestly. A public processed table is not raw reads, and CSV depth filtering is not necessarily equivalent to a VCF tool's complete filter behavior. The user does not need to name these recording commands.
 
 ## Publish progress and plans
 
@@ -28,11 +36,23 @@ If a planning-record write is blocked, distinguish filesystem permissions from a
 
 When escalation is supported and the current mode permits it, request approval through the agent's normal approval mechanism for the specific planning command and any necessary input import. Explain the concrete project and effect: "May I save these planned nodes to SaigenBio? This only updates the canvas; analysis will wait for your approval." If importing input files is included, disclose that those files will also be preserved. Keep analysis commands out of this approval request.
 
-If command approval is unavailable, ask whether the user wants to enable workspace writes. In Codex CLI, guide them to type `/permissions` in the current chat and choose the workspace-write preset; labels vary by version. For another agent, use its documented permission controls rather than assuming Codex commands apply. The agent cannot grant itself permissions or change permission configuration on the user's behalf.
+If command approval is unavailable, ask whether the user wants to enable workspace writes. Use the host agent's documented permission controls; consult the integration guide supplied with the workspace rather than assuming any particular slash command. The agent cannot grant itself permissions or change permission configuration on the user's behalf.
 
 If native Plan mode forbids the write, explain that limitation and ask the user to switch to a mode that permits publishing records while retaining the instruction to wait before analysis. Do not use escalation to bypass a plan-mode restriction. If a managed policy prevents the change or the user declines, leave the plan in chat and clearly state that it has not been published.
 
 After approval or confirmation of the settings change, inspect the active project's flow before retrying, so partially published plans are not duplicated. Verify that the proposed states exist without execution edges. Permission to publish records is not approval to execute the scientific plan. Do not ask again when the necessary permission and user authorization are already in place.
+
+## Preserve alternatives before comparing
+
+When the user explores a different parameter, method, or preprocessing choice, create a standalone result state for that alternative before producing a comparison. Each alternative must be independently inspectable and reusable. Separate alternative generation from comparison into actual recorded executions; do not hide both inside a single combined-result node.
+
+Choose the appropriate shared input for the alternative, not simply the most recent state in the conversation. For example, DP >= 5 and DP >= 10 filtering normally branch from the same original variant calls. Preserve each filtered table in its own state. Then record a comparison with both result states as --from parents and their preserved artifacts as inputs. Reuse an existing valid alternative rather than rerunning it just to make the graph symmetric.
+
+A change in presentation, such as linear versus logarithmic scaling, should reuse the same preserved counts. It should not rerun filtering or imply a changed dataset. Dependencies must reflect the data actually used.
+
+Apply this separation during planning too: propose the alternative result and the comparison as distinct nodes, with the comparison depending on both alternatives. Execute only what the user authorized; a request to try another threshold does not automatically authorize every possible comparison or plot. Avoid nodes for incidental inspections or individual explanatory sentences.
+
+Before reporting completion, verify that each requested alternative has its own state and preserved result, and that any comparison consumes those result states. If an earlier attempt combined generation and comparison, preserve that history. Correct it through authorized separate executions or honest imports of existing evidence; never invent execution edges for operations that did not happen.
 
 ## Required completion check
 
@@ -52,7 +72,7 @@ If recording fails, explain that the result is not yet reflected in SaigenBio. P
 
 ## Natural analysis requests
 
-When project instructions designate this recorder, apply it to requested analysis without requiring the user to mention the skill, CLI, or state IDs. Read the project's instructions for the active project, input locations, and viewer; do not hard-code a demo path or start a duplicate viewer. If the skill or CLI is unavailable, report the missing setup instead of silently proceeding without recording.
+When project instructions designate this recorder, apply it to requested analysis without requiring the user to mention the skill, CLI, or state IDs. Read saigen-workspace.json when present, together with project instructions, for the active project, input locations, and viewer; do not hard-code a demo path or start a duplicate viewer. If the skill or CLI is unavailable, report the missing setup instead of silently proceeding without recording.
 
 Inspect data types and existing records before choosing a method. Resolve scientific ambiguity from the data and context where possible; ask when a material choice remains unclear. For example, low-quality bases in FASTQ reads and low-depth calls in a VCF require different operations. A sample-count table cannot support per-variant depth filtering.
 

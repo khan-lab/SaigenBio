@@ -2,19 +2,19 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>SaigenBio</title><link rel="stylesheet" href="/style.css"><script defer src="/app.js"></script></head><body>
 <header id="topbar">
   <div class="project"><span class="brand">SaigenBio</span><span class="slash">/</span><span class="project-name">Project</span></div>
-  <div class="header-actions"><span id="connection" class="mock" title="Connecting to the local recorder">Connecting</span><button id="report-toggle" aria-pressed="false" disabled>Report</button><button id="edit-toggle" aria-pressed="false" disabled>Edit flow</button></div>
+  <div class="header-actions"><span id="connection" role="status" hidden></span><button id="report-toggle" aria-pressed="false" disabled>Report</button></div>
 </header>
 <main id="flow-view">
   <div id="intro"><div class="eyebrow">Your analysis starts here</div><p>Record a starting state with the agent or the SaigenBio CLI.</p></div>
-  <div id="viewport" aria-label="Analysis flow. Drag the background to pan; scroll to zoom.">
+  <div id="viewport" class="editing" aria-label="Analysis flow. Drag the background to pan; scroll to zoom.">
     <div id="scene"><svg id="edges" aria-label="Analysis actions"></svg><div id="nodes"></div></div>
   </div>
   <div id="report-tools" hidden><span id="report-count">Select states in report order</span><button id="report-clear">Clear</button><button id="report-create" disabled>Create PDF</button><button id="report-cancel">Cancel</button><span id="report-status" role="status"></span><button id="report-pdf" hidden>Download PDF</button><button id="report-source" hidden>Source bundle</button></div>
-  <div id="edit-tools" hidden><button id="undo" class="outline" disabled>Undo</button><button id="add-state" class="outline">+ State</button></div>
+  <div id="edit-tools"><button id="undo" class="outline" disabled>Undo</button><button id="add-state" class="outline">+ State</button></div>
   <div class="canvas-controls"><button id="zoom-out" aria-label="Zoom out">−</button><span id="zoom-label">100%</span><button id="zoom-in" aria-label="Zoom in">+</button><button id="fit">Fit</button></div>
 </main>
 <main id="detail-view" hidden><div id="detail-content"></div></main>
-<div id="selection-tools" hidden><button data-edit-action="open">Open</button><button data-edit-action="edit">Edit</button><span class="separator"></span><button data-edit-action="branch">+ Branch</button><button data-edit-action="connect">Connect →</button></div>
+<div id="selection-tools" hidden><button data-edit-action="edit">Edit</button><span class="separator"></span><button data-edit-action="branch">+ Branch</button><button data-edit-action="connect">Connect →</button></div>
 <aside id="preview" hidden aria-label="State preview"></aside>
 <aside id="action-preview" hidden aria-label="Action details"></aside>
 <dialog id="editor"><form id="editor-form"><div class="modal-top"><h2 id="editor-title">Edit state</h2><button type="button" id="close-editor" aria-label="Close editor">×</button></div><div id="editor-fields"></div><p id="form-error" role="alert"></p><p class="edit-notice">Edits are saved to this project. Plans do not run commands.</p><div class="modal-bottom"><button type="button" class="remove" id="delete-item" hidden>Delete</button><button type="button" class="quiet" id="cancel-editor">Cancel</button><button class="primary" type="submit">Save</button></div></form></dialog>
