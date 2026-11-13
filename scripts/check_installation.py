@@ -63,7 +63,7 @@ def main():
         # Build from a copied source tree: even setuptools metadata stays outside SOURCE.
         staging = target / "source-build"
         staging.mkdir()
-        for name in ("pyproject.toml", "README.md", "saigen", "web", "skills"):
+        for name in ("pyproject.toml", "README.md", "saigen", "ui", "skills"):
             src = SOURCE / name
             dst = staging / name
             if src.is_dir():
@@ -85,11 +85,11 @@ def main():
         run("install-wheel", ["uv", "pip", "install", "--python", python, wheel])
         probe = json.loads(run("installed-paths", [python, "-I", "-c",
             "import json,sysconfig,saigen,saigen.server; from pathlib import Path; "
-            "print(json.dumps({'module':saigen.__file__,'web':str(saigen.server.WEB),"
+            "print(json.dumps({'module':saigen.__file__,'ui':str(saigen.server.UI),"
             "'data':sysconfig.get_path('data'),"
             "'shell':str(Path(saigen.__file__).parent/'shell'/'hooks.zsh')}))"]))
         require(Path(probe["module"]).resolve().is_relative_to(runtime), "Import escaped the installed environment.")
-        require(Path(probe["web"]).resolve().is_relative_to(runtime), "Viewer assets were read from the source checkout.")
+        require(Path(probe["ui"]).resolve().is_relative_to(runtime), "Viewer assets were read from the source checkout.")
         require(Path(probe["shell"]).is_file(), "Packaged shell hooks are missing.")
         report["checks"]["installed_package_and_shell_hooks"] = True
         report["installedPaths"] = probe

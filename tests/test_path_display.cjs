@@ -1,7 +1,7 @@
 const assert=require("node:assert/strict");
 const fs=require("node:fs");
 const vm=require("node:vm");
-const app=fs.readFileSync("web/app.js","utf8");
+const app=fs.readFileSync("ui/app.js","utf8");
 new vm.Script(app);
 const flow={states:[],actions:[{code:{repository:"/Users/tester/source"},cwd:"/Users/tester/project/.saigen/runs/run_a/work"}],artifacts:{}};
 const context=vm.createContext({flow});

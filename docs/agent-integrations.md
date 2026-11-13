@@ -4,24 +4,28 @@ SaigenBio records through the same CLI for every agent. Agent setup supplies ins
 
 ## Prepare a workspace
 
-After installing the current package:
+After [installation](installation.md) and [project initialization](getting-started.md#open-an-analysis-directory), run setup from the directory you will open in your agent:
 
 ```sh
-saigen setup --workspace /path/to/workspace --agent claude \
-  --analysis-project projects/analysis --input data/input.tsv \
-  --viewer http://127.0.0.1:8767/
+saigen setup --workspace . --agent claude --analysis-project . --viewer http://127.0.0.1:8767/
 ```
 
-Choose codex, claude, opencode, or antigravity. Setup creates a shared saigen-workspace.json and a copy of the same recording skill. Existing differing files cause a refusal before changes; merge those instructions deliberately or choose a fresh workspace. Project initialization and viewer startup remain separate. Input paths describe existing evidence; setup does not download data.
+Replace claude with your chosen agent: codex, claude, opencode, or antigravity. Add --input PATH to identify available data; setup does not require a particular data directory. If the analysis project is a subdirectory of the agent workspace, set --analysis-project to that relative path. Setup creates a shared saigen-workspace.json and a copy of the same recording skill. Existing differing files cause a refusal before changes; merge those instructions deliberately or choose a fresh workspace. Project initialization and viewer startup remain separate. Input paths describe existing evidence; setup does not download data.
 
 | Agent | Instructions | Skill directory | Verification |
 | --- | --- | --- | --- |
-| Codex | AGENTS.md | .agents/skills/saigen-record | Setup supported; user trials exercised recording, full lifecycle acceptance pending |
+| Codex | AGENTS.md | .agents/skills/saigen-record | Setup checked; recording exercised manually; full lifecycle acceptance pending |
 | Claude Code | CLAUDE.md | .claude/skills/saigen-record | Documented convention; live acceptance pending |
 | OpenCode | AGENTS.md | .opencode/skills/saigen-record | Documented convention; live acceptance pending |
 | Antigravity | GEMINI.md | .agents/skills/saigen-record | Documented convention; live acceptance pending |
 
 Sources: [Claude Code](https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more), [OpenCode skills](https://opencode.ai/docs/skills), [OpenCode rules](https://opencode.ai/docs/rules), [Antigravity skills](https://antigravity.google/docs/skills), [Antigravity customization](https://antigravity.google/docs/commands/learn), [Codex instructions](https://developers.openai.com/codex/guides/agents-md).
+
+## Start a session
+
+Open a fresh agent session in the workspace so it can load the project instructions. Describe your scientific task normally. The instructions point to the recording skill and the exact CLI path in saigen-workspace.json.
+
+The selected Python environment must remain available at that path. When changing installations, review the configuration and workspace-local skill copy.
 
 ## Permissions and planning
 
@@ -29,16 +33,6 @@ Use the host's supported command approval for a blocked planning write. If unava
 
 Publishing a proposal and approving scientific execution are separate actions. Skill instructions cannot override host restrictions.
 
-## Fresh-session acceptance
+## Verification
 
-Use the same sample/count fixture and scientific prompts in every agent:
-
-1. Ask for a plot in sample-name order. Check recorded input, running state, final figure, and completion verification.
-2. In a new project, ask for two proposed plots and require approval before execution. Check dotted nodes without edges.
-3. Approve the plan. Check each state activates and completes individually.
-4. Request an alternative ordering. Check the original result remains preserved.
-5. Exercise a failing command and retry. Verify failure history remains.
-6. Block planning writes. Check scoped approval guidance and no accidental analysis execution.
-7. Export selected results as PDF.
-
-Record agent version, permission mode, project path, observed outcome, and failures. Installation checks do not establish fresh-agent compliance. Other agents can use the common configuration and skill through their own supported instruction mechanism.
+See the [contributor acceptance procedure](agent-testing.md) for live-agent checks. Other agents can use the common configuration and skill through their own supported instruction mechanism.

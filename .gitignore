@@ -11,3 +11,6 @@ dist/
 
 # Local demonstration projects, including their recorded flows.
 /demos/
+
+# Personal memoranda and draft plans; not shared project documentation.
+/docs/local/

@@ -11,8 +11,8 @@ from urllib.parse import urlsplit
 from .store import Store, RecordError, Conflict, table_preview
 from .reports import Reports
 
-WEB=Path(__file__).resolve().parent.parent/"web"
-if not (WEB/"index.html").exists():WEB=Path(sysconfig.get_path("data"))/"share"/"saigenbio"/"web"
+UI=Path(__file__).resolve().parent.parent/"ui"
+if not (UI/"index.html").exists():UI=Path(sysconfig.get_path("data"))/"share"/"saigenbio"/"ui"
 class Server(ThreadingHTTPServer):
     daemon_threads=True
     def __init__(self, address, store):
@@ -103,7 +103,7 @@ class Handler(BaseHTTPRequestHandler):
             if path in routes:
                 name=routes[path]
                 mime={"index.html":"text/html; charset=utf-8","app.js":"text/javascript; charset=utf-8","style.css":"text/css; charset=utf-8"}[name]
-                return self.reply(200,(WEB/name).read_bytes(),mime,{"Content-Security-Policy":"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'"})
+                return self.reply(200,(UI/name).read_bytes(),mime,{"Content-Security-Policy":"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'"})
             self.reply(404,{"error":"Not found"})
         except (RecordError,OSError) as exc: self.reply(409,{"error":str(exc)})
     def do_POST(self):
