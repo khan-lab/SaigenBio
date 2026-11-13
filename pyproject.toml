@@ -19,5 +19,5 @@ packages = ["saigen"]
 saigen = ["shell/*.zsh"]
 
 [tool.setuptools.data-files]
-"share/saigenbio/web" = ["web/index.html", "web/app.js", "web/style.css"]
+"share/saigenbio/ui" = ["ui/index.html", "ui/app.js", "ui/style.css"]
 "share/saigenbio/skills/saigen-record" = ["skills/saigen-record/SKILL.md"]

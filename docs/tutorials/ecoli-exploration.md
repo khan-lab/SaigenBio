@@ -1,32 +1,23 @@
 # Explore E. coli variants with SaigenBio
 
-This walkthrough follows a researcher changing their mind: acquire data, filter at depth 5, plot, try log scaling, revisit depth 10, compare, and interpret. Send each prompt only after inspecting the previous result.
+Explore how a scientific conclusion responds to analysis choices: acquire data, filter at depth 5, plot, try log scaling, revisit depth 10, compare, and interpret. Send each prompt only after inspecting the previous result.
 
-## 1. Prepare a fresh external workspace
+## 1. Prepare a workspace
 
-From the source checkout, build and check a regular installation:
+[Install SaigenBio](../installation.md), then create an external workspace. Choose your agent with --agent; this example uses Claude Code.
 
-```bash
-python3 -B scripts/check_installation.py --agent claude --with-quarto
-```
-
-Choose codex, claude, opencode, or antigravity with --agent. The printed trial workspace has an installed runtime, skill, and project instructions. All trial files stay outside the source checkout.
-
-For this biological walkthrough, create a separate workspace alongside that trial's workspace, using the runtime path printed by the check:
-
-```bash
-/path/to/trial/runtime/bin/saigen setup --workspace /path/to/trial/exploration --agent claude --analysis-project projects/ecoli --viewer http://127.0.0.1:8767/
-cd /path/to/trial/exploration
-source ../runtime/bin/activate
+```sh
+saigen setup --workspace ~/saigenbio-projects/ecoli-tutorial --agent claude --analysis-project projects/ecoli --viewer http://127.0.0.1:8767/
+cd ~/saigenbio-projects/ecoli-tutorial
 saigen init --project projects/ecoli --name "E. coli threshold exploration"
 saigen serve --project projects/ecoli --port 8767
 ```
 
-This workspace has no synthetic fixture configured. Use a new directory for each rehearsal. Setup refuses to replace differing instruction files. Open http://127.0.0.1:8767/ and leave the viewer running. Choose another free port if needed and keep saigen-workspace.json consistent.
+Use a new directory for each independent attempt. Open http://127.0.0.1:8767/ and leave the viewer running. Choose another free port if needed and update saigen-workspace.json accordingly.
 
-Open a new session in this exploration workspace using your chosen agent. See [agent integrations](agent-integrations.md). Enable workspace writes. Requesting a plan in normal mode lets the agent save proposals while waiting for scientific approval; a native mode that forbids writes cannot publish canvas nodes.
+Open a fresh session of your chosen agent in that workspace. See [agent integrations](../agent-integrations.md) for instruction locations and permissions. The agent should use the CLI path recorded in the workspace configuration.
 
-The canvas is editable by default: drag states to arrange them, or click a state to select its editing controls. Hover for about 650 ms to see a preview, then choose **Show detail →** to open its details. Report selection temporarily disables state dragging; cancelling it restores editing.
+Drag states to arrange the flow. Hover to preview a result, then choose **Show detail →**. See [Getting started](../getting-started.md#read-and-edit-the-flow) for navigation.
 
 ## 2. Explore and download
 
@@ -40,6 +31,7 @@ Sources: [lesson dataset and sample descriptions](https://datacarpentry.github.i
 This is a processed variant-call table, not raw sequencing reads. Its acquisition can be recorded; earlier alignment and calling were not performed in this session. The lesson describes samples SRR2589044, SRR2584863, and SRR2584866 from generations 5,000, 15,000, and 50,000 respectively. The agent should verify downloaded columns and sample metadata instead of assuming their names.
 
 Expected canvas:
+
 - A dotted acquiring node appears while the recorded acquisition command runs, with no incoming arrow.
 - The completed dataset node prioritizes a compact sample table if the agent produces one with the acquisition outputs. Otherwise it previews the downloaded CSV.
 - Download command, declared source URL, timestamps, status, file hashes, and logs are in the node details.
@@ -91,7 +83,7 @@ The typical flow stays around 8–10 states. Do not create a node for every sent
 
 If files are already downloaded, configure their paths through --input during setup and ask the agent to inspect them. It should import existing evidence with snapshot and record checksums. It must not invent download commands, dates, or source provenance. If download logs exist, preserve them as evidence without claiming the wrapper observed their execution.
 
-## Optional planning test
+## Plan before executing
 
 Before filtering, ask for a plan and require approval before analysis. Proposed result nodes should appear dotted without edges. After approval, each step adds its incoming animated edge and finalizes individually. Very short commands may complete between viewer polls.
 
@@ -103,4 +95,4 @@ Select the relevant states through Report, then Create PDF. Inspect plots, compa
 
 Keep the full project directory, including .saigen/. Stop the viewer with Ctrl+C.
 
-Pass criteria: recorded acquisition or honest import; visible table/plot previews; correct branch parents; actual command differences; retained failed attempts; preserved files; and conclusions tied to recorded evidence. Repeat the same scientific prompts in each agent before claiming live compatibility.
+For report options and preservation limits, see [PDF reports](../reports.md).
