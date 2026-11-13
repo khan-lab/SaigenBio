@@ -81,9 +81,58 @@ class ReportTests(unittest.TestCase):
         folder, _ = self.prepare(['first'])
         text = (folder / 'report.qmd').read_text()
         self.assertIn('python3', text)
-        self.assertIn('plot\\.py plot', text)
+        self.assertIn('plot.py', text)
         self.assertIn('scale linear', text)
         self.assertNotIn('/Users/example', text)
+
+    def test_notebook_scripts_tables_and_reuse(self):
+        script = self.root / 'analysis.py'
+        original = 'print("preserved original")\n```\n{{< include /etc/passwd >}}'
+        script.write_text(original)
+        ar = self.store.capture(script, role='code')
+        self.flow['artifacts'][ar['id']] = ar
+        self.flow['actions'] = [dict(id='a'+target, to=target, **{'from':[]},
+            status='completed', reason='More explanation', argv=['python', 'analysis.py'],
+            code={'scriptArtifacts':[ar['id']]}) for target in ['second', 'first']]
+        script.write_text('changed working copy')
+        table = self.root / 'counts.tsv'
+        table.write_text('sample\tcount\na\t3\nb\t5\n')
+        record = self.store.capture(table, role='output')
+        self.flow['artifacts'][record['id']] = record
+        self.flow['states'][2]['artifactIds'].append(record['id'])
+        folder, _ = self.prepare(['second', 'first'])
+        source = (folder / 'report.qmd').read_text()
+        self.assertEqual(source.count('preserved original'), 1)
+        self.assertNotIn('changed working copy', source)
+        self.assertIn('shown in section 1', source)
+        self.assertIn('````python', source)
+        self.assertNotIn('```{python}', source)
+        self.assertIn('| sample | count |', source)
+        self.assertIn('Saved table preview', source)
+        self.assertEqual(source.count('More explanation'), 2)  # one per state
+        self.assertNotIn('pagebreak', source)
+        self.assertLess(source.index('preserved original'), source.index('python analysis.py'))
+        self.assertLess(source.index('python analysis.py'), source.index('| sample | count |'))
+        self.store.artifact_path(ar).chmod(0o600)
+        self.store.artifact_path(ar).write_text('tampered')
+        _, manifest = self.prepare(['second'])
+        self.assertTrue(any('changed' in w or 'hash mismatch' in w for w in manifest['warnings']))
+
+    def test_changed_script_versions_are_both_displayed(self):
+        script = self.root / 'analysis.py'
+        self.flow['actions'] = []
+        for target, contents in [('first', 'print("version one")'), ('second', 'print("version two")')]:
+            script.write_text(contents)
+            ar = self.store.capture(script, role='code')
+            self.flow['artifacts'][ar['id']] = ar
+            self.flow['actions'].append({'id':'a'+target, 'to':target, 'from':[],
+                'status':'completed', 'argv':['python', 'analysis.py'],
+                'code':{'scriptArtifacts':[ar['id']]}})
+        folder, _ = self.prepare(['first', 'second'])
+        source = (folder / 'report.qmd').read_text()
+        self.assertIn('print("version one")', source)
+        self.assertIn('print("version two")', source)
+        self.assertNotIn('shown in section', source)
 
     def test_selection_validation(self):
         for selection in [[], ['first','first'], ['missing'], 'first']:

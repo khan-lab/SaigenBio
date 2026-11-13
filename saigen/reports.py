@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import shlex
 import shutil
 import subprocess
 import threading
@@ -23,6 +24,17 @@ def sha(data):
 def literal(value):
     # Escape all Markdown syntax, including executable fences, raw blocks and links.
     return re.sub(r'([!"#$%&\'()*+,\-./:;<=>?@\[\\\]^_`{|}~])', r'\\\1', str(value or ""))
+
+
+def code_cell(value, language=""):
+    # Plain language fences are display-only; never use Quarto executable braces.
+    value = str(value)
+    fence = "`" * max(3, max((len(m.group()) + 1 for m in re.finditer(r"`+", value)), default=3))
+    return [fence + language, value, fence, ""]
+
+
+def table_cell(value):
+    return literal(value).replace("\n", " ").replace("\r", " ")
 
 
 class Reports:
@@ -144,11 +156,63 @@ class Reports:
         context = [{"id": key, "title": states[key]["title"]} for key in dict.fromkeys(p for a in actions for p in a.get("from", [])) if key not in selection and key in states]
         snapshot = clean({"project": flow["project"], "revision": flow["revision"], "selectedOrder": selection, "states": selected, "actions": actions, "artifacts": records, "omittedParentContext": context})
         manifest = {"schemaVersion": 1, "createdAt": now(), "projectRevision": flow["revision"], "selectedOrder": selection, "orderMeaning": "Presentation order only; no execution or dependency order inferred", "renderer": "Quarto with bundled Typst", "renderArgv": RENDER, "figures": [], "artifacts": {}, "warnings": [], "files": {}}
-        body = ['---', 'title: "Selected analysis states"', 'format:', '  typst:', '    papersize: a4', '    fontsize: 10pt', '    margin:', '      x: 20mm', '      y: 18mm', 'execute:', '  enabled: false', '---', '', txt(flow["project"]) + " · Revision " + str(flow["revision"]), '', 'Selection order is presentation order. Omitted states are excluded; named parents provide context only. Saved evidence is reused without running analyses. Recorded reasons are declarations, not new conclusions.', '']
+        body = ['---', 'title: ' + json.dumps(clean(flow["project"])), 'format:', '  typst:', '    papersize: a4', '    fontsize: 10pt', '    code-overflow: wrap', '    margin:', '      x: 20mm', '      y: 18mm', 'execute:', '  enabled: false', '---', '', 'Selected analysis · Revision ' + str(flow["revision"]), '', 'Selected presentation order; saved outputs, without rerunning analysis.', '']
+        shown_scripts = {}
         total = 0
         for index, n in enumerate(selected, 1):
-            if index > 1: body += ["{{< pagebreak >}}", ""]
-            body += ["# " + str(index) + ". " + txt(n["title"]), '', 'Status: ' + txt(n.get("status")) + ' · Origin: ' + txt(n.get("origin")), '']
+            body += ["# " + str(index) + ". " + txt(n["title"]), '']
+            status = n.get("status")
+            if status != "completed":
+                body += [txt(status) + (' · not run' if status == 'planned' else ' · earlier execution not recorded' if status == 'imported' else ''), '']
+            incoming = [a for a in actions if a["to"] == n["id"]]
+            note = n.get("note") or ""
+            if note:
+                body += [txt(note), '']
+            for action in incoming:
+                parents = [states[p]["title"] + (" (outside selection)" if p not in selection else "") for p in action.get("from", []) if p in states]
+                if parents:
+                    body += ['Uses: ' + txt(', '.join(parents)), '']
+                reason = action.get("reason")
+                if reason and reason.strip() != note.strip():
+                    body += [txt(reason), '']
+                if action.get("annotation"):
+                    body += ['Note: ' + txt(action['annotation']), '']
+                scripts = action.get("code", {}).get("scriptArtifacts", [])
+                for aid in scripts:
+                    ar = flow['artifacts'].get(aid)
+                    try:
+                        if not ar or ar.get('storage') != 'preserved':
+                            raise RecordError('preserved copy unavailable')
+                        if ar['size'] > 1024 * 1024:
+                            raise RecordError('script exceeds 1 MB display limit')
+                        data = self.store.artifact_path(ar).read_bytes()
+                        if sha(data) != ar['sha256']:
+                            raise RecordError('script hash mismatch')
+                        source = data.decode('utf-8')
+                        key = ar['sha256']
+                        if key in shown_scripts:
+                            body += [txt(ar['name']) + ' · shown in section ' + str(shown_scripts[key]), '']
+                        else:
+                            shown_scripts[key] = index
+                            language = {'.py': 'python', '.r': 'r', '.sh': 'bash', '.js': 'javascript'}.get(Path(ar['name']).suffix.lower(), '')
+                            body += [txt(ar['name']), ''] + code_cell(clean(source), language)
+                    except (RecordError, OSError, UnicodeError) as exc:
+                        warning = (ar['name'] if ar else aid) + ': ' + str(exc)
+                        manifest['warnings'].append(clean(warning))
+                        body += ['Script unavailable: ' + txt(warning), '']
+                argv = action.get('argv') or action.get('argvTemplate') or []
+                command = shlex.join(clean(argv)) if argv else clean(action.get('command') or '')
+                if command:
+                    if not scripts:
+                        body += ['Script contents not recorded.', '']
+                    body += code_cell(command, 'bash')
+                if action.get('status') != 'completed' or action.get('exitCode') not in (None, 0):
+                    body += [txt(action.get('status')) + ' · Exit ' + txt(str(action.get('exitCode', 'unknown'))), '']
+                if action.get('error'):
+                    body += ['Error: ' + txt(action['error']), '']
+            for command in (n.get('terminal') or {}).get('commands', []):
+                body += code_cell(clean(command.get('command', '')), 'bash')
+                body += ['Shell activity · ' + txt(command.get('status')) + ' · association with saved outputs does not establish file dependencies.', '']
             figures = []
             for aid in n.get("artifactIds", []):
                 ar = flow["artifacts"].get(aid)
@@ -179,35 +243,26 @@ class Reports:
                     if name not in manifest["figures"]:
                         manifest["figures"].append(name)
                     manifest["files"][name] = sha(data)
-                    figures += ['![' + txt(ar["name"]) + '](' + name + '){width=100%}', '', 'Preserved figure · ' + txt(ar["name"]) + ' · SHA-256 ' + ar["sha256"][:16], '']
+                    figures += ['![' + txt(ar["name"]) + '](' + name + '){width=100%}', '']
                 except (RecordError, OSError, ElementTree.ParseError) as exc:
                     warning = clean(ar["name"]) + ": " + str(exc)
                     manifest["warnings"].append(warning)
                     figures += ['Figure unavailable: ' + literal(warning), '']
             body += figures
-            if not figures:
-                body += ['No supported preserved figure is available for this state. ' + ('This is a plan; no execution is established.' if n.get('status') == 'planned' else 'Use the recorded notes and action status below; no conclusion is inferred.'), '']
-            body += ['Recorded state note: ' + txt(n.get("note") or "Not recorded"), '']
-            for a in [a for a in actions if a["to"] == n["id"]]:
-                parents = ", ".join(states[p]["title"] + (" (omitted context)" if p not in selection else "") for p in a.get("from", []) if p in states)
-                body += ['## Recorded action: ' + txt(a.get("label")), '', 'From: ' + txt(parents), '', 'Status: ' + txt(a.get("status")) + ' · Exit: ' + txt(str(a["exitCode"]) if a.get("exitCode") is not None else "unknown"), '', 'Stated reason: ' + txt(a.get("reason") or "Not recorded"), '']
-                if a.get("annotation"):
-                    body += ['Human note: ' + txt(a["annotation"]), '']
-                command = " ".join(a.get("argv") or a.get("argvTemplate") or []) or a.get("command")
-                body += ['Command / options (recorded text):', '', txt(command or 'Not recorded'), '']
-                if a.get('error'):
-                    body += ['Recorded error: ' + txt(a['error']), '']
-            for c in (n.get('terminal') or {}).get('commands', []):
-                body += ['Recorded terminal command (' + txt(c.get('status')) + '): ' + txt(c.get('command')), '']
-            if not figures:
-                body += ['Provenance: recorded by ' + txt(n.get('writtenBy')) + ' · Code revision: ' + txt(n.get('codeRef') or 'Not recorded') + '. Imports do not establish upstream execution; shell groupings do not establish file dependencies.', '']
-        body += ['{{< pagebreak >}}', '', '# Compact provenance', '', 'Editable source, selected records, verified figures, full source references and full SHA-256 hashes accompany this PDF in the source bundle. Hashes below are abbreviated. Original absolute paths are aliased; embedded labels inside preserved figures are unchanged. Re-render with: quarto render report.qmd --to typst --output report.pdf --no-execute', '']
-        for n in selected:
-            body += [txt(n['id']) + ': ' + txt(n['title']) + ' · Code: ' + txt(n.get('codeRef') or 'Not recorded'), '']
-        for aid, ar in sorted(records.items()):
-            body += [txt(aid) + ' · ' + txt(ar['name']) + ' · SHA-256 ' + ar['sha256'][:16] + '…', '']
-        for warning in manifest['warnings']:
-            body += ['Warning: ' + literal(warning), '']
+            tables = [flow['artifacts'][aid] for aid in n.get('artifactIds', []) if aid in flow['artifacts'] and flow['artifacts'][aid].get('tablePreview')]
+            for ar in tables:
+                preview = clean(ar['tablePreview'])
+                columns = preview.get('columns', [])
+                if not columns:
+                    continue
+                body += [txt(ar['name']), '', '| ' + ' | '.join(table_cell(c) for c in columns) + ' |', '| ' + ' | '.join('---' for _ in columns) + ' |']
+                for row in preview.get('rows', []):
+                    values = (row + [''] * len(columns))[:len(columns)]
+                    body += ['| ' + ' | '.join(table_cell(c) for c in values) + ' |']
+                body += ['', 'Saved table preview · excerpt; rows, columns, or cell text may be truncated.', '']
+            if not figures and not tables and not note:
+                body += ['No saved preview or summary is available.', '']
+        body += ['Full record references and hashes are included in the accompanying source bundle. Preserved scripts are displayed as recorded text; file contents may contain original paths.', '']
         for name, data in {'_quarto.yml': 'project:\n  type: default\nexecute:\n  enabled: false\n', 'report.qmd': '\n'.join(body), 'snapshot.json': json.dumps(snapshot, indent=2) + '\n'}.items():
             (folder / name).write_text(data, encoding='utf-8')
             manifest['files'][name] = sha((folder / name).read_bytes())
