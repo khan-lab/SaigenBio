@@ -99,10 +99,15 @@ Agents can publish future results without execution edges:
 
 ```sh
 saigen plan --project /path/to/analysis --from input --id summary_plan \
-  --title "Summary" --expect "Expected: sample-count plot" --output counts.svg
+  --title "Sample count summary" \
+  --expect "A plot showing the number of samples in each group." \
+  --details "Count samples using the recorded group metadata." \
+  --requires "Confirm group labels before counting." --output counts.svg
 ```
 
 Use another planned ID as --from to propose later steps. After user approval, execute into the same placeholder using the normal run options plus --plan summary_plan --approved. Its actual parents must match the proposal and already contain completed or imported evidence. The node retains its position; the incoming edge appears when execution starts. The approval flag is an agent declaration, not an approval interface.
+
+Use a short result name for --title (usually 3–6 words) and one expected-result sentence for --expect, without an "Expected:" prefix. The canvas shows the title and status; hover shows the expected result. Optional --details describes the proposed method and --requires describes a prerequisite. Both appear in the detail view, alongside planned inputs and expected files. Prerequisites are explanatory text; SaigenBio does not enforce them or infer approval from them. The original plan remains in the state details after execution starts. Older records remain readable with their original text.
 
 For immediate execution, run --expect describes the expected output on the running placeholder. Completion replaces the placeholder with preserved results. Failed attempts remain recorded.
 
@@ -112,7 +117,7 @@ For immediate execution, run --expect describes the expected output on the runni
 acquire uses run's execution options without --from. It records a root acquisition with no incoming edge. Declare public sources through --source-url and downloaded files through --output. The download command must actually run inside the wrapper; importing a file later does not establish its download history.
 
 ```sh
-saigen acquire --project /path/to/analysis --title "Public dataset" --expect "Expected: downloaded CSV" --source-url https://example.org/data.csv --output data.csv -- curl --fail --location https://example.org/data.csv --output data.csv
+saigen acquire --project /path/to/analysis --title "Public dataset" --expect "A downloaded CSV dataset." --source-url https://example.org/data.csv --output data.csv -- curl --fail --location https://example.org/data.csv --output data.csv
 ```
 
 This illustrates the command shape; replace the example URL with a real source.

@@ -211,7 +211,7 @@ class Store:
         flow = self.update("snapshot.imported",actor,change)
         return entity(flow,"states",ident)
 
-    def plan(self, title, parents, expected, outputs=(), actor="AI agent", ident=None):
+    def plan(self, title, parents, expected, outputs=(), actor="AI agent", ident=None, *, details="", requires=""):
         ident = ident or uid("st")
         def change(f):
             if any(n["id"] == ident for n in f["states"]):
@@ -224,7 +224,8 @@ class Store:
             while any(abs(n["x"]-x)<215 and abs(n["y"]-y)<165 for n in f["states"]):
                 y += 210
             n = {"id":ident, "title":text(title,"title",120,True),
-                 "note":text(expected,"expected output",20000,True), "expectedSummary":expected,
+                 "note":"", "expectedSummary":text(expected,"expected output",20000,True),
+                 "planDetails":text(details,"plan details"), "planRequires":text(requires,"prerequisite"),
                  "planParents":list(parents), "expectedFiles":names(list(outputs)),
                  "status":"planned", "origin":"agent-plan", "writtenBy":actor,
                  "performedBy":None, "createdAt":now(), "x":x, "y":y,
@@ -261,7 +262,8 @@ class Store:
             n["expectedSummary"] = expected or (existing.get("expectedSummary","") if existing else "")
             if existing:
                 n["x"], n["y"] = existing["x"], existing["y"]
-                n["plan"] = {k:existing[k] for k in ("title","expectedSummary","planParents","createdAt")}
+                n["plan"] = {k:copy.deepcopy(existing[k]) for k in
+                             ("title","expectedSummary","planDetails","planRequires","note","expectedFiles","planParents","createdAt") if k in existing}
                 f["states"][f["states"].index(existing)] = n
             else:
                 f["states"].append(n)
@@ -329,7 +331,7 @@ class Store:
             if not isinstance(changes,dict) or not changes: raise RecordError("No changes supplied")
             allowed={"title","note","x","y","references"} if group=="states" else {"label","annotation"}
             if item["origin"]=="manual" and item["status"]=="planned":
-                allowed |= {"expectedFiles"} if group=="states" else {"command","reason"}
+                allowed |= {"expectedFiles","expectedSummary","planDetails","planRequires"} if group=="states" else {"command","reason"}
             if not set(changes)<=allowed: raise RecordError("Execution facts cannot be edited")
             for key,value in changes.items():
                 if key in {"x","y"}: coordinates({key:value})
@@ -345,6 +347,8 @@ class Store:
             if any(n["id"]==ident for n in f["states"]): raise RecordError("State ID already exists")
             value=op.get("value",{})
             n={"id":ident,"title":text(value.get("title",""),"title",120,True),"note":text(value.get("note",""),"note"),"x":value.get("x",0),"y":value.get("y",0),"files":[],"artifactIds":[],"manifest":[],"expectedFiles":names(value.get("expectedFiles",[])),"references":[],"status":"planned","origin":"manual","writtenBy":actor,"performedBy":None,"createdAt":now(),"codeRef":None}
+            for key in ("expectedSummary","planDetails","planRequires"):
+                n[key]=text(value.get(key,""),key)
             coordinates(n);f["states"].append(n)
             return {"op":"delete_state","id":ident,"expected":copy.deepcopy(n)}
         if kind=="add_action":

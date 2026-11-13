@@ -131,7 +131,9 @@ def main():
         input_id = root["artifactIds"][0]
         run("publish-plan", [cli, "plan", "--project", project, "--from", "input",
                              "--id", "summary_plan", "--title", "Installed CLI output",
-                             "--expect", "Expected: an SVG showing the number of input rows",
+                             "--expect", "An SVG showing the number of input rows.",
+                             "--details", "Count the rows in the preserved sample table.",
+                             "--requires", "Review the synthetic input before counting.",
                              "--output", "counts.svg"])
         proposed = json.loads(run("read-plan", [cli, "flow", "--project", project]))
         require(not proposed["actions"] and
@@ -147,9 +149,13 @@ def main():
         flow = json.loads(run("read-result", [cli, "flow", "--project", project]))
         require(len(flow["states"]) == 2 and len(flow["actions"]) == 1, "Unexpected smoke-test flow.")
         state = next(n for n in flow["states"] if n["id"] == result["state"])
+        proposal = next(n for n in proposed["states"] if n["id"] == "summary_plan")
+        for key in ("expectedSummary", "planDetails", "planRequires", "expectedFiles", "planParents"):
+            require(state["plan"][key] == proposal[key], "Original plan lost " + key)
         artifact = flow["artifacts"][state["artifactIds"][0]]
         report["checks"]["installed_cli_records_analysis"] = True
         report["checks"]["planned_state_finalized_without_duplicate"] = True
+        report["checks"]["original_plan_details_preserved"] = True
 
         # A random loopback port avoids the live demo and the report-feature worktree.
         server_log = logs / "viewer.log"

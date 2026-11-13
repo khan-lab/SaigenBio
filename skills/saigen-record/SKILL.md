@@ -15,13 +15,20 @@ For files already present, use snapshot and describe unknown upstream provenance
 
 ## Publish progress and plans
 
-For ordinary execution, provide `saigen run --expect "Expected: …"` with a brief description of the output. The wrapper publishes a running placeholder and animated incoming edge before launching the command; completion attaches actual results to that same state.
+For ordinary execution, provide `saigen run --expect "…"` with a brief description of the output. The wrapper publishes a running placeholder and animated incoming edge before launching the command; completion attaches actual results to that same state.
+
+Name each planned result with a short, concrete title, usually 3–6 words. Describe the result the user will inspect, such as "Spatial QC summary" or "Spatial cluster map". Keep method names when they distinguish results. The canvas supplies the status: leave "Planned", approval reminders, and "REVIEW CHECKPOINT" out of titles.
+
+Use `--expect` for one short sentence describing the expected result, without an "Expected:" prefix. The hover preview labels this sentence. Put the proposed procedure in optional `--details` and a condition for proceeding in optional `--requires`; these appear in the detail view. For example, describe QC plots in `--expect`, QC metrics in `--details`, and a requested review checkpoint in `--requires`. Prerequisites are descriptive text, not enforced gates or approval records. Keep the full scientific explanation in these fields or chat rather than packing it into the title or expected-result sentence.
 
 When the user requests planning without execution, first inspect the project and import existing inputs as needed with honest provenance. Publish each proposed output with:
 
 ```sh
 saigen plan --project PATH --from INPUT_STATE --id qc_plan \
-  --title "QC results" --expect "Expected: per-sample quality report" --output qc.svg
+  --title "Spatial QC summary" \
+  --expect "QC plots and a summary of available samples." \
+  --details "Inspect counts, detected genes, and tissue coverage." \
+  --requires "Review QC before normalization." --output qc.svg
 ```
 
 A later proposal may use an earlier planned state's ID as its --from value. This stores intended dependencies without drawing execution edges. Present the scientific plan in chat and wait for the user's approval. Publishing nodes does not execute or approve the plan. If an agent's plan mode forbids writes, provide the plan in chat and explain that canvas publication must wait until writes are allowed; never bypass that restriction.
