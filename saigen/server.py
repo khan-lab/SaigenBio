@@ -8,7 +8,7 @@ import sysconfig
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
-from .store import Store, RecordError, Conflict
+from .store import Store, RecordError, Conflict, table_preview
 from .reports import Reports
 
 WEB=Path(__file__).resolve().parent.parent/"web"
@@ -16,6 +16,7 @@ if not (WEB/"index.html").exists():WEB=Path(sysconfig.get_path("data"))/"share"/
 class Server(ThreadingHTTPServer):
     daemon_threads=True
     def __init__(self, address, store):
+        self.preview_cache={}
         self.store=store
         self.reports=Reports(store)
         self.token=secrets.token_urlsafe(32)
@@ -66,7 +67,19 @@ class Handler(BaseHTTPRequestHandler):
                     source=self.server.reports.file(parts[3],parts[4])
                     return self.reply(200,source.read_bytes(),"application/pdf" if parts[4]=="pdf" else "application/zip",{"Content-Disposition":f'attachment; filename="saigen-report.{parts[4]}"',"Content-Security-Policy":"sandbox; default-src 'none'"})
                 return self.reply(404,{"error":"Not found"})
-            if path=="/api/flow": return self.reply(200,self.store.flow())
+            if path=="/api/flow":
+                flow=self.store.flow()
+                for a in flow["artifacts"].values():
+                    if a.get("tablePreview") or a.get("storage")!="preserved" or Path(a["name"]).suffix.lower() not in {".csv",".tsv"}:
+                        continue
+                    key=(a["sha256"],Path(a["name"]).suffix.lower())
+                    if key not in self.server.preview_cache:
+                        try:
+                            self.server.preview_cache[key]=table_preview(self.store.artifact_path(a),a["name"])
+                        except (RecordError,OSError):
+                            continue
+                    a["tablePreview"]=self.server.preview_cache[key]
+                return self.reply(200,flow)
             if path=="/api/revision": return self.reply(200,{"revision":self.store.flow()["revision"]})
             if path=="/api/session": return self.reply(200,{"token":self.server.token,"projectRoot":str(self.store.root)})
             if path=="/api/history":

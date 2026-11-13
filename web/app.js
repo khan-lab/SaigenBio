@@ -7,7 +7,7 @@ const copy = value => JSON.parse(JSON.stringify(value));
 
 const W=192,H=132;
 let flow={schemaVersion:1,project:"Project",revision:0,states:[],actions:[],artifacts:{},revisions:[]};
-let history=[],editing=false,selected=null,connecting=null,editorContext=null;
+let history=[],selected=null,connecting=null,editorContext=null;
 let reportMode=false,reportSelection=[],reportJob=null,reportRendering=false;
 let camera={x:70,y:90,scale:.72},savedCamera=null,drag=null,hoverTimer=null,hideTimer=null,toastTimer=null;
 let ready=false,busy=false,token="",allEvents=[],artifactRequest=0;
@@ -17,6 +17,12 @@ const artifactURL=id=>"/api/artifacts/"+encodeURIComponent(id);
 const artifacts=n=>(n.artifactIds||[]).map(id=>flow.artifacts[id]).filter(Boolean);
 const unavailablePlots=new Set();
 const firstPlot=n=>artifacts(n).find(a=>a.storage==="preserved"&&!unavailablePlots.has(a.id)&&/^image\/(svg\+xml|png|jpeg|webp|gif)$/.test(a.mime));
+const firstTable=n=>artifacts(n).find(a=>a.tablePreview);
+function tableMarkup(n,mini=false){
+ const a=firstTable(n);if(!a)return "";
+ const t=a.tablePreview,cols=t.columns.slice(0,mini?3:6),rows=t.rows.slice(0,mini?3:5);
+ return '<div class="table-preview"><table><thead><tr>'+cols.map(c=>'<th>'+esc(c)+'</th>').join("")+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.slice(0,cols.length).map(c=>'<td>'+esc(c)+'</td>').join("")+'</tr>').join("")+'</tbody></table></div>';
+}
 const decisionSummary=n=>(n.note||flow.actions.filter(a=>a.to===n.id).map(a=>a.reason).filter(Boolean).join(" ")).trim();
 const shortDate=value=>value?new Date(value).toLocaleString():"Not recorded";
 const stamp=n=>n.finishedAt||n.createdAt;
@@ -59,9 +65,9 @@ async function start(){
  try{
    const session=await request("/api/session");token=session.token;projectRoot=session.projectRoot||"";
    await accept(await request("/api/flow"));ready=true;
-   $("#connection").textContent="Local";$("#connection").title="Connected to the local project recorder";
-   $("#edit-toggle").disabled=false;$("#report-toggle").disabled=false;fit(true);route();
- }catch(error){$("#connection").textContent="Offline";$("#intro p").textContent=error.message;$("#edit-toggle").disabled=true;}
+   $("#connection").textContent="";$("#connection").hidden=true;
+   $("#report-toggle").disabled=false;fit(true);route();
+ }catch(error){$("#connection").hidden=false;$("#connection").textContent="Offline";$("#intro p").textContent=error.message;}
 }
 async function poll(){
  if(busy||drag||$("#editor").open)return;
@@ -72,8 +78,8 @@ async function poll(){
    if(reconnected)unavailablePlots.clear();
    if(next.revision!==flow.revision)await accept(await request("/api/flow"));
    else if(reconnected)redraw();
-   $("#connection").textContent="Local";$("#connection").title="Connected to the local project recorder";
- }catch(error){$("#connection").textContent="Offline";$("#connection").title=error.message;}
+   $("#connection").textContent="";$("#connection").hidden=true;
+ }catch(error){$("#connection").hidden=false;$("#connection").textContent="Offline";$("#connection").title=error.message;}
 }
 // Path abbreviations affect presentation only; the execution record is untouched.
 let projectRoot="",externalDirectories=new Map();
@@ -219,7 +225,7 @@ function bindArtifactButtons(el){
 function nodeContent(n){
  if(n.status==="running"||n.status==="planned")return '<span class="ring">'+(n.status==="running"?"↗":"·")+'</span><span class="node-title">'+esc(n.title)+'</span><span class="pending-summary">'+esc(n.expectedSummary||n.note||(n.expectedFiles||[]).join(', '))+'</span><span class="node-bottom">'+(n.status==="running"?"Running":"Planned")+'</span>';
  const plot=firstPlot(n),bad=["failed","cancelled","unknown"].includes(n.status);
- return '<span class="node-title">'+esc(n.title)+'</span>'+(plot?'<span class="mini-plot">'+imagePreview(n)+'</span>':'<span class="node-excerpt">'+esc(decisionSummary(n))+'</span>')+'<span class="node-bottom">'+(bad?esc(n.status):n.status==="imported"?"Imported · "+n.files.length+" files":n.files.length+" saved outputs")+'</span>';
+ return '<span class="node-title">'+esc(n.title)+'</span>'+(plot?'<span class="mini-plot">'+imagePreview(n)+'</span>':firstTable(n)?tableMarkup(n,true):'<span class="node-excerpt">'+esc(decisionSummary(n))+'</span>')+'<span class="node-bottom">'+(bad?esc(n.status):n.status==="imported"?"Imported · "+n.files.length+" files":n.files.length+" saved outputs")+'</span>';
 }
 
 function reportBadge(id){const i=reportSelection.indexOf(id);return reportMode&&i>=0?'<span class="report-badge" aria-label="Report position '+(i+1)+'">'+(i+1)+'</span>':"";}
@@ -227,10 +233,26 @@ function renderNodes(){
  $("#nodes").innerHTML=flow.states.map(n=>'<button class="state '+esc(n.status)+(firstPlot(n)?" has-plot":"")+(selected===n.id?" selected":"")+'" data-state="'+esc(n.id)+'" style="left:'+n.x+'px;top:'+n.y+'px" aria-label="'+esc(n.title)+'">'+reportBadge(n.id)+nodeContent(n)+'<span class="port" title="Connect to another state" aria-hidden="true"></span></button>').join("");
 }
 function edgePath(from,to){const special=n=>n.status==="running"||n.status==="planned",x1=from.x+(special(from)?from.status==="running"?134:126:W),y1=from.y+(special(from)?46:H/2),x2=to.x+(special(to)?to.status==="running"?58:66:0),y2=to.y+(special(to)?46:H/2),dx=Math.max(35,(x2-x1)*.5);return {d:"M "+x1+" "+y1+" C "+(x1+dx)+" "+y1+", "+(x2-dx)+" "+y2+", "+x2+" "+y2,x:(x1+x2)/2,y:(y1+y2)/2};}
+function executedScriptName(a){
+ const argv=a.argv||a.argvTemplate||[];
+ if(!argv.length)return "";
+ const base=v=>String(v).split(/[\\/]/).pop();
+ const executable=base(argv[0]);
+ if(/\.(py|r|sh|bash|zsh|pl|jl)$/i.test(executable))return executable;
+ if(!/^(python[\d.]*|Rscript|bash|sh|zsh|perl|julia)$/.test(executable))return "";
+ // Only the interpreter's script position; never name a data argument as the executed script.
+ for(let i=1;i<argv.length;i++){
+   if(["-c","-m","-e"].includes(argv[i]))return "";
+   if(argv[i].startsWith("-"))continue;
+   return /\.(py|r|sh|bash|zsh|pl|jl)$/i.test(argv[i])?base(argv[i]):"";
+ }
+ return "";
+}
 function edgeLabel(a,x,y){
  const context=actionContext(a);
  const label=context.metadata.declared?a.label.replace(/\s*\+\s*metadata\s*$/i,""):a.label;
- const parts=label.split(/\s*[·•]\s*/),rows=[{text:parts.shift(),kind:"tool",indent:0}];
+ const parts=label.split(/\s*[·•]\s*/),rows=[{text:executedScriptName(a)||parts[0],kind:"tool",indent:0}];
+ parts.shift();
  for(const part of parts)rows.push({text:part,kind:/^--?\S/.test(part)?"option":"context",indent:10});
  if(context.metadata.declared){
    rows.push({text:"input: "+context.source,kind:"source",indent:8});
@@ -259,7 +281,7 @@ function applyCamera(){ $("#scene").style.transform="translate("+camera.x+"px,"+
 function bounds(){const ns=flow.states;if(!ns.length)return {x:0,y:0,w:1000,h:600};const x=Math.min(...ns.map(n=>n.x)),y=Math.min(...ns.map(n=>n.y));return {x,y,w:Math.max(...ns.map(n=>n.x+W))-x,h:Math.max(...ns.map(n=>n.y+H))-y};}
 function fit(initial=false){const v=$("#viewport"),b=bounds(),w=v.clientWidth,h=v.clientHeight;let scale=Math.min(1,(w-100)/b.w,(h-170)/b.h);if(initial)scale=Math.max(scale,w<800?.67:.62);scale=Math.max(.22,scale);camera={scale,x:w>b.w*scale?(w-b.w*scale)/2-b.x*scale:65-b.x*scale,y:Math.max(90,(h-b.h*scale)/2)-b.y*scale};applyCamera();}
 function zoom(factor,cx,cy){const v=$("#viewport").getBoundingClientRect();cx=cx??v.width/2;cy=cy??v.height/2;const next=Math.max(.22,Math.min(1.8,camera.scale*factor)),ratio=next/camera.scale;camera.x=cx-(cx-camera.x)*ratio;camera.y=cy-(cy-camera.y)*ratio;camera.scale=next;hidePopups();applyCamera();}
-function positionSelection(){const el=$("#selection-tools"),n=getState(selected);if(!editing||!n||!$("#detail-view").hidden||connecting){el.hidden=true;return;}const r=$("#viewport").getBoundingClientRect(),left=r.left+camera.x+(n.x+W/2)*camera.scale,top=r.top+camera.y+n.y*camera.scale;el.hidden=false;el.style.left=Math.max(10,Math.min(innerWidth-250,left-115))+"px";el.style.top=Math.max(r.top+10,Math.min(innerHeight-52,top-43))+"px";}
+function positionSelection(){const el=$("#selection-tools"),n=getState(selected);if(reportMode||!n||!$("#detail-view").hidden||connecting){el.hidden=true;return;}const r=$("#viewport").getBoundingClientRect(),left=r.left+camera.x+(n.x+W/2)*camera.scale,top=r.top+camera.y+n.y*camera.scale;el.hidden=false;el.style.left=Math.max(10,Math.min(innerWidth-250,left-115))+"px";el.style.top=Math.max(r.top+10,Math.min(innerHeight-52,top-43))+"px";}
 function hidePopups(){clearTimeout(hoverTimer);clearTimeout(hideTimer);$("#preview").hidden=true;$("#action-preview").hidden=true;}
 function placePopup(el,rect){el.hidden=false;const pr=el.getBoundingClientRect();let x=rect.right+13;if(x+pr.width>innerWidth-12)x=rect.left-pr.width-13;if(x<12)x=Math.max(12,Math.min(innerWidth-pr.width-12,rect.left));let y=Math.max(85,Math.min(innerHeight-pr.height-15,rect.top));el.style.left=x+"px";el.style.top=y+"px";}
 
@@ -268,11 +290,11 @@ function renderPreview(n){
  el.dataset.state=n.id;el.classList.toggle("has-plot",!!plot);
  const explanation=(pending?n.expectedSummary||note:note)?'<p class="preview-note '+(plot?"preview-caption":"preview-summary")+'">'+esc(pending?n.expectedSummary||note:note)+'</p>':"";
  el.innerHTML='<div class="preview-inner preview-heading"><div class="preview-label">'+esc(n.status)+'</div><div class="preview-title">'+esc(n.title)+'</div></div>'+
-   (plot?'<div class="preview-plot">'+imagePreview(n,"","eager")+'</div>':"")+
-   '<div class="preview-inner preview-context">'+explanation+'<div class="preview-label">'+(pending?"Expected outputs":n.status==="imported"?"Preserved inputs":"Saved outputs")+'</div><ul class="preview-files">'+(pending?(n.expectedFiles||[]).map(f=>'<li>'+esc(f)+'</li>').join(""):items.slice(0,4).map(a=>'<li>'+esc(a.name)+'</li>').join(""))+'</ul></div><button class="preview-open" data-open="'+esc(n.id)+'">Open state <span>↗</span></button>';
+   (plot?'<div class="preview-plot">'+imagePreview(n,"","eager")+'</div>':tableMarkup(n))+
+   '<div class="preview-inner preview-context">'+explanation+'<div class="preview-label">'+(pending?"Expected outputs":n.status==="imported"?"Preserved inputs":"Saved outputs")+'</div><ul class="preview-files">'+(pending?(n.expectedFiles||[]).map(f=>'<li>'+esc(f)+'</li>').join(""):items.slice(0,4).map(a=>'<li>'+esc(a.name)+'</li>').join(""))+'</ul></div><button class="preview-open" data-open="'+esc(n.id)+'">Show detail <span>→</span></button>';
 }
 function showPreview(id,anchor){
- if(editing||drag||!$("#detail-view").hidden)return;
+ if(reportMode||connecting||drag||!$("#detail-view").hidden)return;
  const n=getState(id);if(!n)return;
  renderPreview(n);placePopup($("#preview"),anchor.getBoundingClientRect());
 }
@@ -298,9 +320,10 @@ function handleImageError(e){
 }
 function showAction(id,anchor){
  hidePopups();const a=getAction(id);if(!a)return;
- if(editing){openActionEditor(a);return;}
  const el=$("#action-preview");el.classList.remove("file-popover");
  el.innerHTML='<div class="preview-inner"><button class="close-pop" aria-label="Close action details">×</button><div class="preview-label">'+esc(a.status)+'</div><div class="preview-title">'+esc(a.label)+'</div>'+comparisonMarkup(a)+'<pre>'+esc(displayCommand(a))+'</pre><p class="preview-note">'+esc(a.reason||"Reason not recorded")+'</p>'+(a.annotation?'<p class="preview-note"><strong>Human note:</strong> '+esc(a.annotation)+'</p>':"")+'<div class="action-meta">'+esc(a.methodSource)+'</div><div class="action-meta">'+esc(a.performedBy?"Executor: "+a.performedBy:"No execution recorded")+'</div></div>';
+ el.querySelector(".preview-inner").insertAdjacentHTML("beforeend",'<button class="quiet edit-action">Edit action</button>');
+ el.querySelector(".edit-action").onclick=()=>{el.hidden=true;openActionEditor(a);};
  bindArtifactButtons(el);placePopup(el,anchor.getBoundingClientRect());el.querySelector(".close-pop").onclick=()=>el.hidden=true;
 }
 function fileRows(items){
@@ -327,6 +350,7 @@ function renderDetail(n){
  const incoming=flow.actions.filter(a=>a.to===n.id),items=artifacts(n),plot=firstPlot(n),pending=["running","planned"].includes(n.status);
  let visual="";
  if(plot)visual='<figure class="figure"><div class="figure-title">'+esc(plot.name)+'</div>'+imagePreview(n,"detail-image")+'<figcaption>Preserved output · SHA-256 '+esc(plot.sha256.slice(0,16))+'…</figcaption></figure>';
+ else if(firstTable(n))visual=tableMarkup(n);
  else if(pending)visual='<div class="run-display"><div class="preview-label">'+esc(n.status)+'</div><p>'+(n.status==="running"?"The recorder is waiting for the command to finish.":"This is a plan. No command has been executed.")+'</p></div>';
  else if(["failed","cancelled","unknown"].includes(n.status))visual='<div class="run-display"><div class="preview-label">'+esc(n.status)+'</div><p>'+esc(displayText(incoming.find(a=>a.error)?.error||"This attempt did not produce a verified completion record."))+'</p></div>';
  const origin=n.origin==="terminal"?"Selected files were preserved at this checkpoint. Command order records session activity; it does not establish file dependencies.":n.status==="imported"?"Existing files were recorded. Their earlier execution is not established by this import.":n.origin==="manual"?"This is a human-supplied plan.":"Execution status was observed by the recorder. A successful command does not establish scientific correctness.";
@@ -360,16 +384,8 @@ function openState(id){if(!getState(id))return;hidePopups();if($("#detail-view")
 function route(){
  hidePopups();const match=location.hash.match(/^#state\/(.+)$/);let n;
  try{n=match?getState(decodeURIComponent(match[1])):null;}catch{}
- if(n){$("#flow-view").hidden=true;$("#detail-view").hidden=false;$("#edit-toggle").hidden=true;$("#selection-tools").hidden=true;renderDetail(n);$("#detail-view").scrollTop=0;}
- else{$("#flow-view").hidden=false;$("#detail-view").hidden=true;$("#edit-toggle").hidden=false;if(savedCamera){camera={...savedCamera};savedCamera=null;}applyCamera();}
-}
-function setEditing(value){
- if(value&&reportMode)setReportMode(false);
- editing=value;selected=null;connecting=null;hidePopups();
- $("#edit-toggle").setAttribute("aria-pressed",String(value));$("#edit-toggle").textContent=value?"Done":"Edit flow";
- $("#edit-tools").hidden=!value;$("#viewport").classList.toggle("editing",value);$("#viewport").classList.remove("connecting");
-
- render();
+ if(n){$("#flow-view").hidden=true;$("#detail-view").hidden=false;$("#selection-tools").hidden=true;renderDetail(n);$("#detail-view").scrollTop=0;}
+ else{$("#flow-view").hidden=false;$("#detail-view").hidden=true;if(savedCamera){camera={...savedCamera};savedCamera=null;}applyCamera();}
 }
 function field(name,label,value="",type="input",placeholder=""){
  const c=type==="textarea"?'<textarea name="'+name+'" rows="3" placeholder="'+esc(placeholder)+'">'+esc(value)+'</textarea>':'<input name="'+name+'" value="'+esc(value)+'" '+(name==="title"||name==="label"?"required":"")+' maxlength="'+(name==="title"?80:1000)+'" placeholder="'+esc(placeholder)+'">';
@@ -443,14 +459,18 @@ $("#delete-item").onclick=async()=>{
 
 $("#close-editor").onclick=$("#cancel-editor").onclick=()=>$("#editor").close();
 $("#editor").addEventListener("click",e=>{if(e.target===$("#editor")){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();}});
-$("#edit-toggle").onclick=()=>setEditing(!editing);
 $("#undo").onclick=async()=>{if(!history.length||busy)return;try{await mutate(null,history.at(-1));}catch(error){toast(error.message);}};
 $("#add-state").onclick=()=>addState();
-$("#selection-tools").onclick=e=>{const mode=e.target.closest("[data-edit-action]")?.dataset.editAction,n=getState(selected);if(!n)return;if(mode==="open")openState(n.id);if(mode==="edit")openStateEditor(n);if(mode==="branch")addState(n);if(mode==="connect")startConnecting(n.id);};
+$("#selection-tools").onclick=e=>{const mode=e.target.closest("[data-edit-action]")?.dataset.editAction,n=getState(selected);if(!n)return;if(mode==="edit")openStateEditor(n);if(mode==="branch")addState(n);if(mode==="connect")startConnecting(n.id);};
 $("#fit").onclick=()=>{hidePopups();fit();};
 $("#zoom-in").onclick=()=>zoom(1.2);$("#zoom-out").onclick=()=>zoom(1/1.2);
 $("#viewport").addEventListener("wheel",e=>{e.preventDefault();const r=e.currentTarget.getBoundingClientRect();zoom(Math.exp(-e.deltaY*.0015),e.clientX-r.left,e.clientY-r.top);},{passive:false});
-$("#nodes").addEventListener("pointerover",e=>{const n=e.target.closest("[data-state]");if(reportMode||!n||n.contains(e.relatedTarget))return;clearTimeout(hideTimer);clearTimeout(hoverTimer);hoverTimer=setTimeout(()=>showPreview(n.dataset.state,n),220);});
+$("#nodes").addEventListener("pointerover",e=>{const n=e.target.closest("[data-state]");if(reportMode||!n||n.contains(e.relatedTarget))return;clearTimeout(hideTimer);clearTimeout(hoverTimer);hoverTimer=setTimeout(()=>showPreview(n.dataset.state,n),650);});
+$("#nodes").addEventListener("keydown",e=>{
+ if(reportMode||connecting||!["Enter"," "].includes(e.key))return;
+ const n=e.target.closest("[data-state]");if(!n)return;
+ e.preventDefault();showPreview(n.dataset.state,n);$("#preview [data-open]")?.focus();
+});
 $("#nodes").addEventListener("pointerout",e=>{const n=e.target.closest("[data-state]");if(!n||n.contains(e.relatedTarget))return;clearTimeout(hoverTimer);hideTimer=setTimeout(()=>$("#preview").hidden=true,150);});
 $("#preview").onpointerenter=()=>clearTimeout(hideTimer);
 $("#preview").onpointerleave=()=>{hideTimer=setTimeout(()=>$("#preview").hidden=true,150);};
@@ -462,7 +482,7 @@ $("#viewport").addEventListener("pointerdown",e=>{
  if(e.target.closest(".port")&&!reportMode){e.preventDefault();startConnecting(card.dataset.state);return;}
  if(e.target.closest(".edge-group"))return;
  if(connecting&&card)return;
- if(card&&!editing)return;
+ if(card&&reportMode)return;
  hidePopups();e.preventDefault();$("#viewport").setPointerCapture(e.pointerId);
  drag={id:card?.dataset.state||null,startX:e.clientX,startY:e.clientY,x:card?getState(card.dataset.state).x:camera.x,y:card?getState(card.dataset.state).y:camera.y,moved:false,before:card?copy(flow):null};
  if(!card){$("#viewport").classList.add("panning");selected=null;positionSelection();}
@@ -490,14 +510,14 @@ $("#nodes").addEventListener("click",e=>{
  if(suppressClick||e.target.closest(".port"))return;const n=e.target.closest("[data-state]");if(!n)return;
  if(reportMode){toggleReportState(n.dataset.state);return;}
  if(connecting){connectTo(n.dataset.state);return;}
- if(editing){selected=n.dataset.state;render();}else openState(n.dataset.state);
+ selected=n.dataset.state;render();
 });
-$("#edges").addEventListener("click",e=>{const g=e.target.closest("[data-action]");if(g){if(!editing&&e.target.closest(".edge-label,.edge-sub"))showActionFiles(g.dataset.action,e.target);else showAction(g.dataset.action,g);}});
+$("#edges").addEventListener("click",e=>{const g=e.target.closest("[data-action]");if(g){if(e.target.closest(".edge-label,.edge-sub"))showActionFiles(g.dataset.action,e.target);else showAction(g.dataset.action,g);}});
 $("#edges").addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){const g=e.target.closest("[data-action]");if(g){e.preventDefault();showAction(g.dataset.action,g);}}});
 document.addEventListener("pointerdown",e=>{if(!e.target.closest("#action-preview")&&!e.target.closest(".edge-group"))$("#action-preview").hidden=true;});
 document.addEventListener("keydown",e=>{
  if(e.key==="Escape"){if(reportMode)setReportMode(false);hidePopups();if(connecting){connecting=null;$("#viewport").classList.remove("connecting");}else selected=null;positionSelection();}
- if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="z"&&editing&&!e.target.closest("input,textarea")&&!$("#editor").open){e.preventDefault();$("#undo").click();}
+ if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="z"&&!reportMode&&!e.target.closest("input,textarea")&&!$("#editor").open){e.preventDefault();$("#undo").click();}
 });
 window.addEventListener("hashchange",route);
 window.addEventListener("resize",()=>{hidePopups();applyCamera();});
@@ -516,7 +536,7 @@ function actionFiles(a){
  return ids.map(id=>flow.artifacts[id]).filter(f=>f&&f.role!=="environment"&&!seen.has(f.id)&&seen.add(f.id)).map(f=>({...f,usage:f.role==="code"?"script":metadata.has(f.id)?"metadata":inputIds.has(f.id)?"input":outputIds.has(f.id)?"output":f.role}));
 }
 function showActionFiles(id,anchor){
- if(editing||drag)return;
+ if(reportMode||connecting||drag)return;
  hidePopups();const a=getAction(id);if(!a)return;
  const files=actionFiles(a),el=$("#action-preview");
  el.classList.add("file-popover");
@@ -527,11 +547,11 @@ function showActionFiles(id,anchor){
  placePopup(el,anchor.getBoundingClientRect());
 }
 $("#edges").addEventListener("pointerover",e=>{
- const g=e.target.closest("[data-action]");if(!g||editing)return;
+ const g=e.target.closest("[data-action]");if(!g||reportMode||connecting||drag)return;
  const label=e.target.closest(".edge-label,.edge-sub"),previous=e.relatedTarget instanceof Element?e.relatedTarget.closest(".edge-label,.edge-sub"):null;
  if(g.contains(e.relatedTarget)&&!!label===!!previous)return;
  clearTimeout(hideTimer);clearTimeout(hoverTimer);
- hoverTimer=setTimeout(()=>label?showActionFiles(g.dataset.action,label):showAction(g.dataset.action,g),220);
+ hoverTimer=setTimeout(()=>label?showActionFiles(g.dataset.action,label):showAction(g.dataset.action,g),650);
 });
 $("#edges").addEventListener("pointerout",e=>{
  const g=e.target.closest("[data-action]");if(!g||g.contains(e.relatedTarget))return;
@@ -541,7 +561,11 @@ $("#action-preview").onpointerenter=()=>clearTimeout(hideTimer);
 $("#action-preview").onpointerleave=()=>{hideTimer=setTimeout(()=>$("#action-preview").hidden=true,180);};
 
 function setReportMode(value){
- reportMode=value;if(value){setEditing(false);location.hash="";}else reportSelection=[];
+ reportMode=value;selected=null;connecting=null;
+ $("#viewport").classList.remove("connecting");
+ $("#viewport").classList.toggle("editing",!value);
+ $("#edit-tools").hidden=value;
+ if(value)location.hash="";else reportSelection=[];
  hidePopups();$("#report-toggle").setAttribute("aria-pressed",String(value));
  $("#viewport").classList.toggle("report-mode",value);render();
 }

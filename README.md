@@ -136,13 +136,19 @@ The export contains records, not the file bodies. Back up the complete .saigen d
 
 ## Agent integration
 
-The repository and installed package include [the recording skill](skills/saigen-record/SKILL.md). The skill uses the installed CLI and is self-contained. A wheel installs it under `share/saigenbio/skills/saigen-record` in its Python environment. Copy that whole folder into your analysis workspace's `.agents/skills/` for a local Codex installation; global agent configuration is not changed automatically. See the external installation check below for a tested setup.
+The repository and installed package include [the recording skill](skills/saigen-record/SKILL.md). Prepare an external workspace with the installed CLI:
+
+```sh
+saigen setup --workspace /path/to/workspace --agent claude --analysis-project projects/analysis --viewer http://127.0.0.1:8767/
+```
+
+Choose codex, claude, opencode, or antigravity. Setup writes agent instructions, a skill copy, and saigen-workspace.json with the project and exact CLI path. It refuses to overwrite differing existing files. See [agent integrations](docs/agent-integrations.md) for setup conventions and verification status.
 
 Hover over an arrow for action details, or over its label for a compact list of related scripts, inputs, and outputs. File entries show project-relative paths or aliases for external locations, offer Copy displayed path, and open preserved previews. Commands use the same display paths; the executable is shown by name. In state details, expand Code, inputs, and environment to reveal the Exact local command control.
 
 Display aliases such as {source}, {scripts}, and {external:1} hide parent directories; they are not shell variables. Original local records, exports, and file contents retain their full paths.
 
-Human notes, layout edits, new plans, and Undo are saved through the viewer. Actual execution facts remain attached to their original attempts.
+The canvas is editable by default. Click to select a state, drag to rearrange it, or hover and choose **Show detail →** to inspect it. Human notes, layout edits, new plans, and Undo are saved through the viewer. Actual execution facts remain attached to their original attempts.
 
 ## Test a clean installation outside the repository
 
@@ -152,9 +158,11 @@ Keep reusable test code here; put installation environments, trial projects, bui
 python3 -B scripts/check_installation.py
 ```
 
-The check creates a new visible `../SaigenBio-lab/installations/install-TIMESTAMP/` directory. It copies the package sources there, builds a wheel, installs it into a fresh environment (not editable), installs the bundled skill into the trial's `workspace/.agents/skills/`, and verifies a recorded action plus the installed viewer and plot endpoint. The existing CLI installation and viewers are untouched.
+The check creates a new visible `../SaigenBio-lab/installations/install-TIMESTAMP/` directory. It copies the package sources there, builds a wheel, installs it into a fresh environment (not editable), installs the bundled skill into the selected agent's workspace skill directory, and verifies a recorded action plus the installed viewer and plot endpoint. The existing CLI installation and viewers are untouched.
 
 All generated files, including the build cache and logs, stay in that trial directory. The report is `installation-check.json`; `workspace/START.md` explains how to open a fresh agent session and test skill discovery. Automatic skill selection still needs that fresh-session check.
+
+Use `--agent codex|claude|opencode|antigravity` to select the trial's agent setup (default: codex).
 
 An optional `--destination /outside/path/new-trial` selects another new directory. Existing destinations and paths inside this checkout are rejected.
 
@@ -173,7 +181,7 @@ bash examples/ecoli/setup.bash ../SaigenBio-lab/projects/advisor-demo
 saigen serve --project ../SaigenBio-lab/projects/advisor-demo
 ```
 
-Existing `../SaigenBio-lab/projects/ecoli` contains preserved analysis history, including depth 5. Keep each project's complete `.saigen` directory together; deleting individual run or object files can break its record. Git ignore rules prevent commits but do not remove files from disk.
+Demo projects are created locally and are not included in this repository. Keep each project's complete `.saigen` directory together; deleting individual run or object files can break its record. Git ignore rules prevent commits but do not remove files from disk.
 
 ## Real example and checks
 
@@ -211,7 +219,7 @@ The first version supports preserved SVG, PNG and JPEG figures, up to 20 MB per 
 - examples/ecoli/: optional example preparation, filtering, statistics, and plotting helpers.
 - docs/, README.md, pyproject.toml: design, usage, and packaging.
 
-Local research notes and media have been moved to the sibling SaigenBio-lab/research/ directory. They are not required to install or develop the application. The original HTML prototype is retained in Git history.
+Keep research data, environments, and generated reports in external analysis workspaces. The original HTML prototype is retained in Git history.
 
 Recorded commands retain the paths used at execution time. After moving a project, those historical paths can point to its former location; preserved files remain accessible through the viewer using their hashes. Project migration is not environment or command replay.
 
@@ -227,3 +235,5 @@ saigen plan --project /path/to/analysis --from input --id summary_plan \
 Use another planned ID as --from to propose later steps. After user approval, execute into the same placeholder using the normal run options plus --plan summary_plan --approved. Its actual parents must match the proposal and already contain completed or imported evidence. The node retains its position; the incoming edge appears when execution starts. The approval flag is an agent declaration, not an approval interface.
 
 For immediate execution, run --expect describes the expected output on the running placeholder. Completion replaces the placeholder with preserved results. Failed attempts remain recorded.
+
+See [agent integrations](docs/agent-integrations.md) for shared project configuration and setup for Codex, Claude Code, OpenCode, and Antigravity.

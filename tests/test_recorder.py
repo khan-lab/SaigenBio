@@ -25,6 +25,32 @@ class RecorderTests(unittest.TestCase):
         self.parent=self.store.snapshot("Input",[self.input],ident="input")
     def execute(self,code,outputs=(),**kw):
         return run(self.store,["input"],"Attempt",[sys.executable,"-c",code],outputs=outputs,**kw)
+    def test_root_acquisition_preserves_provenance_and_preview(self):
+        result=run(self.store,[],"Dataset",[sys.executable,"-c",
+            "import pathlib;pathlib.Path('samples.tsv').write_text('sample\\tgeneration\\nA\\t5000\\n')"],
+            acquisition=True,source_urls=["https://example.org/data"],outputs=["samples.tsv"],
+            expected="Expected: downloaded sample metadata")
+        self.assertEqual(result["status"],"completed")
+        f=self.store.flow()
+        action=entity(f,"actions",result["action"])
+        self.assertEqual(action["from"],[])
+        self.assertTrue(action["acquisition"])
+        self.assertEqual(action["environment"]["declaredSourceURLs"],["https://example.org/data"])
+        state=entity(f,"states",result["state"])
+        art=f["artifacts"][state["artifactIds"][0]]
+        self.assertEqual(art["tablePreview"]["columns"],["sample","generation"])
+        self.assertEqual(art["tablePreview"]["rows"],[["A","5000"]])
+        self.assertEqual(self.store.artifact_path(art).read_text(),"sample\tgeneration\nA\t5000\n")
+
+    def test_table_preview_is_bounded_and_reference_not_previewed(self):
+        p=self.root/"wide.csv"
+        p.write_text("a,b,c,d,e,f,g\n"+("x"*300+",2,3,4,5,6,7\n")*20)
+        a=self.store.capture(p)
+        self.assertEqual(len(a["tablePreview"]["columns"]),6)
+        self.assertEqual(len(a["tablePreview"]["rows"]),5)
+        self.assertEqual(len(a["tablePreview"]["rows"][0][0]),160)
+        self.assertIsNone(self.store.capture(p,preserve=False)["tablePreview"])
+
     def test_plan_chain_and_execution_lifecycle(self):
         a=self.store.plan("First",["input"],"Expected: first table",["out.txt"],ident="first")
         self.store.plan("Second",["first"],"Expected: figure",ident="second")
