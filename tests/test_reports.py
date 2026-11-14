@@ -36,7 +36,9 @@ class ReportTests(unittest.TestCase):
 
     def test_order_snapshot_and_preserved_files(self):
         self.fig.write_text('working copy changed')
+        before=json.dumps(self.store.flow(),sort_keys=True)
         folder, manifest = self.prepare(['second', 'first'])
+        self.assertEqual(json.dumps(self.store.flow(),sort_keys=True),before)
         text = (folder / 'report.qmd').read_text()
         self.assertLess(text.index('# 1. Second'), text.index('# 2. First'))
         self.assertNotIn('# 3.', text)

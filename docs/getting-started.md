@@ -50,6 +50,7 @@ Open the viewer address shown by serve.
 - Hover for about 650 ms, then choose **Show detail →** to inspect a state.
 - Previews prioritize a figure, then a bounded CSV/TSV excerpt, then a summary.
 - Hover an arrow for execution details; hover its label for related files.
+- When a command uses several input states, their paths meet at a small junction with one outgoing arrow and one command label. Longer ancestor-input paths route above intermediate cards. The execution details retain every recorded input.
 - Failed attempts stay available in gray. A successful retry is a separate attempt.
 
 Edits save to the project. Notes and layout can change; recorded execution facts are retained. Undo checks for conflicting changes.
@@ -58,7 +59,9 @@ Edits save to the project. Notes and layout can change; recorded execution facts
 
 Ask the agent to propose an analysis and wait for your approval. Proposed result nodes appear without execution edges. After approval, each recorded step becomes running and then completed or failed. Very short runs may finish between browser updates.
 
-Dotted nodes show a short result name and "Planned". Hover to read the expected result; choose **Show detail →** for the proposed method, prerequisites, inputs, and expected files. These descriptions remain available as the original plan once execution starts.
+Planned and running nodes have dotted rectangular outlines, with the same size and connection points as solid result cards. The status label distinguishes "Planned" from "Running". Hover to read the expected result; choose **Show detail →** for the proposed method, prerequisites, inputs, and expected files. These descriptions remain available as the original plan once execution starts. Aligned cards connect with straight paths; cards on different rows can use curves.
+
+Use status names such as planned, running, completed, imported, and failed when describing states. Dotted and solid describe their outlines; all nodes are rectangular. Use the Report interface to export selected results rather than adding a report-only node.
 
 Permission to publish a plan is separate from approval to execute it. Native agent plan modes that prohibit writes may prevent canvas publication. See [permission guidance](agent-integrations.md#permissions-and-planning).
 

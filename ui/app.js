@@ -223,7 +223,7 @@ function bindArtifactButtons(el){
 }
 
 function nodeContent(n){
- if(n.status==="running"||n.status==="planned")return '<span class="ring">'+(n.status==="running"?"↗":"·")+'</span><span class="node-title">'+esc(n.title)+'</span><span class="node-bottom">'+(n.status==="running"?"Running":"Planned")+'</span>';
+ if(n.status==="running"||n.status==="planned")return '<span class="node-title">'+esc(n.title)+'</span><span class="node-bottom">'+(n.status==="running"?"Running":"Planned")+'</span>';
  const plot=firstPlot(n),bad=["failed","cancelled","unknown"].includes(n.status);
  return '<span class="node-title">'+esc(n.title)+'</span>'+(plot?'<span class="mini-plot">'+imagePreview(n)+'</span>':firstTable(n)?tableMarkup(n,true):'<span class="node-excerpt">'+esc(decisionSummary(n))+'</span>')+'<span class="node-bottom">'+(bad?esc(n.status):n.status==="imported"?"Imported · "+n.files.length+" files":n.files.length+" saved outputs")+'</span>';
 }
@@ -233,7 +233,44 @@ function renderNodes(){
  $("#planned-help").hidden=!flow.states.some(n=>n.status==="planned");
  $("#nodes").innerHTML=flow.states.map(n=>'<button class="state '+esc(n.status)+(firstPlot(n)?" has-plot":"")+(selected===n.id?" selected":"")+'" data-state="'+esc(n.id)+'" style="left:'+n.x+'px;top:'+n.y+'px" aria-label="'+esc(n.title)+'">'+reportBadge(n.id)+nodeContent(n)+'<span class="port" title="Connect to another state" aria-hidden="true"></span></button>').join("");
 }
-function edgePath(from,to){const special=n=>n.status==="running"||n.status==="planned",x1=from.x+(special(from)?from.status==="running"?134:126:W),y1=from.y+(special(from)?46:H/2),x2=to.x+(special(to)?to.status==="running"?58:66:0),y2=to.y+(special(to)?46:H/2),dx=Math.max(35,(x2-x1)*.5);return {d:"M "+x1+" "+y1+" C "+(x1+dx)+" "+y1+", "+(x2-dx)+" "+y2+", "+x2+" "+y2,x:(x1+x2)/2,y:(y1+y2)/2};}
+function edgeAnchor(n,right=false){return {x:n.x+(right?W:0),y:n.y+H/2};}
+function edgePath(from,to){
+ const start=edgeAnchor(from,true),end=edgeAnchor(to),dx=Math.max(35,(end.x-start.x)*.5);
+ const d=start.y===end.y&&end.x>=start.x?'M '+start.x+' '+start.y+' L '+end.x+' '+end.y:
+   'M '+start.x+' '+start.y+' C '+(start.x+dx)+' '+start.y+', '+(end.x-dx)+' '+end.y+', '+end.x+' '+end.y;
+ return {d,x:(start.x+end.x)/2,y:(start.y+end.y)/2};
+}
+function roundedRoute(points){
+ let d='M '+points[0].x+' '+points[0].y;
+ for(let i=1;i<points.length-1;i++){
+   const p=points[i],prev=points[i-1],next=points[i+1],before=Math.hypot(p.x-prev.x,p.y-prev.y),after=Math.hypot(next.x-p.x,next.y-p.y),r=Math.min(10,before/2,after/2);
+   if(!r){d+=' L '+p.x+' '+p.y;continue;}
+   const a={x:p.x+(prev.x-p.x)*r/before,y:p.y+(prev.y-p.y)*r/before},b={x:p.x+(next.x-p.x)*r/after,y:p.y+(next.y-p.y)*r/after};
+   d+=' L '+a.x+' '+a.y+' Q '+p.x+' '+p.y+' '+b.x+' '+b.y;
+ }
+ const end=points.at(-1);return d+' L '+end.x+' '+end.y;
+}
+function actionJunction(a){
+ const target=getState(a.to),end=edgeAnchor(target),junction={x:end.x-44,y:end.y};
+ const sources=a.from.map(id=>getState(id));
+ const inputs=sources.map((s,index)=>{
+   const start=edgeAnchor(s,true),left=Math.min(start.x,junction.x),right=Math.max(start.x,junction.x);
+   const candidates=flow.states.filter(n=>n.id!==s.id&&n.id!==target.id&&n.x<right&&n.x+W>left);
+   const blocked=candidates.some(n=>n.y-12<Math.max(start.y,junction.y)&&n.y+H+12>Math.min(start.y,junction.y));
+   if(!blocked&&junction.x>start.x){
+     const dx=Math.max(20,(junction.x-start.x)*.5);
+     return {id:s.id,d:'M '+start.x+' '+start.y+' C '+(start.x+dx)+' '+start.y+', '+(junction.x-dx)+' '+junction.y+', '+junction.x+' '+junction.y};
+   }
+   // An ancestor input can span intermediate result cards. Route above them,
+   // retaining the recorded dependency rather than concealing it behind a card.
+   const lane=Math.min(s.y,target.y,...candidates.map(n=>n.y))-28-index*16;
+   const points=[start,{x:start.x+20,y:start.y},{x:start.x+20,y:lane},{x:junction.x-20,y:lane},{x:junction.x-20,y:junction.y},junction];
+   return {id:s.id,d:roundedRoute(points),points};
+ });
+ const nearest=sources.reduce((best,n)=>Math.abs(edgeAnchor(n,true).x-junction.x)<Math.abs(edgeAnchor(best,true).x-junction.x)?n:best);
+ return {inputs,junction,output:'M '+junction.x+' '+junction.y+' L '+end.x+' '+end.y,
+   label:{x:(edgeAnchor(nearest,true).x+junction.x)/2,y:Math.min(nearest.y,target.y)-14}};
+}
 function executedScriptName(a){
  const argv=a.argv||a.argvTemplate||[];
  if(!argv.length)return "";
@@ -271,7 +308,16 @@ function edgeLabel(a,x,y){
 
 function renderEdges(){
  let html='<defs><marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M1 1L7 4L1 7" fill="none" stroke="#a0b097" stroke-width="1.2"/></marker></defs>';
- for(const a of flow.actions){const t=getState(a.to);a.from.forEach((id,index)=>{const s=getState(id),p=edgePath(s,t),running=a.status==="running",planned=a.status==="planned";html+='<g class="edge-group" data-action="'+esc(a.id)+'" role="button" tabindex="0" aria-label="'+esc(a.label+' from '+s.title+' to '+t.title)+'"><path class="edge-line '+(running?"running-edge":planned?"planned-edge":"")+'" d="'+p.d+'"'+(!running?' marker-end="url(#arrow)"':"")+'/><path class="edge-hit" d="'+p.d+'"/>';
+ for(const a of flow.actions){const t=getState(a.to);
+ if(a.from.length>1){
+   const p=actionJunction(a),running=a.status==="running",planned=a.status==="planned",cls=running?"running-edge":planned?"planned-edge":"";
+   const path=(d,arrow=false)=>'<path class="edge-line '+cls+'" d="'+d+'"'+(arrow&&!running?' marker-end="url(#arrow)"':"")+'/><path class="edge-hit" d="'+d+'"/>';
+   html+='<g class="edge-group joined-action" data-action="'+esc(a.id)+'" role="button" tabindex="0" aria-label="'+esc(a.label+' from '+a.from.map(id=>getState(id).title).join(' + ')+' to '+t.title)+'">'+p.inputs.map(i=>path(i.d)).join('')+path(p.output,true)+
+     '<circle class="edge-junction" cx="'+p.junction.x+'" cy="'+p.junction.y+'" r="3.5"/>'+edgeLabel(a,p.label.x,p.label.y);
+   if(running)html+='<g class="particle"><path d="M-12 0H-2M-7 -4L-2 0L-7 4" stroke="#44815e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/><animateMotion dur="1.4s" repeatCount="indefinite" rotate="auto" path="'+p.output+'"/></g>';
+   html+='</g>';continue;
+ }
+ a.from.forEach((id,index)=>{const s=getState(id),p=edgePath(s,t),running=a.status==="running",planned=a.status==="planned";html+='<g class="edge-group" data-action="'+esc(a.id)+'" role="button" tabindex="0" aria-label="'+esc(a.label+' from '+s.title+' to '+t.title)+'"><path class="edge-line '+(running?"running-edge":planned?"planned-edge":"")+'" d="'+p.d+'"'+(!running?' marker-end="url(#arrow)"':"")+'/><path class="edge-hit" d="'+p.d+'"/>';
  if(index===0){const labelY=a.from.length>1?t.y+H/2-23:p.y-20;html+=edgeLabel(a,p.x,labelY+8);}
  if(running)html+='<g class="particle"><path d="M-27 0H-2M-8 -4L-2 0L-8 4" stroke="#44815e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/><animateMotion dur="2.5s" repeatCount="indefinite" rotate="auto" path="'+p.d+'"/></g>';
  html+='</g>';});}
@@ -323,6 +369,10 @@ function showAction(id,anchor){
  hidePopups();const a=getAction(id);if(!a)return;
  const el=$("#action-preview");el.classList.remove("file-popover");
  el.innerHTML='<div class="preview-inner"><button class="close-pop" aria-label="Close action details">×</button><div class="preview-label">'+esc(a.status)+'</div><div class="preview-title">'+esc(a.label)+'</div>'+comparisonMarkup(a)+'<pre>'+esc(displayCommand(a))+'</pre><p class="preview-note">'+esc(a.reason||"Reason not recorded")+'</p>'+(a.annotation?'<p class="preview-note"><strong>Human note:</strong> '+esc(a.annotation)+'</p>':"")+'<div class="action-meta">'+esc(a.methodSource)+'</div><div class="action-meta">'+esc(a.performedBy?"Executor: "+a.performedBy:"No execution recorded")+'</div></div>';
+ if(a.from.length>1){
+   el.querySelector(".preview-inner").insertAdjacentHTML("beforeend",'<div class="preview-label action-meta">Input states</div><ul class="preview-files">'+a.from.map(id=>'<li><button class="source-link" data-input-state="'+esc(id)+'">'+esc(getState(id).title)+'</button></li>').join('')+'</ul>');
+   el.querySelectorAll("[data-input-state]").forEach(b=>b.onclick=()=>{el.hidden=true;openState(b.dataset.inputState);});
+ }
  el.querySelector(".preview-inner").insertAdjacentHTML("beforeend",'<button class="quiet edit-action">Edit action</button>');
  el.querySelector(".edit-action").onclick=()=>{el.hidden=true;openActionEditor(a);};
  bindArtifactButtons(el);placePopup(el,anchor.getBoundingClientRect());el.querySelector(".close-pop").onclick=()=>el.hidden=true;
