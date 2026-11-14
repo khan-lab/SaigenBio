@@ -62,6 +62,26 @@ class ReportTests(unittest.TestCase):
         self.assertIn('enabled: false', text)
         self.assertEqual(literal('# heading'), '\\# heading')
 
+    def test_planned_result_explanation_is_exported(self):
+        self.store.plan('QC summary',['first'],'QC plots.',ident='qc',
+                        details='Inspect counts.',requires='Review inputs.')
+        self.store.plan('Legacy plan',['first'],'Expected: old explanation',ident='legacy')
+        def legacy(f):
+            n=next(n for n in f['states'] if n['id']=='legacy')
+            n['note']=n['expectedSummary']
+            n.pop('planDetails');n.pop('planRequires')
+            return {},None
+        self.store.update('test.legacy','Test',legacy)
+        self.flow=self.store.flow()
+        folder,_=self.prepare(['qc','legacy'])
+        text=(folder/'report.qmd').read_text()
+        self.assertIn('Expected result: '+literal('QC plots.'),text)
+        self.assertIn('Proposed method: '+literal('Inspect counts.'),text)
+        self.assertIn(literal('Review inputs.'),text)
+        self.assertEqual(text.count(literal('Expected: old explanation')),1)
+        snapshot=json.loads((folder/'snapshot.json').read_text())
+        self.assertEqual(snapshot['states'][0]['planDetails'],'Inspect counts.')
+
     def test_missing_and_unsafe_figures_are_honest(self):
         ar = self.flow['artifacts'][self.a['artifactIds'][0]]
         self.store.artifact_path(ar).unlink()

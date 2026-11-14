@@ -166,6 +166,16 @@ class Reports:
                 body += [txt(status) + (' · not run' if status == 'planned' else ' · earlier execution not recorded' if status == 'imported' else ''), '']
             incoming = [a for a in actions if a["to"] == n["id"]]
             note = n.get("note") or ""
+            if status == 'planned':
+                expected = n.get('expectedSummary') or note
+                if expected:
+                    body += ['Expected result: ' + txt(expected), '']
+                if n.get('planDetails'):
+                    body += ['Proposed method: ' + txt(n['planDetails']), '']
+                if n.get('planRequires'):
+                    body += ['Prerequisite (descriptive, not enforced): ' + txt(n['planRequires']), '']
+                if note == expected:
+                    note = ''
             if note:
                 body += [txt(note), '']
             for action in incoming:

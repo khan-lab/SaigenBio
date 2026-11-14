@@ -223,13 +223,14 @@ function bindArtifactButtons(el){
 }
 
 function nodeContent(n){
- if(n.status==="running"||n.status==="planned")return '<span class="ring">'+(n.status==="running"?"↗":"·")+'</span><span class="node-title">'+esc(n.title)+'</span><span class="pending-summary">'+esc(n.expectedSummary||n.note||(n.expectedFiles||[]).join(', '))+'</span><span class="node-bottom">'+(n.status==="running"?"Running":"Planned")+'</span>';
+ if(n.status==="running"||n.status==="planned")return '<span class="ring">'+(n.status==="running"?"↗":"·")+'</span><span class="node-title">'+esc(n.title)+'</span><span class="node-bottom">'+(n.status==="running"?"Running":"Planned")+'</span>';
  const plot=firstPlot(n),bad=["failed","cancelled","unknown"].includes(n.status);
  return '<span class="node-title">'+esc(n.title)+'</span>'+(plot?'<span class="mini-plot">'+imagePreview(n)+'</span>':firstTable(n)?tableMarkup(n,true):'<span class="node-excerpt">'+esc(decisionSummary(n))+'</span>')+'<span class="node-bottom">'+(bad?esc(n.status):n.status==="imported"?"Imported · "+n.files.length+" files":n.files.length+" saved outputs")+'</span>';
 }
 
 function reportBadge(id){const i=reportSelection.indexOf(id);return reportMode&&i>=0?'<span class="report-badge" aria-label="Report position '+(i+1)+'">'+(i+1)+'</span>':"";}
 function renderNodes(){
+ $("#planned-help").hidden=!flow.states.some(n=>n.status==="planned");
  $("#nodes").innerHTML=flow.states.map(n=>'<button class="state '+esc(n.status)+(firstPlot(n)?" has-plot":"")+(selected===n.id?" selected":"")+'" data-state="'+esc(n.id)+'" style="left:'+n.x+'px;top:'+n.y+'px" aria-label="'+esc(n.title)+'">'+reportBadge(n.id)+nodeContent(n)+'<span class="port" title="Connect to another state" aria-hidden="true"></span></button>').join("");
 }
 function edgePath(from,to){const special=n=>n.status==="running"||n.status==="planned",x1=from.x+(special(from)?from.status==="running"?134:126:W),y1=from.y+(special(from)?46:H/2),x2=to.x+(special(to)?to.status==="running"?58:66:0),y2=to.y+(special(to)?46:H/2),dx=Math.max(35,(x2-x1)*.5);return {d:"M "+x1+" "+y1+" C "+(x1+dx)+" "+y1+", "+(x2-dx)+" "+y2+", "+x2+" "+y2,x:(x1+x2)/2,y:(y1+y2)/2};}
@@ -288,7 +289,7 @@ function placePopup(el,rect){el.hidden=false;const pr=el.getBoundingClientRect()
 function renderPreview(n){
  const items=artifacts(n),pending=n.status==="running"||n.status==="planned",plot=firstPlot(n),note=decisionSummary(n),el=$("#preview");
  el.dataset.state=n.id;el.classList.toggle("has-plot",!!plot);
- const explanation=(pending?n.expectedSummary||note:note)?'<p class="preview-note '+(plot?"preview-caption":"preview-summary")+'">'+esc(pending?n.expectedSummary||note:note)+'</p>':"";
+ const explanation=(pending?n.expectedSummary||note:note)?(pending?'<div class="preview-label">Expected result</div>':"")+'<p class="preview-note '+(plot?"preview-caption":"preview-summary")+'">'+esc(pending?n.expectedSummary||note:note)+'</p>':"";
  el.innerHTML='<div class="preview-inner preview-heading"><div class="preview-label">'+esc(n.status)+'</div><div class="preview-title">'+esc(n.title)+'</div></div>'+
    (plot?'<div class="preview-plot">'+imagePreview(n,"","eager")+'</div>':tableMarkup(n))+
    '<div class="preview-inner preview-context">'+explanation+'<div class="preview-label">'+(pending?"Expected outputs":n.status==="imported"?"Preserved inputs":"Saved outputs")+'</div><ul class="preview-files">'+(pending?(n.expectedFiles||[]).map(f=>'<li>'+esc(f)+'</li>').join(""):items.slice(0,4).map(a=>'<li>'+esc(a.name)+'</li>').join(""))+'</ul></div><button class="preview-open" data-open="'+esc(n.id)+'">Show detail <span>→</span></button>';
@@ -345,6 +346,19 @@ function terminalMarkup(activity){
  (c.pipelineExitCodes?.length>1?' · Pipeline exits '+c.pipelineExitCodes.map(esc).join(", "):"")+
  '</div><div class="action-meta">'+esc(shortDate(c.startedAt))+' → '+esc(shortDate(c.finishedAt))+'</div><div class="action-meta mono">'+esc(displayPath(c.cwd,c))+'</div></article>').join("")+'</details>';
 }
+function planMarkup(n){
+ const p=n.status==="planned"?n:n.plan;
+ if(!p)return "";
+ const expected=p.expectedSummary||p.note||"";
+ const parents=(p.planParents||[]).map(id=>getState(id)).filter(Boolean);
+ return '<section class="detail-section plan-details"><div class="section-label">'+(n.status==="planned"?"Plan":"Original plan")+'</div>'+
+   (expected?'<h3>Expected result</h3><p>'+esc(expected)+'</p>':"")+
+   (p.planDetails?'<h3>Proposed method</h3><p>'+esc(p.planDetails)+'</p>':"")+
+   (p.planRequires?'<h3>Prerequisite</h3><p>'+esc(p.planRequires)+'</p><small>Recorded condition; SaigenBio does not enforce it.</small>':"")+
+   (p.note&&p.note!==expected?'<h3>Notes</h3><p>'+esc(p.note)+'</p>':"")+
+   (parents.length?'<h3>Planned inputs</h3><p>'+parents.map(s=>'<button class="source-link" data-open="'+esc(s.id)+'">'+esc(s.title)+'</button>').join(" + ")+'</p>':"")+
+   (p.expectedFiles?.length?'<h3>Expected files</h3><ul class="files">'+p.expectedFiles.map(f=>'<li>'+esc(f)+'</li>').join("")+'</ul>':"")+'</section>';
+}
 function renderDetail(n){
  if(!n)return;
  const incoming=flow.actions.filter(a=>a.to===n.id),items=artifacts(n),plot=firstPlot(n),pending=["running","planned"].includes(n.status);
@@ -353,12 +367,12 @@ function renderDetail(n){
  else if(firstTable(n))visual=tableMarkup(n);
  else if(pending)visual='<div class="run-display"><div class="preview-label">'+esc(n.status)+'</div><p>'+(n.status==="running"?"The recorder is waiting for the command to finish.":"This is a plan. No command has been executed.")+'</p></div>';
  else if(["failed","cancelled","unknown"].includes(n.status))visual='<div class="run-display"><div class="preview-label">'+esc(n.status)+'</div><p>'+esc(displayText(incoming.find(a=>a.error)?.error||"This attempt did not produce a verified completion record."))+'</p></div>';
- const origin=n.origin==="terminal"?"Selected files were preserved at this checkpoint. Command order records session activity; it does not establish file dependencies.":n.status==="imported"?"Existing files were recorded. Their earlier execution is not established by this import.":n.origin==="manual"?"This is a human-supplied plan.":"Execution status was observed by the recorder. A successful command does not establish scientific correctness.";
- $("#detail-content").innerHTML='<nav class="detail-nav"><button class="back" id="back-flow">← Back to flow</button><button class="quiet" id="edit-detail">Edit state</button></nav><div class="detail-kicker">'+esc(n.status)+'</div><h1 class="detail-title">'+esc(n.title)+'</h1><p class="detail-note">'+esc(n.note)+'</p><div class="detail-meta"><span class="mono">'+(n.codeRef?"Code "+esc(n.codeRef.slice(0,12))+(n.code?.dirty?" + working changes":""):"Code version not recorded")+'</span><span>Recorded by '+esc(n.writtenBy)+'</span><span>'+esc(shortDate(stamp(n)))+'</span></div>'+visual+
- '<section class="detail-section"><div class="section-label">'+(n.status==="imported"?"Saved inputs":"Saved outputs")+'</div><ul class="files">'+(items.length?fileRows(items):'<li>No output files recorded.</li>')+'</ul>'+
- (n.expectedFiles?.length?'<div class="action-meta">Expected: '+n.expectedFiles.map(esc).join(", ")+'</div>':"")+
+ const origin=n.status==="planned"?(n.origin==="manual"?"This is a human-supplied plan. No execution has been recorded.":"This is an agent-proposed plan. No execution has been recorded."):n.origin==="terminal"?"Selected files were preserved at this checkpoint. Command order records session activity; it does not establish file dependencies.":n.status==="imported"?"Existing files were recorded. Their earlier execution is not established by this import.":"Execution status was observed by the recorder. A successful command does not establish scientific correctness.";
+ $("#detail-content").innerHTML='<nav class="detail-nav"><button class="back" id="back-flow">← Back to flow</button><button class="quiet" id="edit-detail">Edit state</button></nav><div class="detail-kicker">'+esc(n.status)+'</div><h1 class="detail-title">'+esc(n.title)+'</h1><p class="detail-note">'+esc(n.status==="planned"?"":n.note)+'</p><div class="detail-meta"><span class="mono">'+(n.codeRef?"Code "+esc(n.codeRef.slice(0,12))+(n.code?.dirty?" + working changes":""):"Code version not recorded")+'</span><span>Recorded by '+esc(n.writtenBy)+'</span><span>'+esc(shortDate(stamp(n)))+'</span></div>'+visual+
+ planMarkup(n)+(n.status!=="planned"?'<section class="detail-section"><div class="section-label">'+(n.status==="imported"?"Saved inputs":"Saved outputs")+'</div><ul class="files">'+(items.length?fileRows(items):'<li>No output files recorded.</li>')+'</ul>': '<section class="detail-section">')+
+ (n.status!=="planned"&&n.expectedFiles?.length?'<div class="action-meta">Expected: '+n.expectedFiles.map(esc).join(", ")+'</div>':"")+
  (n.references?.length?'<div class="action-meta">Additional references · not verified: '+n.references.map(v=>esc(displayText(v))).join(", ")+'</div>':"")+'</section>'+
- '<section class="detail-section"><div class="section-label">'+(incoming.length?"How this state is reached":"Starting evidence")+'</div>'+
+ '<section class="detail-section"><div class="section-label">'+(incoming.length?"How this state is reached":n.status==="planned"?"Execution":"Starting evidence")+'</div>'+
  incoming.map(a=>'<article class="action-row"><div class="action-heading"><span>From '+a.from.map(id=>'<button class="source-link" data-open="'+esc(id)+'">'+esc(getState(id).title)+'</button>').join(" + ")+'</span><span class="preview-label">'+esc(a.status)+'</span></div><pre>'+esc(displayCommand(a))+'</pre><p><strong>Stated reason:</strong> '+esc(a.reason||"Not recorded")+'</p>'+(a.annotation?'<p><strong>Human note:</strong> '+esc(a.annotation)+'</p>':"")+'<div class="action-meta">Recorded by '+esc(a.writtenBy)+' · '+(a.performedBy?"Executed by "+esc(a.performedBy):"No execution recorded")+'</div><div class="action-meta">Started '+esc(shortDate(a.startedAt))+' · Finished '+esc(shortDate(a.finishedAt))+(a.exitCode!==null&&a.exitCode!==undefined?" · Exit "+esc(a.exitCode):"")+'</div>'+(a.error?'<p class="execution-error">'+esc(displayText(a.error,a))+'</p>':"")+(a.logs?.length?'<ul class="files log-files">'+fileRows(a.logs.map(id=>flow.artifacts[id]).filter(Boolean))+'</ul>':"")+(a.origin==="recorded"?'<details class="provenance"><summary>Code, inputs, and environment</summary><pre>'+esc(JSON.stringify(displayRecord({argv:a.argv,cwd:a.cwd,inputArtifacts:a.inputArtifacts,code:a.code,environment:a.environment},a),null,2))+'</pre><button class="exact-command" data-original-command="'+esc(a.id)+'">Exact local command</button></details>':"")+'</article>').join("")+'<p class="origin-note">'+esc(origin)+'</p></section>'+terminalMarkup(n.terminal)+stateHistory(n);
  bindOriginalCommands($("#detail-content"));
  $("#back-flow").onclick=()=>location.hash="";
@@ -397,10 +411,13 @@ function showEditor(context,title,fields,deletable=false){
 
 function openStateEditor(n){
  const planned=n.origin==="manual"&&n.status==="planned";
- showEditor({type:"state",id:n.id},"Edit state",field("title","State name",n.title)+field("note","Notes",n.note,"textarea")+field("files",planned?"Expected output names · one per line":"Additional file references · one per line",(planned?n.expectedFiles||[]:n.references||[]).join("\n"),"textarea")+'<p class="field-hint">'+(planned?"A plan does not execute a command.":"Saved output files and execution facts stay attached to the original record.")+'</p>',planned);
+ showEditor({type:"state",id:n.id},"Edit state",field("title","State name",n.title)+(planned?planFields(n):"")+field("note","Notes",n.note,"textarea")+field("files",planned?"Expected output names · one per line":"Additional file references · one per line",(planned?n.expectedFiles||[]:n.references||[]).join("\n"),"textarea")+'<p class="field-hint">'+(planned?"A plan does not execute a command.":"Saved output files and execution facts stay attached to the original record.")+'</p>',planned);
+}
+function planFields(n={}){
+ return field("expectedSummary","Expected result · one short sentence",n.expectedSummary||"","textarea")+field("planDetails","Proposed method",n.planDetails||"","textarea")+field("planRequires","Prerequisite",n.planRequires||"","textarea")+'<p class="field-hint">Prerequisites describe when to proceed; SaigenBio does not enforce them.</p>';
 }
 function addState(parent=null){
- showEditor({type:"add",parent:parent?.id},parent?"Add a branch":"Add a state",field("title","State name","")+field("note","Purpose or notes","","textarea")+field("files","Expected output names · one per line","","textarea")+(parent?field("label","Action label","","input","Script or tool")+field("command","Proposed command","","textarea")+field("reason","Why take this branch?","","textarea"):""));
+ showEditor({type:"add",parent:parent?.id},parent?"Add a branch":"Add a state",field("title","State name","","input","Short result name")+planFields()+field("note","Notes","","textarea")+field("files","Expected output names · one per line","","textarea")+(parent?field("label","Action label","","input","Script or tool")+field("command","Proposed command","","textarea")+field("reason","Why take this branch?","","textarea"):""));
 }
 function openActionEditor(a){
  const planned=a.origin==="manual"&&a.status==="planned";
@@ -431,6 +448,7 @@ $("#editor-form").onsubmit=async e=>{
  const refs=v("files").split("\n").map(x=>x.trim()).filter(Boolean),ops=[];
  if(ctx.type==="state"){
    const n=getState(ctx.id),changes={title:v("title"),note:v("note")};
+   if(n.origin==="manual"&&n.status==="planned")for(const key of ["expectedSummary","planDetails","planRequires"])changes[key]=v(key);
    changes[n.origin==="manual"&&n.status==="planned"?"expectedFiles":"references"]=refs;
    ops.push({op:"edit_state",id:n.id,changes});
  }else if(ctx.type==="action"){
@@ -440,7 +458,7 @@ $("#editor-form").onsubmit=async e=>{
    ops.push({op:"edit_action",id:a.id,changes});
  }else if(ctx.type==="add"){
    const parent=getState(ctx.parent),r=$("#viewport").getBoundingClientRect(),pos=freePosition(parent?parent.x+320:(r.width/2-camera.x)/camera.scale,parent?parent.y+190:(r.height/2-camera.y)/camera.scale),id=newId("st");
-   ops.push({op:"add_state",id,value:{title:v("title"),note:v("note"),x:pos.x,y:pos.y,expectedFiles:refs}});
+   ops.push({op:"add_state",id,value:{title:v("title"),note:v("note"),expectedSummary:v("expectedSummary"),planDetails:v("planDetails"),planRequires:v("planRequires"),x:pos.x,y:pos.y,expectedFiles:refs}});
    if(parent)ops.push({op:"add_action",id:newId("plan"),value:{from:[parent.id],to:id,label:v("label"),command:v("command"),reason:v("reason")}});
    selected=id;
  }else if(ctx.type==="connect"){

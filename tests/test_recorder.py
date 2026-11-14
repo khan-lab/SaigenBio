@@ -52,7 +52,8 @@ class RecorderTests(unittest.TestCase):
         self.assertIsNone(self.store.capture(p,preserve=False)["tablePreview"])
 
     def test_plan_chain_and_execution_lifecycle(self):
-        a=self.store.plan("First",["input"],"Expected: first table",["out.txt"],ident="first")
+        a=self.store.plan("First",["input"],"A first table.",["out.txt"],ident="first",
+                          details="Count input rows.",requires="Review inputs first.")
         self.store.plan("Second",["first"],"Expected: figure",ident="second")
         self.assertEqual(self.store.flow()["actions"],[])
         self.assertGreater(entity(self.store.flow(),"states","second")["x"],a["x"])
@@ -77,6 +78,9 @@ class RecorderTests(unittest.TestCase):
         self.assertEqual(len(f["states"]),3)
         self.assertEqual(entity(f,"states","first")["status"],"completed")
         self.assertEqual(entity(f,"states","first")["x"],a["x"])
+        original=entity(f,"states","first")["plan"]
+        for key in ("expectedSummary","planDetails","planRequires","expectedFiles","planParents"):
+            self.assertEqual(original[key],a[key])
         self.assertEqual(entity(f,"states","second")["status"],"planned")
         self.assertEqual(len(f["actions"]),1)
         result=run(self.store,["first"],"Second",[sys.executable,"-c","pass"],planned="second")
@@ -84,6 +88,43 @@ class RecorderTests(unittest.TestCase):
         self.assertEqual(len(self.store.flow()["actions"]),2)
         with self.assertRaises(RecordError):
             run(self.store,["input"],"First",[sys.executable,"-c","pass"],planned="first")
+
+    def test_legacy_plan_retains_text_when_executed(self):
+        self.store.plan("Legacy",["input"],"Expected: old explanation",ident="legacy")
+        def legacy(f):
+            n=entity(f,"states","legacy")
+            n.pop("planDetails");n.pop("planRequires")
+            n["note"]=n["expectedSummary"]
+            return {},None
+        self.store.update("test.legacy","Test",legacy)
+        run(self.store,["input"],"Legacy",[sys.executable,"-c","pass"],planned="legacy")
+        p=entity(self.store.flow(),"states","legacy")["plan"]
+        self.assertEqual(p["note"],"Expected: old explanation")
+        self.assertNotIn("planDetails",p)
+
+    def test_plan_cli_separates_fields_without_execution(self):
+        result=subprocess.run([sys.executable,"-B","-m","saigen","plan","--project",str(self.root),
+            "--from","input","--id","qc","--title","Spatial QC summary",
+            "--expect","QC plots and sample counts.","--details","Inspect coverage.",
+            "--requires","Review QC before normalization.","--output","qc.svg"],
+            cwd=REPO,capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        n=json.loads(result.stdout)
+        self.assertEqual(n["expectedSummary"],"QC plots and sample counts.")
+        self.assertEqual(n["planDetails"],"Inspect coverage.")
+        self.assertEqual(n["planRequires"],"Review QC before normalization.")
+        self.assertEqual(n["note"],"")
+        self.assertEqual(self.store.flow()["actions"],[])
+
+    def test_manual_plan_fields_can_be_edited_and_undone(self):
+        f=self.store.edit([{"op":"add_state","id":"manual","value":{
+            "title":"QC summary","expectedSummary":"QC plots.","planDetails":"Inspect counts.",
+            "planRequires":"Review inputs."}}],self.store.flow()["revision"])
+        f=self.store.edit([{"op":"edit_state","id":"manual","changes":{
+            "planRequires":"Review metadata."}}],f["revision"])
+        self.assertEqual(entity(f,"states","manual")["planRequires"],"Review metadata.")
+        self.store.undo(f["revision"],f["revision"])
+        self.assertEqual(entity(self.store.flow(),"states","manual")["planRequires"],"Review inputs.")
 
     def test_preserved_inputs_outputs_and_reopen(self):
         result=run(self.store,["input"],"Copy",[sys.executable,"-c","import pathlib,sys;pathlib.Path('out.txt').write_text(pathlib.Path(sys.argv[1]).read_text())","{input:0}"],inputs=[str(self.input)],outputs=["out.txt"],reason="Test copying")

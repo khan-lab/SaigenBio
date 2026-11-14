@@ -27,6 +27,20 @@ Open a fresh agent session in the workspace so it can load the project instructi
 
 The selected Python environment must remain available at that path. When changing installations, review the configuration and workspace-local skill copy.
 
+## Refresh existing workspace instructions
+
+Setup copies the recording skill into the workspace. Upgrading SaigenBio does not update that copy, and rerunning setup refuses to overwrite differing files.
+
+After upgrading the installation used by the workspace:
+
+1. Read saigen-workspace.json to identify its CLI and agent. Use that CLI for the following setup command.
+2. Generate the current instructions in a new temporary directory outside the software checkout: `saigen setup --workspace /absolute/path/to/new-temporary-directory --agent codex --analysis-project /absolute/path/to/existing-analysis`. Substitute your agent and paths. This generates instructions only; it does not initialize or execute analysis.
+3. Compare the generated skill with the workspace copy at the agent-specific path in the table above. Back up the existing copy, then merge the updated guidance while retaining intentional local customizations. If there are no customizations, replace only the skill file with the generated one.
+4. Retain the workspace's project, input, and viewer settings. If its CLI location changed, update the cli and python paths in saigen-workspace.json to the new installation. Review generated project instructions if needed rather than replacing existing instructions wholesale.
+5. Open a fresh agent session so it loads the updated skill. Check a planning-only request before approving execution.
+
+For concise planned nodes, the shared skill now separates short result titles, one-sentence expected results, proposed methods, and prerequisites. All supported agents receive this same guidance.
+
 ## Permissions and planning
 
 Use the host's supported command approval for a blocked planning write. If unavailable, the user must change its permission settings. Codex CLI offers /permissions; this command is not a portable agent interface. For other agents use their current permission UI. Native planning modes may forbid writes regardless of filesystem permissions. No native read-only plan-mode integration is claimed.
