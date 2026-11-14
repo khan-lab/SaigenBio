@@ -7,12 +7,12 @@ This procedure is for contributors validating a new agent or skill change. Setup
 Use the same sample/count fixture and scientific prompts in every agent:
 
 1. Ask for a plot in sample-name order. Check recorded input, running state, final figure, and completion verification.
-2. In a new project, ask for two proposed plots and require approval before execution. Check dotted nodes without edges.
-3. Approve the plan. Check each state activates and completes individually.
+2. In a new project, ask for two proposed plots and require approval before execution. Check dotted nodes without edges, concise result titles, and one-sentence expected results without a repeated "Expected:" prefix. Include a requested method and review prerequisite: check they are preserved in details rather than embedded in the title or hover sentence. Confirm no analysis commands started.
+3. Approve the plan. Check each state activates and completes individually and retains its original plan in details.
 4. Request an alternative ordering. Check the original result remains preserved.
 5. Exercise a failing command and retry. Verify failure history remains.
 6. Block planning writes. Check scoped approval guidance and no accidental analysis execution.
-7. Export selected results as PDF.
+7. Export selected results as PDF through the Report interface. Verify that exporting adds no report-only node or analysis edges and leaves the project revision unchanged. If new scientific calculations are needed for the report, check that they are recorded separately before export.
 
 Record agent version, permission mode, project path, observed outcome, and failures. Installation checks do not establish fresh-agent compliance. Other agents can use the common configuration and skill through their own supported instruction mechanism.
 

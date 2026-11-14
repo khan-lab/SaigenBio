@@ -34,6 +34,8 @@ def main():
     p.add_argument("--title",required=True);p.add_argument("--id")
     p.add_argument("--from",dest="parents",action="append",required=True)
     p.add_argument("--expect",required=True);p.add_argument("--output",action="append",default=[])
+    p.add_argument("--details",default="",help="Proposed method or fuller explanation")
+    p.add_argument("--requires",default="",help="Prerequisite for proceeding; descriptive, not enforced")
     p=command("run",aliases=["acquire"])
     p.add_argument("--plan",help="Reuse a proposed state after user approval")
     p.add_argument("--approved",action="store_true",help="Declare that the user approved executing this plan")
@@ -85,7 +87,8 @@ def main():
                 matches=[n for n in flow["states"] if n["id"]==selector] or [n for n in flow["states"] if n["title"]==selector]
                 if len(matches)!=1: raise RecordError("Planned input is missing or ambiguous")
                 parents.append(matches[0]["id"])
-            result=store.plan(args.title,parents,args.expect,args.output,args.actor or "AI agent",args.id)
+            result=store.plan(args.title,parents,args.expect,args.output,args.actor or "AI agent",args.id,
+                              details=args.details,requires=args.requires)
         elif args.command in {"run","acquire"}:
             if args.command=="run" and not args.parents: raise RecordError("A run needs --from; use acquire for a root download")
             if args.command=="acquire" and (args.parents or args.plan): raise RecordError("Acquisition has no parent or planned target")

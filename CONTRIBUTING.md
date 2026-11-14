@@ -39,6 +39,7 @@ python3 -B -m unittest discover -s tests -v
 node --check ui/app.js
 node tests/test_path_display.cjs
 node tests/test_action_junctions.cjs
+node tests/test_node_geometry.cjs
 git diff --check
 ```
 
