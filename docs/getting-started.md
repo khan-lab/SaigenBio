@@ -7,11 +7,24 @@
 From that directory:
 
 ```sh
-saigen init --project . --name "My analysis"
-saigen serve --project . --port 8767
+saigen init
 ```
 
-Open http://127.0.0.1:8767/ and leave the viewer running. SaigenBio stores its records under .saigen/ in this directory. Initialization does not automatically import files or reconstruct earlier executions.
+In a terminal, init asks for a project name, one or more AI agents (or none), agent workflow permissions, a viewer port, and whether to start the viewer. Review the settings before creating the workspace. Supplied flags skip their questions. Cancelling the interview leaves files unchanged.
+
+The default name is the folder name. The interview suggests an available port starting at 8767. Open the printed viewer address and leave the terminal running; Ctrl+C stops the viewer. If you choose to start it later, run `saigen serve` from the analysis directory. It reuses the saved port.
+
+SaigenBio stores records under .saigen/, viewer settings in .saigen/viewer.json, and agent setup in saigen-workspace.json plus the selected agents' instruction and skill files. Initialization does not import data or run analysis. Existing conflicting instruction files are reported before a project is created.
+
+For scripts or agents, use flags without an interview:
+
+```sh
+saigen init --project /path/to/analysis --name "My analysis" \
+  --agent codex --agent claude --permissions flexible \
+  --port 8767 --non-interactive
+```
+
+Non-interactive init does not start a viewer unless --start-viewer is supplied. Without a terminal it automatically uses this non-interactive behavior. Omit --agent to skip agent setup. An explicitly chosen busy port produces an error; no existing service is stopped. See [workflow permissions](agent-integrations.md#workflow-permissions) for what flexible mode authorizes.
 
 You can also use --project /path/to/analysis from another directory. Keep scientific projects separate from the SaigenBio software checkout.
 
@@ -19,7 +32,7 @@ You can also use --project /path/to/analysis from another directory. Keep scient
 
 Choose the workflow that fits your analysis:
 
-- **AI agent:** follow [Agent integrations](agent-integrations.md) once, then describe your scientific task in the agent's chat.
+- **AI agent:** if selected during init, open a fresh agent session in the folder and describe your task. To add an agent later, see [Agent integrations](agent-integrations.md).
 - **Existing files:** import selected evidence with snapshot; see [Recording reference](recording.md#record-existing-evidence).
 - **Commands and scripts:** run them through the [execution wrapper](recording.md#record-a-new-run).
 - **Human terminal session:** use [shell recording](recording.md#record-a-human-shell-session) and save meaningful checkpoints.
@@ -54,9 +67,11 @@ Permission to publish a plan is separate from approval to execute it. Native age
 Stop the viewer with Ctrl+C. Restart it from the same workspace:
 
 ```sh
-saigen serve --project . --port 8767
+saigen serve --project .
 ```
 
-The graph is stored on disk. Tell a new agent to inspect the existing flow before continuing. If the port is occupied, stop the old viewer or choose a free port and update the workspace configuration.
+The graph is stored on disk. Tell a new agent to inspect the existing flow before continuing. Rerunning init retains existing records and settings rather than repeating the interview. Use setup to add an agent.
+
+Use `saigen serve --port NUMBER` for a one-time port override, or --port 0 to ask the operating system for a free port. If changing the saved address, update both .saigen/viewer.json and the viewer URL in saigen-workspace.json. Without saved settings, serve defaults to 8767. An occupied port never causes another service to be stopped automatically.
 
 Keep the complete project directory, including .saigen/. See [backup and export](recording.md#inspect-and-export) and [PDF reports](reports.md).

@@ -129,7 +129,7 @@ class Handler(BaseHTTPRequestHandler):
         except Conflict as exc: self.reply(409,{"error":str(exc)})
         except (RecordError,ValueError,TypeError,KeyError) as exc: self.reply(400,{"error":str(exc)})
 
-def serve(store,port=8765):
+def serve(store,port=8767):
     store.flow()
     with Server(("127.0.0.1",port),store) as server:
         print(f"SaigenBio: http://127.0.0.1:{server.server_port}",flush=True)

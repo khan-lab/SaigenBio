@@ -23,12 +23,21 @@ def main():
         return p
     p=command("setup",help="Prepare a workspace for an AI agent")
     p.add_argument("--workspace",required=True)
-    p.add_argument("--agent",choices=["codex","claude","opencode","antigravity"],required=True)
+    p.add_argument("--agent",choices=["codex","claude","opencode","antigravity"],action="append",required=True)
     p.add_argument("--analysis-project",required=True)
     p.add_argument("--input",action="append",default=[])
-    p.add_argument("--viewer",default="http://127.0.0.1:8767/")
+    p.add_argument("--viewer",default=None)
+    p.add_argument("--permissions",choices=["ask","flexible"],default=None,help="Agent workflow preference; does not grant host access")
     p=command("annotate");p.add_argument("--state",required=True);p.add_argument("--note",required=True)
-    p=command("init");p.add_argument("--name")
+    p=command("init",help="Initialize a project; interview in a terminal, flags for automation")
+    p.add_argument("--name")
+    p.add_argument("--agent",choices=["codex","claude","opencode","antigravity"],action="append",help="Set up an agent; repeat for several")
+    p.add_argument("--port",type=int,help="Save the viewer port (default: 8767)")
+    p.add_argument("--permissions",choices=["ask","flexible"],help="Agent workflow preference; does not grant host access")
+    p.add_argument("--non-interactive",action="store_true",help="Use flags and defaults without prompting")
+    start=p.add_mutually_exclusive_group()
+    start.add_argument("--start-viewer",dest="start_viewer",action="store_true",default=None)
+    start.add_argument("--no-start-viewer",dest="start_viewer",action="store_false")
     p=command("snapshot");p.add_argument("--title",required=True);p.add_argument("--id");p.add_argument("--note",default="");p.add_argument("--file",action="append",default=[]);p.add_argument("--reference",action="append",default=[]);p.add_argument("--source-repo")
     p=command("plan",help="Publish an expected result without an execution edge")
     p.add_argument("--title",required=True);p.add_argument("--id")
@@ -45,7 +54,7 @@ def main():
     p.add_argument("--title",required=True);p.add_argument("--id");p.add_argument("--label");p.add_argument("--reason",default="")
     p.add_argument("--input",action="append",default=[]);p.add_argument("--output",action="append",default=[]);p.add_argument("--stdout");p.add_argument("--script",action="append",default=[]);p.add_argument("--environment",action="append",default=[]);p.add_argument("--tool-version",action="append",default=[]);p.add_argument("--source-repo")
     p.add_argument("argv",nargs=argparse.REMAINDER)
-    p=command("serve");p.add_argument("--port",type=int,default=8765)
+    p=command("serve");p.add_argument("--port",type=int,default=None,help="Override the saved viewer port; 0 chooses a free port")
     for name in ("flow","history","recover"):command(name)
     p=command("export");p.add_argument("destination")
     p=command("start")
@@ -72,8 +81,11 @@ def main():
     try:
         if args.command=="setup":
             from .workspace import setup
-            result=setup(args.workspace,args.agent,args.analysis_project,args.input,args.viewer)
-        elif args.command=="init":result=store.init(args.name)
+            result=setup(args.workspace,args.agent,args.analysis_project,args.input,args.viewer,args.permissions)
+        elif args.command=="init":
+            from .onboarding import initialize
+            return initialize(store,name=args.name,agents=args.agent,port=args.port,
+                              permission=args.permissions,non_interactive=args.non_interactive,start_viewer=args.start_viewer)
         elif args.command=="annotate":
             f=store.flow()
             sid=sessions.resolve_state(f,args.state)
@@ -101,7 +113,11 @@ def main():
             result=run(store,parents,args.title,argv,inputs=args.input,outputs=args.output,actor=actor,reason=args.reason,label=args.label,ident=args.id,stdout_name=args.stdout,source_repo=args.source_repo,scripts=args.script,environment_files=args.environment,tool_versions=args.tool_version,planned=args.plan,expected=args.expect,acquisition=args.command=="acquire",source_urls=args.source_url)
             print(json.dumps(result,indent=2))
             return 0 if result["status"]=="completed" else 130 if result["status"]=="cancelled" else 1
-        elif args.command=="serve":serve(store,args.port);return 0
+        elif args.command=="serve":
+            from .onboarding import saved_port
+            port=args.port if args.port is not None else saved_port(store)
+            if not 0<=port<=65535: raise RecordError("Choose a port number from 0 to 65535.")
+            serve(store,port);return 0
         elif args.command=="flow":result=store.flow()
         elif args.command=="history":result=store.events()
         elif args.command=="recover":store.recover();result=store.flow()

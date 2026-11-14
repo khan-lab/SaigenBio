@@ -2,6 +2,10 @@
 
 This procedure is for contributors validating a new agent or skill change. Setup generation alone does not establish reliable live recording.
 
+## Initialization interview
+
+In a temporary workspace outside the source checkout, run saigen init in a terminal. Try selecting several agents and flexible permissions, changing the port, declining viewer startup, and cancelling before creation. Check the generated instructions include the selected workflow preference and explicit permission for routine local SaigenBio UI implementation changes in flexible mode. No analysis should start. Check a busy port is not reused, the viewer starts on the saved port, and rerunning init preserves records and settings. Repeat with --non-interactive flags to check that scripts do not receive prompts. Host filesystem and network settings must remain unchanged.
+
 ## Fresh-session acceptance
 
 Use the same sample/count fixture and scientific prompts in every agent:
