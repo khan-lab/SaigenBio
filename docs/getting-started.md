@@ -37,6 +37,7 @@ Open the viewer address shown by serve.
 - Hover for about 650 ms, then choose **Show detail →** to inspect a state.
 - Previews prioritize a figure, then a bounded CSV/TSV excerpt, then a summary.
 - Hover an arrow for execution details; hover its label for related files.
+- When a command uses several input states, their paths meet at a small junction with one outgoing arrow and one command label. Longer ancestor-input paths route above intermediate cards. The execution details retain every recorded input.
 - Failed attempts stay available in gray. A successful retry is a separate attempt.
 
 Edits save to the project. Notes and layout can change; recorded execution facts are retained. Undo checks for conflicting changes.
