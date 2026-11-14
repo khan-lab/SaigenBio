@@ -1,5 +1,7 @@
 # PDF reports
 
+Export reports from the analysis states already on the canvas. A report export does not need its own planned or completed node, and does not add analysis edges. If writing a report requires a new calculation or scientific comparison, record that analysis as a result state first, then include it in the export. Previously recorded report-generation runs remain part of the project's history.
+
 ## Select and export
 
 Install Quarto with its bundled Typst engine and keep `quarto` on PATH. In the viewer, choose **Report**, then click states in the order you want to present them. Numbered badges show that order. Clicking a selected state removes it; selecting it again appends it. **Clear** resets the selection, **Cancel** leaves report mode, and **Create PDF** starts a local render with visible status. Download the PDF or its source bundle when ready. Report selection is separate from graph editing.

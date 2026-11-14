@@ -61,6 +61,12 @@ Apply this separation during planning too: propose the alternative result and th
 
 Before reporting completion, verify that each requested alternative has its own state and preserved result, and that any comparison consumes those result states. If an earlier attempt combined generation and comparison, preserve that history. Correct it through authorized separate executions or honest imports of existing evidence; never invent execution edges for operations that did not happen.
 
+## Export reports from existing results
+
+Treat report export as presentation of selected analysis states. Use the viewer's Report interface to choose states and export the PDF and source bundle. Do not propose a report-only planned node, or use `saigen run` just to assemble existing figures into a report: that creates an unnecessary convergence of analysis edges. Selection order, source evidence, and project revision are preserved in the export bundle without changing the analysis graph. If viewer interaction is unavailable, explain how to select the results and export them; do not fabricate a report execution record.
+
+If preparing a report requires new calculations or scientific comparisons, record those as meaningful analysis states first, then export them with the existing evidence. Preserve report-generation executions already recorded in older projects; do not delete them or hide their dependencies merely to simplify the canvas.
+
 ## Required completion check
 
 In a SaigenBio-managed project, a new analysis that produces results is complete only when its execution and outputs are recorded through `saigen run` in the active project. Creating a plot or table directly is not sufficient, even if the file is correct. Reading the skill does not itself record anything.

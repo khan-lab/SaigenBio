@@ -223,7 +223,7 @@ function bindArtifactButtons(el){
 }
 
 function nodeContent(n){
- if(n.status==="running"||n.status==="planned")return '<span class="ring">'+(n.status==="running"?"↗":"·")+'</span><span class="node-title">'+esc(n.title)+'</span><span class="node-bottom">'+(n.status==="running"?"Running":"Planned")+'</span>';
+ if(n.status==="running"||n.status==="planned")return '<span class="node-title">'+esc(n.title)+'</span><span class="node-bottom">'+(n.status==="running"?"Running":"Planned")+'</span>';
  const plot=firstPlot(n),bad=["failed","cancelled","unknown"].includes(n.status);
  return '<span class="node-title">'+esc(n.title)+'</span>'+(plot?'<span class="mini-plot">'+imagePreview(n)+'</span>':firstTable(n)?tableMarkup(n,true):'<span class="node-excerpt">'+esc(decisionSummary(n))+'</span>')+'<span class="node-bottom">'+(bad?esc(n.status):n.status==="imported"?"Imported · "+n.files.length+" files":n.files.length+" saved outputs")+'</span>';
 }
@@ -233,7 +233,13 @@ function renderNodes(){
  $("#planned-help").hidden=!flow.states.some(n=>n.status==="planned");
  $("#nodes").innerHTML=flow.states.map(n=>'<button class="state '+esc(n.status)+(firstPlot(n)?" has-plot":"")+(selected===n.id?" selected":"")+'" data-state="'+esc(n.id)+'" style="left:'+n.x+'px;top:'+n.y+'px" aria-label="'+esc(n.title)+'">'+reportBadge(n.id)+nodeContent(n)+'<span class="port" title="Connect to another state" aria-hidden="true"></span></button>').join("");
 }
-function edgePath(from,to){const special=n=>n.status==="running"||n.status==="planned",x1=from.x+(special(from)?from.status==="running"?134:126:W),y1=from.y+(special(from)?46:H/2),x2=to.x+(special(to)?to.status==="running"?58:66:0),y2=to.y+(special(to)?46:H/2),dx=Math.max(35,(x2-x1)*.5);return {d:"M "+x1+" "+y1+" C "+(x1+dx)+" "+y1+", "+(x2-dx)+" "+y2+", "+x2+" "+y2,x:(x1+x2)/2,y:(y1+y2)/2};}
+function edgeAnchor(n,right=false){return {x:n.x+(right?W:0),y:n.y+H/2};}
+function edgePath(from,to){
+ const start=edgeAnchor(from,true),end=edgeAnchor(to),dx=Math.max(35,(end.x-start.x)*.5);
+ const d=start.y===end.y&&end.x>=start.x?'M '+start.x+' '+start.y+' L '+end.x+' '+end.y:
+   'M '+start.x+' '+start.y+' C '+(start.x+dx)+' '+start.y+', '+(end.x-dx)+' '+end.y+', '+end.x+' '+end.y;
+ return {d,x:(start.x+end.x)/2,y:(start.y+end.y)/2};
+}
 function executedScriptName(a){
  const argv=a.argv||a.argvTemplate||[];
  if(!argv.length)return "";

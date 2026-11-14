@@ -12,7 +12,7 @@ Use the same sample/count fixture and scientific prompts in every agent:
 4. Request an alternative ordering. Check the original result remains preserved.
 5. Exercise a failing command and retry. Verify failure history remains.
 6. Block planning writes. Check scoped approval guidance and no accidental analysis execution.
-7. Export selected results as PDF.
+7. Export selected results as PDF through the Report interface. Verify that exporting adds no report-only node or analysis edges and leaves the project revision unchanged. If new scientific calculations are needed for the report, check that they are recorded separately before export.
 
 Record agent version, permission mode, project path, observed outcome, and failures. Installation checks do not establish fresh-agent compliance. Other agents can use the common configuration and skill through their own supported instruction mechanism.
 
