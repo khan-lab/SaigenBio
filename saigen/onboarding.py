@@ -1,10 +1,12 @@
 """Terminal setup interview and saved local viewer settings."""
 import json
+import shlex
 import socket
 import sys
 
 from .store import RecordError, text
 from .workspace import ADAPTERS, PERMISSIONS, prepare, write_files
+from .terminal import can_select, checkboxes, color, question
 
 DEFAULT_PORT = 8767
 
@@ -51,13 +53,13 @@ def suggested_port(start=DEFAULT_PORT):
 
 
 def ask(prompt, default=""):
-    answer = input(prompt + (" [" + str(default) + "]" if default != "" else "") + ": ").strip()
+    answer = input(question(prompt, str(default))).strip()
     return answer or str(default)
 
 
 def yes_no(prompt, default=True):
     while True:
-        answer = input(prompt + (" [Y/n]: " if default else " [y/N]: ")).strip().lower()
+        answer = input(question(prompt, "Y/n" if default else "y/N")).strip().lower()
         if not answer:
             return default
         if answer in {"y", "yes"}:
@@ -69,22 +71,14 @@ def yes_no(prompt, default=True):
 
 def choose_agents():
     agents = list(ADAPTERS)
-    print("AI agents: " + ", ".join(f"{i + 1} {a}" for i, a in enumerate(agents)))
-    while True:
-        answer = ask("Choose names or numbers, separated by commas; 'all' or 'none'", "none").lower()
-        if answer == "none":
-            return []
-        if answer == "all":
-            return agents
-        values = answer.replace(",", " ").split()
-        mapped = [agents[int(a) - 1] if a.isdigit() and 1 <= int(a) <= len(agents) else a for a in values]
-        if mapped and all(a in ADAPTERS for a in mapped):
-            return list(dict.fromkeys(mapped))
-        print("Choose supported agent names or numbers, 'all', or 'none'.")
+    if can_select():
+        return checkboxes("AI agents", agents)
+    print(color("AI agents"))
+    return [agent for agent in agents if yes_no("Set up " + agent + "?", default=False)]
 
 
 def choose_permission():
-    print("Agent workflow permissions:")
+    print(color("Agent workflow permissions:"))
     print("  1 Ask before downloads and analysis runs.")
     print("  2 Flexible: requested edits, downloads, and analysis; routine local SaigenBio UI fixes and improvements may proceed without separate approval.")
     print("This saves instructions. Your agent's filesystem and network permissions still apply.")
@@ -105,6 +99,7 @@ def initialize(store, *, name=None, agents=None, port=None, permission=None,
         if interactive:
             print(f"Project already initialized: {result['project']}. Existing settings were retained.")
             print("Use saigen setup to add an agent, or saigen serve to open the viewer.")
+            print("Viewer command: " + viewer_command(store, saved_port(store)))
         else:
             print(json.dumps(result, indent=2))
         return 0
@@ -160,14 +155,15 @@ def initialize(store, *, name=None, agents=None, port=None, permission=None,
     write_files(root, files)
     (store.home / "viewer.json").write_text(json.dumps({"port": port}, indent=2) + "\n")
     if interactive:
-        print(f"\nProject ready. Viewer: {viewer}")
+        print(color(f"\nProject ready. Viewer: {viewer}", "32"))
+        print("Viewer command: " + viewer_command(store, port))
         if agents:
             print("Open this folder in your selected AI agent to begin.")
             print("Host permissions: allow workspace writes and, for downloads, network access in your agent's permission settings.")
             if "codex" in agents:
                 print("Codex permission guidance: https://learn.chatgpt.com/docs/agent-approvals-security")
         if not start_viewer:
-            print("Start the viewer later with: saigen serve --project " + str(store.root))
+            print("Run that command when you want to start the viewer.")
     else:
         result["workspaceSetup"] = {"agents": context["agents"], "permissionMode": permission, "viewer": viewer}
         print(json.dumps(result, indent=2), flush=True)
@@ -176,3 +172,7 @@ def initialize(store, *, name=None, agents=None, port=None, permission=None,
         print("Leave this terminal running; press Ctrl+C to stop the viewer.", flush=True)
         serve(store, port)
     return 0
+
+
+def viewer_command(store, port):
+    return shlex.join(["saigen", "serve", "--project", str(store.root), "--port", str(port)])

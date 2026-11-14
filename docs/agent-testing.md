@@ -6,6 +6,8 @@ This procedure is for contributors validating a new agent or skill change. Setup
 
 In a temporary workspace outside the source checkout, run saigen init in a terminal. Try selecting several agents and flexible permissions, changing the port, declining viewer startup, and cancelling before creation. Check the generated instructions include the selected workflow preference and explicit permission for routine local SaigenBio UI implementation changes in flexible mode. No analysis should start. Check a busy port is not reused, the viewer starts on the saved port, and rerunning init preserves records and settings. Repeat with --non-interactive flags to check that scripts do not receive prompts. Host filesystem and network settings must remain unchanged.
 
+For agent checkboxes, test Up/Down, Space to select/deselect, a to select all, n to clear, and Enter to confirm. Cancel midway and verify terminal input/echo recover. Check NO_COLOR disables prompt colors and a terminal without cursor support asks individual yes/no questions. When declining viewer startup, verify the displayed serve command includes the chosen port and correctly quotes a project path containing spaces.
+
 ## Fresh-session acceptance
 
 Use the same sample/count fixture and scientific prompts in every agent:
