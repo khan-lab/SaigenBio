@@ -4,16 +4,16 @@ Explore how a scientific conclusion responds to analysis choices: acquire data, 
 
 ## 1. Prepare a workspace
 
-[Install SaigenBio](../installation.md), then create an external workspace. Choose your agent with --agent; this example uses Claude Code.
+[Install or update SaigenBio](../installation.md) and verify the init options as described in the [first-run walkthrough](../getting-started.md). Create an empty external workspace, using another name if ecoli-tutorial already exists. This example selects Claude Code; substitute your agent or omit --agent to choose during the interview.
 
 ```sh
-saigen setup --workspace ~/saigenbio-projects/ecoli-tutorial --agent claude --analysis-project projects/ecoli --viewer http://127.0.0.1:8767/
-cd ~/saigenbio-projects/ecoli-tutorial
-saigen init --project projects/ecoli --name "E. coli threshold exploration"
-saigen serve --project projects/ecoli --port 8767
+mkdir -p ~/saigenbio-projects
+cd ~/saigenbio-projects
+mkdir ecoli-tutorial && cd ecoli-tutorial
+saigen init --name "E. coli threshold exploration" --agent claude
 ```
 
-Use a new directory for each independent attempt. Open http://127.0.0.1:8767/ and leave the viewer running. Choose another free port if needed and update saigen-workspace.json accordingly.
+If directory creation reports that the name already exists, stop and choose an unused name before running init. Complete the remaining interview questions for workflow permissions, viewer port, and startup. Open the printed viewer address and leave its terminal running. If you decline startup, use `saigen serve` later; it reuses the saved port. Use a new directory for each independent attempt.
 
 Open a fresh session of your chosen agent in that workspace. See [agent integrations](../agent-integrations.md) for instruction locations and permissions. The agent should use the CLI path recorded in the workspace configuration.
 

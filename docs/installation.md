@@ -58,10 +58,10 @@ pipx and uv tool installations provide an isolated application environment. Ensu
 
 ```sh
 saigen --version
-saigen --help
+saigen init --help
 ```
 
-If the command is unavailable, activate the environment containing the installation or check your tool manager's PATH setup. Then follow [Getting started](getting-started.md).
+The init help should include --agent, --port, --permissions, --non-interactive, and --start-viewer. These options confirm that the installed command supports the setup interview; the version number may be shared by multiple source revisions. If the command is unavailable, activate the environment containing the installation or check your tool manager's PATH setup. Then follow the [first-run walkthrough](getting-started.md).
 
 Your scientific tools can live in separate environments. SaigenBio does not install aligners, variant callers, or plotting packages automatically.
 
@@ -73,8 +73,47 @@ Your scientific tools can live in separate environments. SaigenBio does not inst
 
 ## Updating
 
-Update the checkout, then reinstall using the same method. For pip, run python -m pip install --upgrade .; for pipx use pipx install --force .; for uv use uv tool install --force ..
+From your clean source checkout, update to the merged code:
 
-Restart the viewer to load updated Python code and reload the browser. Workspace-local skills are copies: review changes when updating existing instructions. Setup refuses to overwrite differing files. If the installed CLI moves to another environment, update its path in saigen-workspace.json.
+```sh
+cd /path/to/SaigenBio
+git switch main
+git pull --ff-only
+```
+
+Reinstall using the same environment or tool manager as before. For a uv tool installation:
+
+```sh
+uv tool install --reinstall --no-cache .
+saigen init --help
+```
+
+The explicit reinstall replaces the installed code even when the source version number has not changed; --no-cache also avoids reusing a cached build. Run the command from the checkout you just updated, not another older clone. Pulling commits does not by itself update a regular installed copy.
+
+For other installation methods, activate/select the original environment and use its corresponding command:
+
+| Installation | Reinstall from the updated checkout |
+| --- | --- |
+| Virtual environment, pyenv, or Conda with pip | `python -m pip install --force-reinstall --no-cache-dir .` |
+| pipx | `pipx install --force .` |
+
+Verify the new init options after reinstalling. Your analysis history does not need to be deleted or reinitialized to upgrade the software.
+
+Restart the viewer to load updated Python code and reload the browser. Workspace-local skills are copies: [refresh existing instructions](agent-integrations.md#refresh-existing-workspace-instructions) while preserving customizations. Setup refuses to overwrite customized instruction files. If the installed CLI moves to another environment, update its path in saigen-workspace.json. To start an independent analysis instead, follow [Restart with a fresh analysis](getting-started.md#restart-with-a-fresh-analysis).
+
+## The init interview is missing
+
+If init help lists only --project, --actor, and --name, the command is an older installed copy. In a POSIX shell, inspect which executable wins on PATH:
+
+```sh
+command -v saigen
+type -a saigen
+```
+
+Reinstall from the intended checkout using the installation method above. If multiple saigen commands are listed, activate the intended environment or correct PATH so its executable is selected. For zsh, `rehash` refreshes command lookup after changing executable locations. Then check `saigen init --help` again.
+
+The interview runs when both input and output are attached to a terminal and --non-interactive is absent. Run init directly in a terminal rather than through a pipe or an agent's non-interactive command runner. Supplying all settings as flags still skips their questions.
+
+An older init can create an empty project and print JSON without interviewing you. Once a project exists, the new init also retains it rather than restarting setup. To experience the interview from the beginning, use a new empty directory as described in the [fresh-start walkthrough](getting-started.md#restart-with-a-fresh-analysis); do not delete recorded evidence just to trigger setup.
 
 For editable installations and software checks, see [Contributing](../CONTRIBUTING.md).
