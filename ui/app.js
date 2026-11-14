@@ -232,10 +232,12 @@ function reportBadge(id){const i=reportSelection.indexOf(id);return reportMode&&
 function renderNodes(){
  $("#nodes").innerHTML=flow.states.map(n=>'<button class="state '+esc(n.status)+(firstPlot(n)?" has-plot":"")+(selected===n.id?" selected":"")+'" data-state="'+esc(n.id)+'" style="left:'+n.x+'px;top:'+n.y+'px" aria-label="'+esc(n.title)+'">'+reportBadge(n.id)+nodeContent(n)+'<span class="port" title="Connect to another state" aria-hidden="true"></span></button>').join("");
 }
-function edgePath(from,to){const special=n=>n.status==="running"||n.status==="planned",x1=from.x+(special(from)?from.status==="running"?134:126:W),y1=from.y+(special(from)?46:H/2),x2=to.x+(special(to)?to.status==="running"?58:66:0),y2=to.y+(special(to)?46:H/2),dx=Math.max(35,(x2-x1)*.5);return {d:"M "+x1+" "+y1+" C "+(x1+dx)+" "+y1+", "+(x2-dx)+" "+y2+", "+x2+" "+y2,x:(x1+x2)/2,y:(y1+y2)/2};}
-function edgeAnchor(n,right=false){
- const pending=n.status==="running"||n.status==="planned";
- return {x:n.x+(pending?(right?n.status==="running"?134:126:n.status==="running"?58:66):right?W:0),y:n.y+(pending?46:H/2)};
+function edgeAnchor(n,right=false){return {x:n.x+(right?W:0),y:n.y+H/2};}
+function edgePath(from,to){
+ const start=edgeAnchor(from,true),end=edgeAnchor(to),dx=Math.max(35,(end.x-start.x)*.5);
+ const d=start.y===end.y&&end.x>=start.x?'M '+start.x+' '+start.y+' L '+end.x+' '+end.y:
+   'M '+start.x+' '+start.y+' C '+(start.x+dx)+' '+start.y+', '+(end.x-dx)+' '+end.y+', '+end.x+' '+end.y;
+ return {d,x:(start.x+end.x)/2,y:(start.y+end.y)/2};
 }
 function roundedRoute(points){
  let d='M '+points[0].x+' '+points[0].y;
@@ -253,8 +255,7 @@ function actionJunction(a){
  const inputs=sources.map((s,index)=>{
    const start=edgeAnchor(s,true),left=Math.min(start.x,junction.x),right=Math.max(start.x,junction.x);
    const candidates=flow.states.filter(n=>n.id!==s.id&&n.id!==target.id&&n.x<right&&n.x+W>left);
-   const height=n=>["running","planned"].includes(n.status)?180:H;
-   const blocked=candidates.some(n=>n.y-12<Math.max(start.y,junction.y)&&n.y+height(n)+12>Math.min(start.y,junction.y));
+   const blocked=candidates.some(n=>n.y-12<Math.max(start.y,junction.y)&&n.y+H+12>Math.min(start.y,junction.y));
    if(!blocked&&junction.x>start.x){
      const dx=Math.max(20,(junction.x-start.x)*.5);
      return {id:s.id,d:'M '+start.x+' '+start.y+' C '+(start.x+dx)+' '+start.y+', '+(junction.x-dx)+' '+junction.y+', '+junction.x+' '+junction.y};

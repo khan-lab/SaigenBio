@@ -36,13 +36,13 @@ assert.equal((edges.innerHTML.match(/class="edge-junction"/g)||[]).length,1);
 assert.ok(edges.innerHTML.includes("qc + input"));
 assert.equal(evaluate("JSON.stringify(flow)"),before);
 
-// Running/planned results attach at their rings and keep one outgoing action.
+// Running/planned results attach at their card edges and keep one outgoing action.
 for(const status of ["running","planned"]){
     context.status=status;
     evaluate('flow.states[2].status=status;flow.actions[0].status=status;renderEdges()');
     const g=evaluate("actionJunction(flow.actions[0])");
-    assert.equal(g.junction.y,46);
-    assert.ok(g.output.endsWith(status==="running"?"L 698 46":"L 706 46"));
+    assert.equal(g.junction.y,66);
+    assert.ok(g.output.endsWith("L 640 66"));
     assert.equal((edges.innerHTML.match(/class="edge-label"/g)||[]).length,1);
     assert.equal((edges.innerHTML.match(/<animateMotion/g)||[]).length,status==="running"?1:0);
 }
@@ -50,7 +50,7 @@ for(const status of ["running","planned"]){
 // Independent sources remain separate paths into the same junction after dragging.
 evaluate('flow.states[0].y=240;flow.states[2].y=120;renderEdges()');
 assert.equal(evaluate("actionJunction(flow.actions[0]).inputs.length"),2);
-assert.equal(evaluate("actionJunction(flow.actions[0]).junction.y"),166);
+assert.equal(evaluate("actionJunction(flow.actions[0]).junction.y"),186);
 // A target dragged to the left must route above its source cards too.
 evaluate('flow.states[2].x=-320;flow.states[2].y=0');
 assert.ok(evaluate('actionJunction(flow.actions[0]).inputs.every(i=>i.points&&i.points.some(p=>p.y<0))'));
