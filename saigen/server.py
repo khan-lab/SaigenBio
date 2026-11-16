@@ -100,9 +100,12 @@ class Handler(BaseHTTPRequestHandler):
                     mime="text/plain; charset=utf-8"
                 return self.reply(200,source.read_bytes(),mime,{"Content-Security-Policy":"sandbox; default-src 'none'; style-src 'unsafe-inline'"})
             routes={"/":"index.html","/app.js":"app.js","/geometry.js":"geometry.js","/paths.js":"paths.js","/api.js":"api.js","/reports.js":"reports.js","/workflows.js":"workflows.js","/style.css":"style.css"}
+            assets={"logo.svg":"image/svg+xml","logo-512.png":"image/png","logo-1024.png":"image/png","favicon.svg":"image/svg+xml","favicon-16.png":"image/png","favicon-32.png":"image/png","favicon-48.png":"image/png","favicon.ico":"image/vnd.microsoft.icon"}
+            routes.update({"/assets/"+name:"assets/"+name for name in assets})
+            routes["/favicon.ico"]="assets/favicon.ico"
             if path in routes:
                 name=routes[path]
-                mime={"workflows.js":"text/javascript; charset=utf-8","api.js":"text/javascript; charset=utf-8","reports.js":"text/javascript; charset=utf-8","geometry.js":"text/javascript; charset=utf-8","paths.js":"text/javascript; charset=utf-8","index.html":"text/html; charset=utf-8","app.js":"text/javascript; charset=utf-8","style.css":"text/css; charset=utf-8"}[name]
+                mime={"workflows.js":"text/javascript; charset=utf-8","api.js":"text/javascript; charset=utf-8","reports.js":"text/javascript; charset=utf-8","geometry.js":"text/javascript; charset=utf-8","paths.js":"text/javascript; charset=utf-8","index.html":"text/html; charset=utf-8","app.js":"text/javascript; charset=utf-8","style.css":"text/css; charset=utf-8"}.get(name,assets.get(Path(name).name))
                 return self.reply(200,(UI/name).read_bytes(),mime,{"Content-Security-Policy":"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'"})
             self.reply(404,{"error":"Not found"})
         except (RecordError,OSError) as exc: self.reply(409,{"error":str(exc)})

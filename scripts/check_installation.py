@@ -187,6 +187,18 @@ def main():
                 require(all(len(get(asset)[1]) > 100 for asset in ("/geometry.js", "/paths.js", "/api.js", "/reports.js", "/workflows.js")), "Installed UI modules are missing")
                 require(len(get("/app.js")[1]) > 1000 and len(get("/style.css")[1]) > 100,
                         "Packaged browser assets are missing.")
+                require(b'rel="icon"' in page and b'/assets/favicon.svg' in page, "Installed HTML does not declare the favicon.")
+                for asset, expected_mime, signature in (
+                    ("/assets/favicon.svg", "image/svg+xml", b"<svg"),
+                    ("/favicon.ico", "image/vnd.microsoft.icon", b"\x00\x00\x01\x00"),
+                    ("/assets/favicon-32.png", "image/png", b"\x89PNG\r\n\x1a\n"),
+                    ("/assets/logo.svg", "image/svg+xml", b"<svg"),
+                    ("/assets/logo-512.png", "image/png", b"\x89PNG\r\n\x1a\n"),
+                    ("/assets/logo-1024.png", "image/png", b"\x89PNG\r\n\x1a\n"),
+                ):
+                    asset_mime, data = get(asset)
+                    require(asset_mime == expected_mime and data.startswith(signature), "Missing or invalid installed branding asset: " + asset)
+                report["checks"]["installed_logo_and_favicon"] = True
                 api_flow = json.loads(get("/api/flow")[1])
                 require(api_flow["revision"] == flow["revision"], "Viewer served a different project revision.")
                 mime, svg = get("/api/artifacts/" + artifact["id"])

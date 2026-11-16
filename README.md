@@ -1,3 +1,5 @@
+<img src="ui/assets/logo.svg" width="80" height="80" alt="SaigenBio logo">
+
 # SaigenBio
 
 **A visual analysis recorder for bioinformaticians working with AI agents.**

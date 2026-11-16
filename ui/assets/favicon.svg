@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 240 240">
+<title>SaigenBio</title>
+<rect width="240" height="240" rx="28" fill="#F7F6EF"/>
+<g fill="none" stroke="#294E43" stroke-width="19" stroke-linecap="square" stroke-linejoin="round">
+<path d="M29 32H211 M60 191V65H180V191 M60 109H106 M134 109H180 M28 155H212"/>
+</g>
+<g fill="none" stroke="#294E43" stroke-width="7" stroke-linecap="round">
+<path d="M110 42C110 62 130 69 130 88S110 114 110 143 M130 42C130 62 110 69 110 88S130 114 130 143"/>
+<path d="M111 45H129 M113 88H127 M111 139H129" stroke-width="5"/>
+</g>
+</svg>
