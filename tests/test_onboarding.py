@@ -35,7 +35,7 @@ class OnboardingTests(unittest.TestCase):
                 return initialize(self.store, **kwargs)
 
     def test_interview_creates_multiple_agents_and_flexible_policy(self):
-        self.assertEqual(self.initialize(["Spatial study", "y", "y", "y", "y", "2", "", "n", "y"]), 0)
+        self.assertEqual(self.initialize(["Spatial study", "y", "y", "y", "y", "2", "y", "", "n", "y"]), 0)
         self.assertEqual(self.store.flow()["project"], "Spatial study")
         config = json.loads((self.root / "saigen-workspace.json").read_text())
         self.assertEqual(config["agents"], ["codex", "claude", "opencode", "antigravity"])
@@ -61,7 +61,7 @@ class OnboardingTests(unittest.TestCase):
         port = suggested_port()
         with patch("saigen.server.serve") as serve:
             self.assertEqual(self.initialize(["y"], name="Flag project", agents=["codex"],
-                port=port, permission="flexible", start_viewer=True), 0)
+                port=port, permission="flexible", ui_development="ask", start_viewer=True), 0)
             serve.assert_called_once_with(self.store, port)
         self.assertNotIn("AI agents:", self.output.getvalue())
         self.assertNotIn("Agent workflow permissions:", self.output.getvalue())
@@ -106,13 +106,13 @@ class OnboardingTests(unittest.TestCase):
         (self.root / "CLAUDE.md").write_text("My custom rules\n")
         with self.assertRaises(RecordError):
             self.initialize([], name="Conflict", agents=["codex", "claude"],
-                            port=suggested_port(), permission="ask", start_viewer=False)
+                            port=suggested_port(), permission="ask", ui_development="ask", start_viewer=False)
         self.assertFalse(self.store.db.exists())
         self.assertFalse((self.root / "AGENTS.md").exists())
         self.assertEqual((self.root / "CLAUDE.md").read_text(), "My custom rules\n")
 
     def test_add_agent_retains_existing_settings_and_customizations(self):
-        self.initialize(["", "y", "n", "n", "n", "2", "", "n", "y"])
+        self.initialize(["", "y", "n", "n", "n", "2", "n", "", "n", "y"])
         config = json.loads((self.root / "saigen-workspace.json").read_text())
         # User-maintained configuration keys and CLI paths survive additive setup.
         config["custom"] = "keep me"

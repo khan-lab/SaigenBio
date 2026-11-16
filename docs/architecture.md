@@ -71,3 +71,22 @@ Reports use selected states from a fixed revision and preserved figures. Quarto/
 The service is intended for one local machine. Loopback and host checks restrict its HTTP exposure, and mutations and report access use session tokens. Preserved files and reports can still contain sensitive scientific or local information.
 
 Shell capture observes top-level zsh submissions, not arbitrary child commands or notebook cells. Automatic notebook capture, remote orchestration, authenticated collaboration, and complete environment replay are not implemented.
+
+## Responsibility ownership
+
+| Component | Owns | Boundary |
+| --- | --- | --- |
+| Recorder (`store.py`, `runner.py`, `sessions.py`) | Execution facts, artifact identity, revisions and provenance | An annotation cannot manufacture an observed execution |
+| Canvas (`ui/`) | Rendering, navigation, layout, plans and annotations | Scientific commands run through the CLI, outside browser rendering |
+| Agent integration (`workspace.py`, `skills/`) | Portable instructions and workspace context | Instructions express user choices; the host enforces access |
+| Initialization (`onboarding.py`, `terminal.py`) | Setup interview, terminal presentation and viewer settings | Reuse workspace preparation; do not duplicate recording logic |
+| Reporting (`reports.py`) | Fixed-revision evidence exports | Rendering must not silently rerun scientific analysis |
+| Agent host | Filesystem, network and command access | SaigenBio does not change global host permission settings |
+
+`__main__.py` dispatches CLI requests; `server.py` translates HTTP requests into recorder operations. Keep validation of record invariants in the recorder so every entry point gets the same protections. Terminal controls belong in `terminal.py`; configuration preparation and conflict detection belong in `workspace.py`.
+
+Keep three locations distinct: a scientific workspace contains records and inputs; an installed application supplies executable code; a source checkout contains development changes. Test installations and biological analyses in external directories. A workspace's analysis permission does not identify a writable application checkout.
+
+New workspaces save independent `permissionMode` (analysis: `ask` or `flexible`) and `uiDevelopment` (routine local UI source changes: `ask` or `allow`) choices. The default for source changes is `ask`. Existing configurations without `uiDevelopment` retain their legacy meaning: Flexible includes its previously granted routine UI development authorization. Adding agents must preserve both choices and user-maintained instructions. See [workflow permissions](agent-integrations.md#workflow-permissions).
+
+When extending the application, identify the owner of each behavior, reuse its public operations, and verify compatibility at the affected boundary. Refactor concrete coupling when it obstructs that ownership; avoid speculative module splitting. Changes to stored facts, configuration defaults, or agent instructions require an explicit compatibility decision and relevant verification.
