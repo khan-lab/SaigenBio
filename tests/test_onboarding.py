@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from saigen.onboarding import initialize, saved_port, suggested_port, valid_port, yes_no
+from saigen.onboarding import choose_agents, initialize, saved_port, suggested_port, valid_port, viewer_command, yes_no
 from saigen.store import Store, RecordError
 from saigen.workspace import setup
 
@@ -28,13 +28,14 @@ class OnboardingTests(unittest.TestCase):
         with patch("sys.stdin.isatty", return_value=True), \
              patch("sys.stdout.isatty", return_value=True), \
              patch("builtins.input", side_effect=answers), \
+             patch("saigen.onboarding.can_select", return_value=False), \
              contextlib.redirect_stdout(self.output):
             # redirect_stdout replaces the stream whose isatty was patched.
             with patch.object(self.output, "isatty", return_value=True):
                 return initialize(self.store, **kwargs)
 
     def test_interview_creates_multiple_agents_and_flexible_policy(self):
-        self.assertEqual(self.initialize(["Spatial study", "1,2,3,4", "2", "", "n", "y"]), 0)
+        self.assertEqual(self.initialize(["Spatial study", "y", "y", "y", "y", "2", "y", "", "n", "y"]), 0)
         self.assertEqual(self.store.flow()["project"], "Spatial study")
         config = json.loads((self.root / "saigen-workspace.json").read_text())
         self.assertEqual(config["agents"], ["codex", "claude", "opencode", "antigravity"])
@@ -51,7 +52,7 @@ class OnboardingTests(unittest.TestCase):
         self.assertEqual(self.store.flow()["actions"], [])
 
     def test_cancel_or_eof_writes_nothing(self):
-        self.assertEqual(self.initialize(["", "none", "", "n", "n"]), 0)
+        self.assertEqual(self.initialize(["", "n", "n", "n", "n", "", "n", "n"]), 0)
         self.assertFalse(self.root.exists())
         self.assertEqual(self.initialize([EOFError()]), 130)
         self.assertFalse(self.root.exists())
@@ -60,7 +61,7 @@ class OnboardingTests(unittest.TestCase):
         port = suggested_port()
         with patch("saigen.server.serve") as serve:
             self.assertEqual(self.initialize(["y"], name="Flag project", agents=["codex"],
-                port=port, permission="flexible", start_viewer=True), 0)
+                port=port, permission="flexible", ui_development="ask", start_viewer=True), 0)
             serve.assert_called_once_with(self.store, port)
         self.assertNotIn("AI agents:", self.output.getvalue())
         self.assertNotIn("Agent workflow permissions:", self.output.getvalue())
@@ -70,8 +71,27 @@ class OnboardingTests(unittest.TestCase):
             self.assertTrue(yes_no("Continue?"))
             self.assertFalse(yes_no("Continue?", False))
 
+    def test_checkbox_selection_is_used_when_supported(self):
+        with patch("saigen.onboarding.can_select", return_value=True), \
+             patch("saigen.onboarding.checkboxes", return_value=["codex", "claude"]) as select:
+            self.assertEqual(choose_agents(), ["codex", "claude"])
+            self.assertEqual(select.call_args.args[0], "AI agents")
+
+    def test_declining_startup_prints_runnable_command_with_port(self):
+        import shlex
+        self.root = self.root.parent / "analysis with spaces"
+        self.store = Store(self.root)
+        port = suggested_port()
+        with patch("saigen.server.serve") as serve:
+            self.initialize(["y"], name="Manual startup", agents=[], port=port,
+                            start_viewer=False)
+            serve.assert_not_called()
+        command = viewer_command(self.store, port)
+        self.assertIn(command, self.output.getvalue())
+        self.assertEqual(shlex.split(command), ["saigen", "serve", "--project", str(self.store.root), "--port", str(port)])
+
     def test_existing_project_retains_records_and_settings(self):
-        self.initialize(["", "none", "", "n", "y"])
+        self.initialize(["", "n", "n", "n", "n", "", "n", "y"])
         self.store.snapshot("Evidence", [], ident="input")
         before = (self.root / "saigen-workspace.json").read_bytes()
         port = saved_port(self.store)
@@ -86,13 +106,13 @@ class OnboardingTests(unittest.TestCase):
         (self.root / "CLAUDE.md").write_text("My custom rules\n")
         with self.assertRaises(RecordError):
             self.initialize([], name="Conflict", agents=["codex", "claude"],
-                            port=suggested_port(), permission="ask", start_viewer=False)
+                            port=suggested_port(), permission="ask", ui_development="ask", start_viewer=False)
         self.assertFalse(self.store.db.exists())
         self.assertFalse((self.root / "AGENTS.md").exists())
         self.assertEqual((self.root / "CLAUDE.md").read_text(), "My custom rules\n")
 
     def test_add_agent_retains_existing_settings_and_customizations(self):
-        self.initialize(["", "1", "2", "", "n", "y"])
+        self.initialize(["", "y", "n", "n", "n", "2", "n", "", "n", "y"])
         config = json.loads((self.root / "saigen-workspace.json").read_text())
         # User-maintained configuration keys and CLI paths survive additive setup.
         config["custom"] = "keep me"
@@ -143,7 +163,7 @@ class OnboardingTests(unittest.TestCase):
 
     def test_serve_cli_reuses_saved_port_and_explicit_port_overrides(self):
         from saigen.__main__ import main
-        self.initialize(["", "none", "", "n", "y"])
+        self.initialize(["", "n", "n", "n", "n", "", "n", "y"])
         for extra, expected in (([], saved_port(self.store)), (["--port", "0"], 0)):
             with patch.object(sys, "argv", ["saigen", "serve", "--project", str(self.root)] + extra), \
                  patch("saigen.__main__.serve") as serve:

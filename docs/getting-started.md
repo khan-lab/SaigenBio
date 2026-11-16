@@ -10,9 +10,13 @@ From that directory:
 saigen init
 ```
 
-In a terminal, init asks for a project name, one or more AI agents (or none), agent workflow permissions, a viewer port, and whether to start the viewer. Review the settings before creating the workspace. Supplied flags skip their questions. Cancelling the interview leaves files unchanged.
+In a terminal, init asks for a project name, one or more AI agents (or none), analysis permissions, permission for routine local SaigenBio UI source improvements, a viewer port, and whether to start the viewer. Review the settings before creating the workspace. Supplied flags skip their questions. Cancelling the interview leaves files unchanged.
+
+In a supported terminal, select agents with checkboxes: Up/Down moves the cursor, Space toggles a choice, and Enter confirms. Use a to select all or n to clear all; confirming no choices skips agent setup. Other terminals ask a yes/no question for each agent. Questions use modest colors; set NO_COLOR=1 to disable color. Non-interactive output remains plain JSON.
 
 The default name is the folder name. The interview suggests an available port starting at 8767. Open the printed viewer address and leave the terminal running; Ctrl+C stops the viewer. If you choose to start it later, run `saigen serve` from the analysis directory. It reuses the saved port.
+
+The completion message also prints a copyable command with the absolute project path and selected port, for example `saigen serve --project /path/to/analysis --port 8768`. Use it to start or restart the viewer from another directory, including when you decline immediate startup.
 
 SaigenBio stores records under .saigen/, viewer settings in .saigen/viewer.json, and agent setup in saigen-workspace.json plus the selected agents' instruction and skill files. Initialization does not import data or run analysis. Existing conflicting instruction files are reported before a project is created.
 
@@ -20,7 +24,7 @@ For scripts or agents, use flags without an interview:
 
 ```sh
 saigen init --project /path/to/analysis --name "My analysis" \
-  --agent codex --agent claude --permissions flexible \
+  --agent codex --agent claude --permissions flexible --ui-development ask \
   --port 8767 --non-interactive
 ```
 

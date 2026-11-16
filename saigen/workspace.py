@@ -17,7 +17,26 @@ PERMISSIONS = {
     "flexible": "Proceed with edits, public-data downloads, and analysis runs needed for the user's requested work in this workspace without asking again for each step. The user also authorizes routine local fixes and improvements to SaigenBio's own UI implementation without separate approval for each edit. Locate its source checkout before editing; do not assume the analysis workspace or an installed package is the UI source.",
 }
 
-def instruction_files(agents, skill_text, permission=None):
+ANALYSIS_PERMISSIONS = {
+    "ask": PERMISSIONS["ask"],
+    "flexible": "Proceed with edits, public-data downloads, and analysis runs needed for the user's requested work in this workspace without asking again for each step.",
+}
+
+UI_DEVELOPMENT = {
+    "ask": "Ask before changing SaigenBio's application source code.",
+    "allow": "The user authorizes routine local fixes and improvements to SaigenBio's own UI implementation without separate approval for each edit. Locate its source checkout before editing; do not assume the analysis workspace or an installed package is the UI source.",
+}
+
+
+def permission_instructions(permission, ui_development=None):
+    # Missing scope retains the exact legacy policy for existing workspaces.
+    if ui_development is None:
+        return PERMISSIONS[permission] if permission else ""
+    analysis = ANALYSIS_PERMISSIONS[permission] if permission else ""
+    return (analysis + " " + UI_DEVELOPMENT[ui_development]).strip()
+
+
+def instruction_files(agents, skill_text, permission=None, ui_development=None):
     files = {}
     groups = {}
     for agent in agents:
@@ -32,14 +51,14 @@ def instruction_files(agents, skill_text, permission=None):
             "Read and follow " + " and ".join(skills) + " even when the user does not name SaigenBio. " \
             "Use the exact cli path in saigen-workspace.json rather than another saigen found on PATH. Inspect existing records before importing or executing. " \
             "Do not launch a duplicate viewer. Stop at the requested scientific decision checkpoint.\n"
-        if permission:
-            files[instructions] += "\n" + PERMISSIONS[permission] + " " \
+        if permission or ui_development:
+            files[instructions] += "\n" + permission_instructions(permission, ui_development) + " " \
                 "Planning-only requests and explicit review checkpoints still require waiting. " \
                 "Ask before destructive changes, uploads, spending money, or work outside the requested scope. " \
                 "This workflow preference does not grant filesystem or network access or override host permissions.\n"
     return files
 
-def prepare(workspace, agent, project, inputs, viewer=None, permission=None):
+def prepare(workspace, agent, project, inputs, viewer=None, permission=None, ui_development=None):
     """Build and preflight all files before initialization or setup writes anything."""
     root = Path(workspace).expanduser().resolve()
     source = Path(__file__).resolve().parent.parent / "skills/saigen-record/SKILL.md"
@@ -52,6 +71,8 @@ def prepare(workspace, agent, project, inputs, viewer=None, permission=None):
         raise RecordError("Unknown AI agent")
     if permission is not None and permission not in PERMISSIONS:
         raise RecordError("Unknown workflow permission mode")
+    if ui_development is not None and ui_development not in UI_DEVELOPMENT:
+        raise RecordError("Unknown UI development permission")
     previous = {}
     config = root / "saigen-workspace.json"
     if config.is_file():
@@ -68,6 +89,11 @@ def prepare(workspace, agent, project, inputs, viewer=None, permission=None):
             raise RecordError("Existing viewer differs: " + str(config) + ". Update it deliberately before setup.")
         if permission is not None and previous.get("permissionMode", "ask") != permission:
             raise RecordError("Existing workflow permission differs. Update workspace instructions deliberately.")
+        if ui_development is not None and previous.get("uiDevelopment", "allow" if previous.get("permissionMode") == "flexible" else "ask") != ui_development:
+            raise RecordError("Existing UI development permission differs. Update workspace instructions deliberately.")
+        ui_development = previous.get("uiDevelopment", ui_development)
+        if ui_development is not None and (not isinstance(ui_development, str) or ui_development not in UI_DEVELOPMENT):
+            raise RecordError("Unknown UI development permission in workspace configuration")
         old_agents = previous.get("agents") or ([previous["agent"]] if previous.get("agent") else [])
         if not isinstance(old_agents, list) or any(not isinstance(a,str) or a not in ADAPTERS for a in old_agents):
             raise RecordError("Invalid agents in workspace configuration")
@@ -77,6 +103,7 @@ def prepare(workspace, agent, project, inputs, viewer=None, permission=None):
             raise RecordError("Unknown workflow permission mode in workspace configuration")
     else:
         old_agents = []
+        ui_development = ui_development or "ask"
     context = {"project": project, "inputs": list(inputs), "viewer": viewer,
                "pathsRelativeTo": "workspace", "agent": agents[0] if agents else None,
                "cli": str(Path(sys.executable).parent / "saigen"), "python": sys.executable}
@@ -85,10 +112,12 @@ def prepare(workspace, agent, project, inputs, viewer=None, permission=None):
     context["viewer"] = viewer or previous.get("viewer") or "http://127.0.0.1:8767/"
     if permission is not None:
         context["permissionMode"] = permission
+    if ui_development is not None:
+        context["uiDevelopment"] = ui_development
     skill_text = source.read_text()
-    files = instruction_files(agents, skill_text, permission)
+    files = instruction_files(agents, skill_text, permission, ui_development)
     files["saigen-workspace.json"] = json.dumps(context, indent=2) + "\n"
-    old_files = instruction_files(old_agents, skill_text, previous.get("permissionMode"))
+    old_files = instruction_files(old_agents, skill_text, previous.get("permissionMode"), previous.get("uiDevelopment"))
     # Preflight every destination before writing any content.
     for name, content in files.items():
         dest = root / name
@@ -114,8 +143,8 @@ def write_files(root, files):
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(content)
 
-def setup(workspace, agent, project, inputs, viewer=None, permission=None):
-    root, files, context = prepare(workspace, agent, project, inputs, viewer, permission)
+def setup(workspace, agent, project, inputs, viewer=None, permission=None, ui_development=None):
+    root, files, context = prepare(workspace, agent, project, inputs, viewer, permission, ui_development)
     write_files(root, files)
     return {"workspace":str(root), "agent":context["agent"], "agents":context["agents"], "files":list(files),
             "verification":"Setup generated; fresh-agent behavior requires testing."}

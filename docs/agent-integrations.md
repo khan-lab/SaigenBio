@@ -47,12 +47,16 @@ For concise planned nodes, the shared skill now separates short result titles, o
 
 ### Workflow permissions
 
-The init interview offers two workflow preferences, saved as permissionMode in saigen-workspace.json and described in agent instructions:
+The init interview asks independently about analysis permissions and SaigenBio UI development. Both choices are saved in saigen-workspace.json and described in agent instructions. Analysis uses permissionMode:
 
 | Choice | Authorized behavior |
 | --- | --- |
 | ask | Requested workspace edits may proceed; ask before proposed downloads and analysis runs. |
-| flexible | Proceed with requested edits, public-data downloads, and analysis runs without asking for each step. Also authorizes routine local fixes and improvements to SaigenBio's own UI implementation without separate approval for each edit. Locate its source checkout before editing. |
+| flexible | Proceed with requested edits, public-data downloads, and analysis runs without asking for each step. |
+
+UI source changes use `uiDevelopment`: `ask` (default) requires approval; `allow` authorizes routine local UI fixes and improvements. Use `--ui-development ask` or `--ui-development allow` with init or setup. This choice concerns SaigenBio application source, while canvas plans, notes, and layout remain workspace edits. Locate the source checkout before editing application code.
+
+Older configurations without `uiDevelopment` retain their original meaning: Flexible also grants the routine local UI development permission previously selected. Setup preserves this legacy behavior rather than silently changing authorization. To change permissions in an existing workspace, deliberately update its configuration and corresponding agent instructions together; customized files are never overwritten automatically.
 
 Use --permissions ask or --permissions flexible with init, or when creating a new standalone setup. In both modes, planning-only requests and explicit review checkpoints still mean wait. Destructive changes, uploads, spending money, and work outside the authorized scope still require approval. Existing workflow preferences are retained when adding agents; changing a preference requires deliberately updating both the configuration and instructions.
 
