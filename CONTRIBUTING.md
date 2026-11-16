@@ -60,6 +60,8 @@ The checker creates an external directory under ../SaigenBio-lab/installations/ 
 
 A successful package check does not prove an AI agent will follow the skill. Use the [agent acceptance procedure](docs/agent-testing.md) for that.
 
+Real Nextflow checks are opt-in: see [local workflow integration](docs/nextflow.md#reproduce-the-real-test). Supply a new external destination under SaigenBio-lab and keep downloaded data, pipeline work directories and engine installs there.
+
 ## Preparing a pull request
 
 Explain the user-visible problem, resulting behavior, and relevant verification. Update documentation when commands or interactions change. Preserve existing analysis history and keep inferred provenance distinct from observed execution.

@@ -106,4 +106,4 @@ Report interaction is owned by `reports.js`: ordered selection, job state, polli
 
 ## Workflow integration
 
-The optional workflow foundation uses existing recorder transactions for proposals, approval declarations and engine evidence. Adapters supply structured information and never write graph state directly. No production workflow engines or execution path are implemented yet. See [workflow status and commands](workflows.md) and the [adapter contract](workflow-adapters.md) for responsibilities and implementation phases.
+The optional workflow foundation uses existing recorder transactions for proposals, approval declarations and engine evidence. Adapters supply structured information and never write graph state directly. A constrained local Nextflow adapter and synchronous execution path are implemented; capability reporting documents unsupported task aggregation and live monitoring. See [workflow status and commands](workflows.md) and the [adapter contract](workflow-adapters.md) for responsibilities and implementation phases.

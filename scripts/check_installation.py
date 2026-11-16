@@ -97,7 +97,7 @@ def main():
         report["version"] = run("cli-version", [cli, "--version"]).strip()
 
         workflow_engines = json.loads(run("workflow-foundation", [cli, "workflow", "engines"]))
-        require(workflow_engines == {"engines": [], "executionSupported": False}, "Unexpected workflow foundation capabilities.")
+        require(workflow_engines["executionSupported"] and workflow_engines["engines"][0]["name"] == "nextflow", "Unexpected workflow foundation capabilities.")
         run("workflow-adapter-package", [python, "-c", "from saigen.workflows.adapters.base import WorkflowAdapter, LaunchSpec, EvidenceBatch"])
         report["checks"]["installed_workflow_foundation"] = True
 

@@ -170,5 +170,5 @@ class WorkflowTests(unittest.TestCase):
         p = cli('propose', '--spec', str(spec), '--revision', str(self.revision()))
         self.assertEqual(cli('show', p['id']), p)
         cli('approve', p['id'], '--digest', p['executionDigest'], '--revision', str(self.revision()))
-        self.assertFalse(cli('engines')['executionSupported'])
+        self.assertTrue(cli('engines')['executionSupported'])
         self.assertEqual(self.store.flow()['workflows']['runs'], {})
