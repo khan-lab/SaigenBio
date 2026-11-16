@@ -15,12 +15,14 @@ def main():
     parser.add_argument("--version",action="version",version="%(prog)s "+__version__)
     parser.add_argument("--project",default=os.environ.get("SAIGEN_PROJECT","."))
     parser.add_argument("--actor",default=None,help="Declared identity; not authenticated")
-    sub=parser.add_subparsers(dest="command",required=True,metavar="{annotate,acquire,setup,init,snapshot,plan,run,serve,flow,history,recover,export,start,save,pause,resume,status,commands}")
+    sub=parser.add_subparsers(dest="command",required=True,metavar="{workflow,annotate,acquire,setup,init,snapshot,plan,run,serve,flow,history,recover,export,start,save,pause,resume,status,commands}")
     def command(name,**kwargs):
         p=sub.add_parser(name,**kwargs)
         p.add_argument("--project",default=argparse.SUPPRESS)
         p.add_argument("--actor",default=argparse.SUPPRESS)
         return p
+    from .workflows.cli import register as register_workflows
+    register_workflows(command)
     p=command("setup",help="Prepare a workspace for an AI agent")
     p.add_argument("--workspace",required=True)
     p.add_argument("--agent",choices=["codex","claude","opencode","antigravity"],action="append",required=True)
@@ -81,7 +83,10 @@ def main():
             raise RecordError("Use this command inside the project's saigen start session")
         return ident
     try:
-        if args.command=="setup":
+        if args.command=="workflow":
+            from .workflows.cli import dispatch
+            result=dispatch(store,args)
+        elif args.command=="setup":
             from .workspace import setup
             result=setup(args.workspace,args.agent,args.analysis_project,args.input,args.viewer,args.permissions,args.ui_development)
         elif args.command=="init":

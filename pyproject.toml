@@ -13,7 +13,7 @@ dependencies = []
 saigen = "saigen.__main__:main"
 
 [tool.setuptools]
-packages = ["saigen"]
+packages = ["saigen", "saigen.workflows", "saigen.workflows.adapters"]
 
 [tool.setuptools.package-data]
 saigen = ["shell/*.zsh"]
