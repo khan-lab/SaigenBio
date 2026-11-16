@@ -10,6 +10,21 @@ SaigenBio helps manage that exploration for reproducibility. It connects recorde
 
 Use your preferred AI agent to explore the biology. Use SaigenBio to keep the evolving analysis understandable, inspectable, and ready to share. States contain preserved results; arrows show the actions that produced them.
 
+## What SaigenBio consists of
+
+SaigenBio is a local tool that helps bioinformaticians and AI agents keep track of biological analyses. Its core is an analysis recording system, accessed through a command-line interface (CLI) and displayed as a visual workflow.
+
+| Component | Role |
+| --- | --- |
+| Agent skills | Instructions explaining how AI agents should plan analyses and record commands, inputs, outputs, and decisions |
+| CLI | Commands for recording data, publishing plans, running analyses, and exporting results |
+| Recording system | Stores analysis states, execution records, preserved files, and the relationships between them |
+| Visual UI | Lets researchers review plans and results, inspect their provenance, and edit the canvas |
+
+The researcher and agent decide what to investigate. Scripts, analysis tools, and workflow engines perform the computation; SaigenBio records and visualizes the work. On the canvas, nodes represent analysis states or results, and arrows represent the actions connecting them.
+
+For implementation responsibilities and storage details, see [Architecture](docs/architecture.md).
+
 ## What you can do
 
 - Follow analysis as it runs, from a planned output to a completed result.
