@@ -28,7 +28,7 @@ The backend has no third-party Python runtime dependencies. Run source commands 
 | examples/ecoli/ | Optional example helpers |
 | docs/ | Maintained user and contributor documentation |
 
-See [Architecture](docs/architecture.md) before changing record semantics.
+Read [responsibility ownership](docs/architecture.md#responsibility-ownership) before adding behavior. Identify which component owns it and keep shared record validation in the recorder. PRs that change configuration or stored records should explain compatibility with existing workspaces. Keep scientific workspaces, installed applications, and development checkouts distinct.
 
 ## Checks
 
@@ -40,6 +40,7 @@ node --check ui/app.js
 node tests/test_path_display.cjs
 node tests/test_action_junctions.cjs
 node tests/test_node_geometry.cjs
+node tests/test_reports_ui.cjs
 git diff --check
 ```
 

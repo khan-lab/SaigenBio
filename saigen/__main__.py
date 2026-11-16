@@ -27,12 +27,14 @@ def main():
     p.add_argument("--analysis-project",required=True)
     p.add_argument("--input",action="append",default=[])
     p.add_argument("--viewer",default=None)
+    p.add_argument("--ui-development",choices=["ask","allow"],help="Permission for routine local SaigenBio UI source changes (default: ask for new workspaces)")
     p.add_argument("--permissions",choices=["ask","flexible"],default=None,help="Agent workflow preference; does not grant host access")
     p=command("annotate");p.add_argument("--state",required=True);p.add_argument("--note",required=True)
     p=command("init",help="Initialize a project; interview in a terminal, flags for automation")
     p.add_argument("--name")
     p.add_argument("--agent",choices=["codex","claude","opencode","antigravity"],action="append",help="Set up an agent; repeat for several")
     p.add_argument("--port",type=int,help="Save the viewer port (default: 8767)")
+    p.add_argument("--ui-development",choices=["ask","allow"],help="Permission for routine local SaigenBio UI source changes (default: ask for new workspaces)")
     p.add_argument("--permissions",choices=["ask","flexible"],help="Agent workflow preference; does not grant host access")
     p.add_argument("--non-interactive",action="store_true",help="Use flags and defaults without prompting")
     start=p.add_mutually_exclusive_group()
@@ -81,11 +83,11 @@ def main():
     try:
         if args.command=="setup":
             from .workspace import setup
-            result=setup(args.workspace,args.agent,args.analysis_project,args.input,args.viewer,args.permissions)
+            result=setup(args.workspace,args.agent,args.analysis_project,args.input,args.viewer,args.permissions,args.ui_development)
         elif args.command=="init":
             from .onboarding import initialize
             return initialize(store,name=args.name,agents=args.agent,port=args.port,
-                              permission=args.permissions,non_interactive=args.non_interactive,start_viewer=args.start_viewer)
+                              permission=args.permissions,ui_development=args.ui_development,non_interactive=args.non_interactive,start_viewer=args.start_viewer)
         elif args.command=="annotate":
             f=store.flow()
             sid=sessions.resolve_state(f,args.state)

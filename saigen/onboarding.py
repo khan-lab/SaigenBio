@@ -80,7 +80,7 @@ def choose_agents():
 def choose_permission():
     print(color("Agent workflow permissions:"))
     print("  1 Ask before downloads and analysis runs.")
-    print("  2 Flexible: requested edits, downloads, and analysis; routine local SaigenBio UI fixes and improvements may proceed without separate approval.")
+    print("  2 Flexible: requested edits, public-data downloads, and analysis runs may proceed without separate approval.")
     print("This saves instructions. Your agent's filesystem and network permissions still apply.")
     while True:
         answer = ask("Choose 1 or 2", "1").lower()
@@ -92,7 +92,7 @@ def choose_permission():
 
 
 def initialize(store, *, name=None, agents=None, port=None, permission=None,
-               non_interactive=False, start_viewer=None):
+               non_interactive=False, start_viewer=None, ui_development=None):
     interactive = not non_interactive and sys.stdin.isatty() and sys.stdout.isatty()
     if store.db.exists():
         result = store.flow()
@@ -112,6 +112,8 @@ def initialize(store, *, name=None, agents=None, port=None, permission=None,
                 agents = choose_agents()
             if agents and permission is None:
                 permission = choose_permission()
+            if agents and ui_development is None:
+                ui_development = "allow" if yes_no("Allow routine local SaigenBio UI source fixes and improvements?", default=False) else "ask"
             if port is None:
                 proposal = suggested_port()
                 while True:
@@ -129,6 +131,7 @@ def initialize(store, *, name=None, agents=None, port=None, permission=None,
         name = text(name or store.root.name, "project name", 120, True)
         agents = agents or []
         permission = permission or "ask"
+        ui_development = ui_development or "ask"
         if permission not in PERMISSIONS:
             raise RecordError("Unknown workflow permission mode")
         port = valid_port(port if port is not None else suggested_port())
@@ -137,13 +140,14 @@ def initialize(store, *, name=None, agents=None, port=None, permission=None,
                 raise RecordError(f"Port {port} is in use. Choose another --port; no existing service was stopped.")
             raise RecordError(f"Port {port} became unavailable. Run init again and choose another port.")
         viewer = f"http://127.0.0.1:{port}/"
-        root, files, context = prepare(store.root, agents, ".", [], viewer, permission)
+        root, files, context = prepare(store.root, agents, ".", [], viewer, permission, ui_development)
         if (store.home / "viewer.json").exists():
             raise RecordError("Existing viewer settings found without an initialized project. Review .saigen/viewer.json before initializing.")
         if interactive:
             print(f"\nProject: {name}\nAgents: {', '.join(agents) or 'none'}\nViewer: {viewer}")
             if agents:
                 print("Workflow permissions: " + permission)
+                print("SaigenBio UI development: " + ui_development)
             print("Start viewer: " + ("yes" if start_viewer else "no"))
             if not yes_no("Create this workspace?"):
                 print("Cancelled. No files were changed.")
@@ -165,7 +169,7 @@ def initialize(store, *, name=None, agents=None, port=None, permission=None,
         if not start_viewer:
             print("Run that command when you want to start the viewer.")
     else:
-        result["workspaceSetup"] = {"agents": context["agents"], "permissionMode": permission, "viewer": viewer}
+        result["workspaceSetup"] = {"agents": context["agents"], "permissionMode": permission, "uiDevelopment": ui_development, "viewer": viewer}
         print(json.dumps(result, indent=2), flush=True)
     if start_viewer:
         from .server import serve

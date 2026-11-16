@@ -10,7 +10,7 @@ From that directory:
 saigen init
 ```
 
-In a terminal, init asks for a project name, one or more AI agents (or none), agent workflow permissions, a viewer port, and whether to start the viewer. Review the settings before creating the workspace. Supplied flags skip their questions. Cancelling the interview leaves files unchanged.
+In a terminal, init asks for a project name, one or more AI agents (or none), analysis permissions, permission for routine local SaigenBio UI source improvements, a viewer port, and whether to start the viewer. Review the settings before creating the workspace. Supplied flags skip their questions. Cancelling the interview leaves files unchanged.
 
 In a supported terminal, select agents with checkboxes: Up/Down moves the cursor, Space toggles a choice, and Enter confirms. Use a to select all or n to clear all; confirming no choices skips agent setup. Other terminals ask a yes/no question for each agent. Questions use modest colors; set NO_COLOR=1 to disable color. Non-interactive output remains plain JSON.
 
@@ -24,7 +24,7 @@ For scripts or agents, use flags without an interview:
 
 ```sh
 saigen init --project /path/to/analysis --name "My analysis" \
-  --agent codex --agent claude --permissions flexible \
+  --agent codex --agent claude --permissions flexible --ui-development ask \
   --port 8767 --non-interactive
 ```
 
