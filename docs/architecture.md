@@ -101,3 +101,5 @@ The viewer uses ordered deferred scripts and no build framework:
 - `style.css` owns visual styling; `index.html` owns the page shell and script loading order.
 
 The helper files expose frozen `SaigenGeometry` and `SaigenPaths` namespaces. Keep their calculations independent of application globals so they can be exercised directly. Further extraction from `app.js` should introduce explicit interfaces when a feature needs independent maintenance. Include new assets in both the server route allowlist and wheel packaging, and verify the installed viewer loads them.
+
+Report interaction is owned by `reports.js`: ordered selection, job state, polling, downloads, and report controls. Its factory receives application callbacks and exposes mode, selection position, rendering, and selection operations. Application selection and graph rendering remain coordinated by `app.js`. `api.js` owns JSON request handling and recorder error conversion; it receives a token provider rather than storing application session state. Feature modules must expose explicit operations and retain their private state inside their factory.

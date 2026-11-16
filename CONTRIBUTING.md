@@ -40,6 +40,7 @@ node --check ui/app.js
 node tests/test_path_display.cjs
 node tests/test_action_junctions.cjs
 node tests/test_node_geometry.cjs
+node tests/test_reports_ui.cjs
 git diff --check
 ```
 
