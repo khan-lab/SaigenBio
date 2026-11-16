@@ -36,7 +36,13 @@ In a supported terminal, select agents with checkboxes: Up/Down moves the cursor
 
 The default name is the folder name. The interview suggests an available port starting at 8767. Open the printed viewer address and leave the terminal running; Ctrl+C stops the viewer. If you choose to start it later, run `saigen serve` from the analysis directory. It reuses the saved port.
 
-The completion message also prints a copyable command with the absolute project path and selected port, for example `saigen serve --project /path/to/analysis --port 8768`. Use it to start or restart the viewer from another directory, including when you decline immediate startup.
+If you decline immediate startup, the completion message says the viewer was not started and shows its saved address. Stay in the workspace directory and run the printed command when ready, for example:
+
+```sh
+saigen serve --project . --port 8768
+```
+
+The command uses your selected port. If you initialized a different directory with `--project`, the printed command uses that project's absolute path instead.
 
 SaigenBio stores records under .saigen/, viewer settings in .saigen/viewer.json, and agent setup in saigen-workspace.json plus the selected agents' instruction and skill files. Initialization does not import data or run analysis. Existing conflicting instruction files are reported before a project is created.
 

@@ -3,6 +3,7 @@ import json
 import shlex
 import socket
 import sys
+from pathlib import Path
 
 from .store import RecordError, text
 from .workspace import ADAPTERS, PERMISSIONS, prepare, write_files
@@ -159,15 +160,22 @@ def initialize(store, *, name=None, agents=None, port=None, permission=None,
     write_files(root, files)
     (store.home / "viewer.json").write_text(json.dumps({"port": port}, indent=2) + "\n")
     if interactive:
-        print(color(f"\nProject ready. Viewer: {viewer}", "32"))
+        print(color("\nProject ready.", "32"))
+        if start_viewer:
+            print("Starting viewer: " + viewer)
+        else:
+            print("Viewer was not started.")
+            print("Saved viewer address: " + viewer)
+        if Path.cwd().resolve() == store.root:
+            print("Stay in this workspace to start or restart the viewer:")
+        else:
+            print("Start or restart the viewer with this project path:")
         print("Viewer command: " + viewer_command(store, port))
         if agents:
             print("Open this folder in your selected AI agent to begin.")
             print("Host permissions: allow workspace writes and, for downloads, network access in your agent's permission settings.")
             if "codex" in agents:
                 print("Codex permission guidance: https://learn.chatgpt.com/docs/agent-approvals-security")
-        if not start_viewer:
-            print("Run that command when you want to start the viewer.")
     else:
         result["workspaceSetup"] = {"agents": context["agents"], "permissionMode": permission, "uiDevelopment": ui_development, "viewer": viewer}
         print(json.dumps(result, indent=2), flush=True)
@@ -179,4 +187,5 @@ def initialize(store, *, name=None, agents=None, port=None, permission=None,
 
 
 def viewer_command(store, port):
-    return shlex.join(["saigen", "serve", "--project", str(store.root), "--port", str(port)])
+    project = "." if Path.cwd().resolve() == store.root else str(store.root)
+    return shlex.join(["saigen", "serve", "--project", project, "--port", str(port)])
