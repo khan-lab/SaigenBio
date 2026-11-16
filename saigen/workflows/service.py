@@ -1,8 +1,29 @@
 """Shared service for future CLI, UI and MCP clients. Engine launches are delegated to execution.py."""
 import copy
-from ..store import RecordError, entity, now, uid, text
+from ..store import RecordError, entity, now, uid, text, plan_removal_error
 from . import repository as repo
 from .models import document, execution_digest, canonical
+
+
+def cancellation_error(flow, ident):
+    proposal = repo.proposal(flow, ident)
+    if proposal.get("retirement"):
+        return "This workflow proposal was already cancelled"
+    if any(run["proposalId"] == ident for run in flow.get("workflows", {}).get("runs", {}).values()):
+        return "This workflow has recorded attempts; its plans and execution history must be preserved"
+    nodes = set(proposal["stageNodes"].values())
+    for node_id in nodes:
+        error = plan_removal_error(flow, node_id, removing=nodes, proposal=ident)
+        if error:
+            return error
+    return None
+
+
+def removal_options(flow):
+    """Derived HTTP presentation data; never persisted as analysis facts."""
+    states = {n["id"]: plan_removal_error(flow, n["id"]) for n in flow["states"]}
+    proposals = {ident: cancellation_error(flow, ident) for ident in flow.get("workflows", {}).get("proposals", {})}
+    return {"states": states, "proposals": proposals}
 
 
 class WorkflowService:
@@ -50,6 +71,7 @@ class WorkflowService:
     def approve(self, ident, digest, *, revision, actor="AI agent"):
         def change(flow):
             proposal = repo.proposal(flow, ident)
+            repo.require_active(proposal)
             if digest != proposal["executionDigest"] or digest != execution_digest(proposal["spec"]):
                 raise RecordError("Approval must match the published execution configuration")
             proposal["approval"] = {"executionDigest": digest, "at": now(), "declaredBy": actor,
@@ -57,12 +79,30 @@ class WorkflowService:
             return {"proposalId": ident, "approval": copy.deepcopy(proposal["approval"])}, None
         return repo.proposal(self.store.update("workflow.approved", actor, change, revision), ident)
 
+    def cancel(self, ident, *, revision, reason, actor="AI agent"):
+        """Retire an unused proposal atomically, retaining its specification and stage snapshots."""
+        text(reason, "cancellation reason", 20000, True)
+        def change(flow):
+            proposal = repo.proposal(flow, ident)
+            error = cancellation_error(flow, ident)
+            if error:
+                raise RecordError(error)
+            ids = set(proposal["stageNodes"].values())
+            states = [copy.deepcopy(n) for n in flow["states"] if n["id"] in ids]
+            actions = [copy.deepcopy(a) for a in flow["actions"] if a["to"] in ids or ids.intersection(a["from"])]
+            proposal["retirement"] = {"at": now(), "by": actor, "reason": reason, "states": states, "actions": actions}
+            flow["states"] = [n for n in flow["states"] if n["id"] not in ids]
+            flow["actions"] = [a for a in flow["actions"] if not (a["to"] in ids or ids.intersection(a["from"]))]
+            return {"proposalId": ident, "retirement": copy.deepcopy(proposal["retirement"])}, None
+        return repo.proposal(self.store.update("workflow.cancelled", actor, change, revision), ident)
+
     def register_run(self, ident, digest, engine_run_id, *, revision, actor="Recorder"):
         """Internal adapter boundary after an engine run is observed; never launches one."""
         text(engine_run_id, "engine run identity", 1000, True)
         run_id = uid("wrun")
         def change(flow):
             proposal = repo.proposal(flow, ident)
+            repo.require_active(proposal)
             if digest != proposal["executionDigest"] or digest != execution_digest(proposal["spec"]) or not proposal["approval"] or proposal["approval"]["executionDigest"] != digest:
                 raise RecordError("A matching proposal approval is required")
             if any(r["engineRunId"] == engine_run_id and r["proposalId"] == ident for r in repo.collection(flow)["runs"].values()):

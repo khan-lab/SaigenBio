@@ -58,6 +58,7 @@ def main():
     p.add_argument("--title",required=True);p.add_argument("--id");p.add_argument("--label");p.add_argument("--reason",default="")
     p.add_argument("--input",action="append",default=[]);p.add_argument("--output",action="append",default=[]);p.add_argument("--stdout");p.add_argument("--script",action="append",default=[]);p.add_argument("--environment",action="append",default=[]);p.add_argument("--tool-version",action="append",default=[]);p.add_argument("--source-repo")
     p.add_argument("argv",nargs=argparse.REMAINDER)
+    p=command("remove-plan", help="Remove an unused standalone plan");p.add_argument("state");p.add_argument("--revision",required=True,type=int)
     p=command("serve");p.add_argument("--port",type=int,default=None,help="Override the saved viewer port; 0 chooses a free port")
     for name in ("flow","history","recover"):command(name)
     p=command("export");p.add_argument("destination")
@@ -97,6 +98,8 @@ def main():
             f=store.flow()
             sid=sessions.resolve_state(f,args.state)
             result=store.edit([{"op":"edit_state","id":sid,"changes":{"note":args.note}}],f["revision"],args.actor or "AI agent")
+        elif args.command=="remove-plan":
+            result=store.edit([{"op":"delete_state","id":args.state}],args.revision,args.actor or "AI agent")
         elif args.command=="snapshot":
             result=store.snapshot(args.title,[resolve(p) for p in args.file],args.actor or "AI agent",args.note,args.id,[resolve(p) for p in args.reference],code_info(args.source_repo or store.root))
         elif args.command=="plan":

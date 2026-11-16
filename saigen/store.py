@@ -48,6 +48,41 @@ def coordinates(item):
         value = item.get(key, 0)
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or abs(value)>1000000:
             raise RecordError("Invalid canvas position")
+def plan_removal_error(flow, ident, *, removing=(), proposal=None):
+    """Shared deletion guard; workflow retirement may remove its own unused stages together."""
+    item = entity(flow, "states", ident)
+    removing = set(removing) | {ident}
+    if item["status"] != "planned" or item["origin"] not in {"manual", "agent-plan", "workflow-plan"}:
+        return "Recorded execution history cannot be deleted"
+    if item.get("workflowRun") or item.get("performedBy") or any(item.get(k) for k in ("artifactIds", "manifest", "files")):
+        return "This plan contains execution or artifact evidence and cannot be deleted"
+    workflows = flow.get("workflows", {})
+    for record in workflows.get("runs", {}).values():
+        if ident in record.get("stageNodes", {}).values() or any(v.get("stateId") == ident for v in record.get("stages", {}).values()):
+            return "This state is used by a recorded workflow run"
+    for other in workflows.get("proposals", {}).values():
+        if other["id"] == proposal:
+            continue
+        if ident in other.get("stageNodes", {}).values():
+            return "Cancel the whole unexecuted workflow proposal instead of deleting a stage"
+        spec = other["spec"]
+        if ident in spec.get("contextStateIds", []) or any(b["stateId"] == ident for b in spec["inputBindings"]):
+            return "This state is referenced by a workflow proposal; preserve its input and context references"
+    if (item.get("workflowProposal") and item["workflowProposal"] != proposal) or (item["origin"] == "workflow-plan" and not proposal):
+        return "Cancel the whole unexecuted workflow proposal instead of deleting a stage"
+    for other in flow["states"]:
+        parents = other.get("planParents", []) + other.get("plan", {}).get("planParents", [])
+        if other["id"] not in removing and ident in parents:
+            return "Another state depends on this plan; remove dependent unused plans first"
+    for action in flow["actions"]:
+        if action["to"] != ident and ident not in action["from"]:
+            continue
+        if action["origin"] != "manual" or action["status"] != "planned":
+            return "This state is used by a recorded execution"
+        if action["to"] not in removing:
+            return "Another state depends on this plan; remove dependent unused plans first"
+    return None
+
 def validate(flow):
     ids = set()
     for n in flow["states"]:
@@ -55,6 +90,9 @@ def validate(flow):
             raise RecordError("Invalid or duplicate state ID")
         ids.add(n["id"])
         coordinates(n)
+    archived = {ident for p in flow.get("workflows", {}).get("proposals", {}).values() if p.get("retirement") for ident in p["stageNodes"].values()}
+    if ids.intersection(archived):
+        raise RecordError("State ID belongs to a cancelled workflow proposal")
     aids = set()
     graph = {i: [] for i in ids}
     for a in flow["actions"]:
@@ -363,7 +401,11 @@ class Store:
             return {"op":"delete_action","id":ident,"expected":copy.deepcopy(a)}
         if kind in {"delete_state","delete_action"}:
             item=entity(f,group,ident)
-            if item["origin"]!="manual" or item["status"]!="planned": raise RecordError("Recorded execution history cannot be deleted")
+            if group == "states":
+                error = plan_removal_error(f, ident)
+                if error: raise RecordError(error)
+            elif item["origin"] != "manual" or item["status"] != "planned":
+                raise RecordError("Recorded execution history cannot be deleted")
             if "expected" in op:
                 clean=lambda v:{k:x for k,x in v.items() if k not in {"updatedAt","lastEditedBy"}}
                 if clean(item)!=clean(op["expected"]): raise Conflict("The record has changed since it was added")
@@ -376,7 +418,16 @@ class Store:
             return {"op":"restore_action" if group=="actions" else "restore_state","id":ident,"value":copy.deepcopy(item),"related":copy.deepcopy(related)}
         if kind in {"restore_state","restore_action"} and internal:
             if any(n["id"]==ident for n in f[group]): raise Conflict("The ID has been reused")
-            f[group].append(copy.deepcopy(op["value"]))
+            value = op["value"]
+            if group == "states":
+                parents = value.get("planParents", []) + value.get("plan", {}).get("planParents", [])
+                if any(not any(n["id"] == parent for n in f["states"]) for parent in parents):
+                    raise Conflict("An input was removed; this plan can no longer be restored")
+            restored_ids = {n["id"] for n in f["states"]} | ({ident} if group == "states" else set())
+            actions = op.get("related", []) if group == "states" else [value]
+            if any(a["to"] not in restored_ids or any(i not in restored_ids for i in a["from"]) for a in actions):
+                raise Conflict("A connected state was removed; this connection can no longer be restored")
+            f[group].append(copy.deepcopy(value))
             for a in op.get("related",[]):
                 if any(x["id"]==a["id"] for x in f["actions"]): raise Conflict("An action ID has been reused")
                 f["actions"].append(copy.deepcopy(a))

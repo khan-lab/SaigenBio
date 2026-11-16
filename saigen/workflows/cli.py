@@ -17,6 +17,10 @@ def register(command):
     execute = commands.add_parser("execute")
     execute.add_argument("proposal")
     execute.add_argument("--revision", required=True, type=int)
+    cancel = commands.add_parser("cancel", help="Retire an unexecuted proposal and remove its planned cards")
+    cancel.add_argument("proposal")
+    cancel.add_argument("--revision", required=True, type=int)
+    cancel.add_argument("--reason", required=True)
     status = commands.add_parser("status")
     status.add_argument("run")
     propose = commands.add_parser("propose")
@@ -46,6 +50,8 @@ def dispatch(store, args):
     if args.workflow_command == "status":
         from .repository import run
         return run(store.flow(), args.run)
+    if args.workflow_command == "cancel":
+        return service.cancel(args.proposal, revision=args.revision, reason=args.reason, actor=args.actor or "AI agent")
     if args.workflow_command == "show":
         return service.show(args.proposal)
     if args.workflow_command == "approve":

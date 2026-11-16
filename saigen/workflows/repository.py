@@ -18,3 +18,8 @@ def run(flow, ident):
         return collection(flow)["runs"][ident]
     except KeyError as exc:
         raise RecordError("Unknown workflow run") from exc
+
+
+def require_active(proposal):
+    if proposal.get("retirement"):
+        raise RecordError("This workflow proposal was cancelled; publish a new proposal to proceed")
