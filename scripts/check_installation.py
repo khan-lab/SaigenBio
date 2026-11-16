@@ -187,6 +187,8 @@ def main():
                 require(all(len(get(asset)[1]) > 100 for asset in ("/geometry.js", "/paths.js", "/api.js", "/reports.js", "/workflows.js")), "Installed UI modules are missing")
                 require(len(get("/app.js")[1]) > 1000 and len(get("/style.css")[1]) > 100,
                         "Packaged browser assets are missing.")
+                require(b'<img class="brand-logo" src="/assets/favicon.svg"' in page,
+                        "Installed header does not show the compact SaigenBio logo.")
                 require(b'rel="icon"' in page and b'/assets/favicon.svg' in page, "Installed HTML does not declare the favicon.")
                 for asset, expected_mime, signature in (
                     ("/assets/favicon.svg", "image/svg+xml", b"<svg"),
