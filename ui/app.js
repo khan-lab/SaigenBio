@@ -241,9 +241,9 @@ function renderPreview(n){
  const items=artifacts(n),pending=n.status==="running"||n.status==="planned",plot=firstPlot(n),note=decisionSummary(n),el=$("#preview");
  el.dataset.state=n.id;el.classList.toggle("has-plot",!!plot);
  const explanation=(pending?n.expectedSummary||note:note)?(pending?'<div class="preview-label">Expected result</div>':"")+'<p class="preview-note '+(plot?"preview-caption":"preview-summary")+'">'+esc(pending?n.expectedSummary||note:note)+'</p>':"";
- el.innerHTML='<div class="preview-inner preview-heading"><div class="preview-label">'+esc(n.status)+'</div><div class="preview-title">'+esc(n.title)+'</div></div>'+
+ el.innerHTML='<div class="preview-inner preview-heading"><div class="preview-top"><div class="preview-label">'+esc(n.status)+'</div><button class="preview-open" data-open="'+esc(n.id)+'">Show detail <span aria-hidden="true">→</span></button></div><div class="preview-title">'+esc(n.title)+'</div></div>'+
    (plot?'<div class="preview-plot">'+imagePreview(n,"","eager")+'</div>':tableMarkup(n))+
-   '<div class="preview-inner preview-context">'+workflows.preview(n)+explanation+'<div class="preview-label">'+(pending?"Expected outputs":n.status==="imported"?"Preserved inputs":"Saved outputs")+'</div><ul class="preview-files">'+(pending?(n.expectedFiles||[]).map(f=>'<li>'+esc(f)+'</li>').join(""):items.slice(0,4).map(a=>'<li>'+esc(a.name)+'</li>').join(""))+'</ul></div><button class="preview-open" data-open="'+esc(n.id)+'">Show detail <span>→</span></button>';
+   '<div class="preview-inner preview-context">'+workflows.preview(n)+explanation+'<div class="preview-label">'+(pending?"Expected outputs":n.status==="imported"?"Preserved inputs":"Saved outputs")+'</div><ul class="preview-files">'+(pending?(n.expectedFiles||[]).map(f=>'<li>'+esc(f)+'</li>').join(""):items.slice(0,4).map(a=>'<li>'+esc(a.name)+'</li>').join(""))+'</ul></div>';
 }
 function showPreview(id,anchor){
  if(reports.active||connecting||drag||!$("#detail-view").hidden)return;
