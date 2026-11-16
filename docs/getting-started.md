@@ -1,8 +1,28 @@
 # Getting started
 
+For a first run, follow this order: verify the installed command, create an empty analysis workspace, complete the setup interview, open a fresh agent session, approve one small step, and export its results. Keep the analysis workspace outside the SaigenBio software checkout.
+
+## Check the installed command
+
+[Install or update SaigenBio](installation.md), then check the command your terminal will run:
+
+```sh
+saigen init --help
+```
+
+The help should include --agent, --port, --permissions, --non-interactive, and --start-viewer. If it only lists --project, --actor, and --name, your terminal is using an older installed CLI. Updating the Git checkout alone does not update that installation. Follow [the missing-interview troubleshooting steps](installation.md#the-init-interview-is-missing) before continuing. Different builds can share a version number, so saigen --version alone is not enough to distinguish them.
+
 ## Open an analysis directory
 
-[Install SaigenBio](installation.md), then choose the directory where you want to keep your analysis. It can contain existing data and scripts or be a new directory. It does not need a prescribed folder layout.
+For this walkthrough, choose a new, empty directory. For example:
+
+```sh
+mkdir -p ~/saigenbio-projects
+cd ~/saigenbio-projects
+mkdir first-analysis && cd first-analysis
+```
+
+If first-analysis already exists, stop and choose another unused name. Do not initialize the SaigenBio software checkout as an analysis project. Existing data and scripts can be imported later; no prescribed data-folder layout is required.
 
 From that directory:
 
@@ -31,6 +51,30 @@ saigen init --project /path/to/analysis --name "My analysis" \
 Non-interactive init does not start a viewer unless --start-viewer is supplied. Without a terminal it automatically uses this non-interactive behavior. Omit --agent to skip agent setup. An explicitly chosen busy port produces an error; no existing service is stopped. See [workflow permissions](agent-integrations.md#workflow-permissions) for what flexible mode authorizes.
 
 You can also use --project /path/to/analysis from another directory. Keep scientific projects separate from the SaigenBio software checkout.
+
+## Open a fresh agent session
+
+Open your selected agent in the analysis workspace, not the software checkout. Start a fresh session so it reads the generated project instructions and recording skill. The agent should resolve the project and CLI from saigen-workspace.json. No agent setup is needed if you chose none; you can use the CLI or [add an agent later](agent-integrations.md#prepare-a-workspace).
+
+Start with a planning-only request, for example:
+
+> Read this workspace's SaigenBio configuration and recording skill. I want to work through a small public-data tutorial. First propose a reproducible workflow and stop for approval. Do not download data or execute analysis yet. If there is no recorded input state, explain what must be acquired or imported before planned result nodes can be published. Do not create a report-only node.
+
+An empty project has no input state for planned nodes to depend on. A plan in chat is appropriate until real input evidence is recorded. When inputs are available, planned nodes should use short result titles; the full method and prerequisites belong in their details. See [planning behavior](#plan-before-executing) and [workflow permissions](agent-integrations.md#workflow-permissions). A planning-only request means wait even in Flexible mode.
+
+## Approve one small step
+
+Once the plan and public source are clear, approve only its first useful step:
+
+> Proceed with the public-data acquisition step we agreed on. Record the download and a small input summary in SaigenBio, then stop so I can inspect the evidence before further analysis. Keep any failed attempts in the history.
+
+Inspect the saved table or figure and the recorded source before approving the next analysis. Running cards have dotted outlines and a Running label; completed results use solid outlines. For a complete scientific example, follow the [E. coli exploration tutorial](tutorials/ecoli-exploration.md).
+
+## Export a first report
+
+In the viewer, choose **Report**, select the input and result states you want to present, then choose **Create PDF**. Download both the PDF and source bundle when ready. PDF rendering requires Quarto; see [report requirements and limitations](reports.md).
+
+Check that exporting adds no report-only node or analysis edges. The source bundle preserves the selected state order and project revision. Record any new scientific calculation needed for a report as a separate analysis first, then include that result in the export.
 
 ## Record your work
 
@@ -82,3 +126,11 @@ The graph is stored on disk. Tell a new agent to inspect the existing flow befor
 Use `saigen serve --port NUMBER` for a one-time port override, or --port 0 to ask the operating system for a free port. If changing the saved address, update both .saigen/viewer.json and the viewer URL in saigen-workspace.json. Without saved settings, serve defaults to 8767. An occupied port never causes another service to be stopped automatically.
 
 Keep the complete project directory, including .saigen/. See [backup and export](recording.md#inspect-and-export) and [PDF reports](reports.md).
+
+## Restart with a fresh analysis
+
+Use another empty directory and repeat the interview. You do not need to delete the old workspace. Keep it as an archive: .saigen/ contains its recorded history and preserved outputs.
+
+Do not copy the old .saigen/, saigen-workspace.json, agent instruction files, or workspace-local recording skills into the new directory. Let init generate the new configuration and instructions. Reacquire the public data or explicitly import the existing evidence with its provenance described honestly.
+
+If an older CLI already initialized your supposedly fresh folder, upgrading and rerunning init will retain that project rather than open an interview. Use another unused directory name. If you want to continue the existing project instead, [refresh its instructions](agent-integrations.md#refresh-existing-workspace-instructions) and use standalone setup deliberately.
