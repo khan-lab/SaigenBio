@@ -4,6 +4,7 @@ const vm=require("node:vm");
 const app=fs.readFileSync("ui/app.js","utf8");
 const edges={innerHTML:""};
 const context=vm.createContext({document:{querySelector:s=>{assert.equal(s,"#edges");return edges;}}});
+for(const file of ["geometry.js","paths.js"])vm.runInContext(fs.readFileSync("ui/"+file,"utf8"),context);
 vm.runInContext(app.slice(0,app.indexOf("function render(){")),context);
 const evaluate=code=>vm.runInContext(code,context);
 const state=(id,x,y,status="completed")=>({id,title:id,x,y,status,files:[],artifactIds:[],manifest:[]});

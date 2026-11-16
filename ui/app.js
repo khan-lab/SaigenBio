@@ -5,7 +5,7 @@ const $ = s => document.querySelector(s);
 const esc = value => String(value ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const copy = value => JSON.parse(JSON.stringify(value));
 
-const W=192,H=132;
+const {W,H}=SaigenGeometry;
 let flow={schemaVersion:1,project:"Project",revision:0,states:[],actions:[],artifacts:{},revisions:[]};
 let history=[],selected=null,connecting=null,editorContext=null;
 let reportMode=false,reportSelection=[],reportJob=null,reportRendering=false;
@@ -81,71 +81,8 @@ async function poll(){
    $("#connection").textContent="";$("#connection").hidden=true;
  }catch(error){$("#connection").hidden=false;$("#connection").textContent="Offline";$("#connection").title=error.message;}
 }
-// Path abbreviations affect presentation only; the execution record is untouched.
-let projectRoot="",externalDirectories=new Map();
-const absolutePath=v=>typeof v==="string"&&/^(?:\/(?!\/)|[A-Za-z]:[\\/]|\\\\)/.test(v);
-const slashPath=v=>String(v||"").replace(/\\/g,"/").replace(/\/+$/,"");
-const pathBase=v=>slashPath(v).split("/").at(-1);
-const pathParent=v=>slashPath(v).split("/").slice(0,-1).join("/");
-const below=(path,root)=>!!root&&root!=="/"&&(path===root||path.startsWith(root+"/"));
-function pathRoots(action){
- const roots=[],add=(root,alias)=>{root=slashPath(root);if(root&&root!=="/"&&!roots.some(r=>r.root===root))roots.push({root,alias});};
- const inferred=flow.actions.map(a=>a.cwd).find(p=>p&&slashPath(p).includes("/.saigen/runs/"));
- add(action?.cwd&&slashPath(action.cwd).includes("/.saigen/runs/")?action.cwd:"","{run}");
- add(projectRoot||(inferred?slashPath(inferred).split("/.saigen/runs/")[0]:""),".");
- const repositories=[...new Set([...flow.actions.map(a=>a.code?.repository),...flow.states.map(n=>n.code?.repository)].filter(Boolean))].sort();
- repositories.forEach((root,i)=>add(root,repositories.length===1?"{source}":"{source:"+(i+1)+"}"));
- const scriptDirs=[...new Set(Object.values(flow.artifacts).filter(f=>f.role==="code"&&absolutePath(f.sourcePath)).map(f=>pathParent(f.sourcePath)))].sort().filter(dir=>!roots.some(r=>below(dir,r.root)));
- scriptDirs.forEach((root,i)=>add(root,scriptDirs.length===1?"{scripts}":"{scripts:"+(i+1)+"}"));
- return roots.sort((a,b)=>b.root.length-a.root.length);
-}
-function displayPath(value,action){
- if(!absolutePath(value))return String(value??"");
- const path=slashPath(value),match=pathRoots(action).find(r=>below(path,r.root));
- if(match)return match.alias+path.slice(match.root.length);
- const dir=pathParent(path);
- if(!externalDirectories.has(dir))externalDirectories.set(dir,externalDirectories.size+1);
- return "{external:"+externalDirectories.get(dir)+"}/"+pathBase(path);
-}
-function displayText(value,action){
- let out=String(value??"");
- for(const {root,alias} of pathRoots(action)){
-   const escaped=root.replace(/[.*+?^$(){}|[\]\\]/g,"\\$&");
-   out=out.replace(new RegExp('(^|[\\s="\\x27(])'+escaped+'(?=$|[/\\\\\\s"\\x27,;()\\]}])',"g"),(_,lead)=>lead+alias);
- }
- out=out.replace(/(["'])((?:\/(?!\/)|[A-Za-z]:[\\/])[^"'\r\n<>|;&]+)\1/g,(_,quote,path)=>quote+displayPath(path,action)+quote);
- return out.replace(/(^|[\s="'(])((?:\/(?!\/)|[A-Za-z]:[\\/])[^\s"'<>|;&)]+)/g,(_,lead,path)=>lead+displayPath(path,action));
-}
-function displayArgument(value,action,index){
- if(index===0&&absolutePath(value))return pathBase(value);
- if(absolutePath(value))return displayPath(value,action);
- const assignment=value.match(/^([^=]+=)((?:\/(?!\/)|[A-Za-z]:[\\/]).+)$/);
- return assignment?assignment[1]+displayPath(assignment[2],action):displayText(value,action);
-}
-function shellQuote(value){
- return /^[a-zA-Z0-9_./:{}=@,+%-]+$/.test(value)?value:"'"+value.replace(/'/g,"'\\''")+"'";
-}
-function displayCommand(action){
- if(action.terminal)return action.terminal.commands.map(c=>displayText(c.command,c)).join("\n")||"No shell commands in this saved step";
- if(!Array.isArray(action.argv)||!action.argv.length)return displayText(action.command||"Command not specified",action);
- return action.argv.map((value,i)=>{
-   const prefix=i===0?"":/^--?[a-zA-Z]/.test(value)?" \\\n  ":" ";
-   return prefix+shellQuote(displayArgument(value,action,i));
- }).join("");
-}
-function displayRecord(value,action,key=""){
- if(Array.isArray(value))return key==="argv"?value.map((v,i)=>displayArgument(v,action,i)):value.map(v=>displayRecord(v,action));
- if(value&&typeof value==="object"){
-   const context=Array.isArray(value.argv)?value:action;
-   return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,displayRecord(v,context,k)]));
- }
- if(typeof value==="string"){
-   if(["sourcePath","cwd","repository","executable","workdir"].includes(key))return displayPath(value,action);
-   if(key==="command"&&action?.argv)return displayCommand(action);
-   return displayText(value,action);
- }
- return value;
-}
+let projectRoot="";
+const {displayPath,displayText,displayCommand,displayRecord}=SaigenPaths.create(()=>flow,()=>projectRoot);
 function bindOriginalCommands(el){
  el.querySelectorAll("[data-original-command]").forEach(button=>button.onclick=()=>{
    const action=getAction(button.dataset.originalCommand);if(!action)return;
@@ -233,44 +170,8 @@ function renderNodes(){
  $("#planned-help").hidden=!flow.states.some(n=>n.status==="planned");
  $("#nodes").innerHTML=flow.states.map(n=>'<button class="state '+esc(n.status)+(firstPlot(n)?" has-plot":"")+(selected===n.id?" selected":"")+'" data-state="'+esc(n.id)+'" style="left:'+n.x+'px;top:'+n.y+'px" aria-label="'+esc(n.title)+'">'+reportBadge(n.id)+nodeContent(n)+'<span class="port" title="Connect to another state" aria-hidden="true"></span></button>').join("");
 }
-function edgeAnchor(n,right=false){return {x:n.x+(right?W:0),y:n.y+H/2};}
-function edgePath(from,to){
- const start=edgeAnchor(from,true),end=edgeAnchor(to),dx=Math.max(35,(end.x-start.x)*.5);
- const d=start.y===end.y&&end.x>=start.x?'M '+start.x+' '+start.y+' L '+end.x+' '+end.y:
-   'M '+start.x+' '+start.y+' C '+(start.x+dx)+' '+start.y+', '+(end.x-dx)+' '+end.y+', '+end.x+' '+end.y;
- return {d,x:(start.x+end.x)/2,y:(start.y+end.y)/2};
-}
-function roundedRoute(points){
- let d='M '+points[0].x+' '+points[0].y;
- for(let i=1;i<points.length-1;i++){
-   const p=points[i],prev=points[i-1],next=points[i+1],before=Math.hypot(p.x-prev.x,p.y-prev.y),after=Math.hypot(next.x-p.x,next.y-p.y),r=Math.min(10,before/2,after/2);
-   if(!r){d+=' L '+p.x+' '+p.y;continue;}
-   const a={x:p.x+(prev.x-p.x)*r/before,y:p.y+(prev.y-p.y)*r/before},b={x:p.x+(next.x-p.x)*r/after,y:p.y+(next.y-p.y)*r/after};
-   d+=' L '+a.x+' '+a.y+' Q '+p.x+' '+p.y+' '+b.x+' '+b.y;
- }
- const end=points.at(-1);return d+' L '+end.x+' '+end.y;
-}
-function actionJunction(a){
- const target=getState(a.to),end=edgeAnchor(target),junction={x:end.x-44,y:end.y};
- const sources=a.from.map(id=>getState(id));
- const inputs=sources.map((s,index)=>{
-   const start=edgeAnchor(s,true),left=Math.min(start.x,junction.x),right=Math.max(start.x,junction.x);
-   const candidates=flow.states.filter(n=>n.id!==s.id&&n.id!==target.id&&n.x<right&&n.x+W>left);
-   const blocked=candidates.some(n=>n.y-12<Math.max(start.y,junction.y)&&n.y+H+12>Math.min(start.y,junction.y));
-   if(!blocked&&junction.x>start.x){
-     const dx=Math.max(20,(junction.x-start.x)*.5);
-     return {id:s.id,d:'M '+start.x+' '+start.y+' C '+(start.x+dx)+' '+start.y+', '+(junction.x-dx)+' '+junction.y+', '+junction.x+' '+junction.y};
-   }
-   // An ancestor input can span intermediate result cards. Route above them,
-   // retaining the recorded dependency rather than concealing it behind a card.
-   const lane=Math.min(s.y,target.y,...candidates.map(n=>n.y))-28-index*16;
-   const points=[start,{x:start.x+20,y:start.y},{x:start.x+20,y:lane},{x:junction.x-20,y:lane},{x:junction.x-20,y:junction.y},junction];
-   return {id:s.id,d:roundedRoute(points),points};
- });
- const nearest=sources.reduce((best,n)=>Math.abs(edgeAnchor(n,true).x-junction.x)<Math.abs(edgeAnchor(best,true).x-junction.x)?n:best);
- return {inputs,junction,output:'M '+junction.x+' '+junction.y+' L '+end.x+' '+end.y,
-   label:{x:(edgeAnchor(nearest,true).x+junction.x)/2,y:Math.min(nearest.y,target.y)-14}};
-}
+const {edgeAnchor,edgePath}=SaigenGeometry;
+const actionJunction=a=>SaigenGeometry.actionJunction(a,flow.states);
 function executedScriptName(a){
  const argv=a.argv||a.argvTemplate||[];
  if(!argv.length)return "";

@@ -90,3 +90,14 @@ Keep three locations distinct: a scientific workspace contains records and input
 New workspaces save independent `permissionMode` (analysis: `ask` or `flexible`) and `uiDevelopment` (routine local UI source changes: `ask` or `allow`) choices. The default for source changes is `ask`. Existing configurations without `uiDevelopment` retain their legacy meaning: Flexible includes its previously granted routine UI development authorization. Adding agents must preserve both choices and user-maintained instructions. See [workflow permissions](agent-integrations.md#workflow-permissions).
 
 When extending the application, identify the owner of each behavior, reuse its public operations, and verify compatibility at the affected boundary. Refactor concrete coupling when it obstructs that ownership; avoid speculative module splitting. Changes to stored facts, configuration defaults, or agent instructions require an explicit compatibility decision and relevant verification.
+
+### UI file boundaries
+
+The viewer uses ordered deferred scripts and no build framework:
+
+- `geometry.js` calculates card anchors and action routes from explicit state inputs. It owns card dimensions and has no DOM or recorder access.
+- `paths.js` creates presentation-only path and command formatters. The caller supplies current project context; each formatter instance owns its external-path aliases.
+- `app.js` coordinates HTTP requests, application state, rendering, editing, navigation, and reports. It passes data into the geometry and formatting helpers.
+- `style.css` owns visual styling; `index.html` owns the page shell and script loading order.
+
+The helper files expose frozen `SaigenGeometry` and `SaigenPaths` namespaces. Keep their calculations independent of application globals so they can be exercised directly. Further extraction from `app.js` should introduce explicit interfaces when a feature needs independent maintenance. Include new assets in both the server route allowlist and wheel packaging, and verify the installed viewer loads them.
