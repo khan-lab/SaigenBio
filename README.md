@@ -39,7 +39,6 @@ For a guided scientific example, follow the [E. coli tutorial](docs/tutorials/ec
 | Record commands, import files, or capture a shell session | [Recording reference](docs/recording.md) |
 | Export selected results | [PDF reports](docs/reports.md) |
 | Understand provenance and storage | [Architecture](docs/architecture.md) |
-| Use the logo or favicon | [Branding assets](docs/branding.md) |
 | Develop or contribute | [Contributing](CONTRIBUTING.md) |
 
 ## Current scope
