@@ -9,17 +9,32 @@ const before=JSON.stringify(flow);
 const ui=context.SaigenWorkflows.create({getFlow:()=>flow,escape,displayPath:v=>v});
 assert.ok(ui.labels().includes('Nextflow 25.10.4'));
 assert.ok(ui.labels().includes('Variant summary'));
-assert.ok(ui.card(node).includes('Python · QUAL ≥ 100'));
+assert.ok(ui.card(node).includes('Python via Nextflow'));
 assert.ok(ui.details(node).includes('Proposed parameters'));
 assert.ok(ui.details(node).includes('minimum_quality'));
 assert.ok(ui.details(node).includes('100'));
-assert.ok(ui.details(node).includes('declared in the proposal'));
+assert.ok(ui.details(node).includes('proposal-declared'));
 assert.equal(JSON.stringify(flow),before);
 proposal.approval={declaredBy:'Agent',at:'2026-11-16'};
 node.workflowRun='run';flow.workflows.runs.run={id:'run',status:'completed',engineRunId:'session'};
 flow.actions=[{to:'s',workflowRun:'run',command:'python3 analyze.py input.tsv'}];
 assert.ok(ui.details(node).includes('Approved parameters'));
-assert.ok(ui.details(node).includes('command recorded'));
+assert.ok(ui.details(node).includes('older run has no structured engine verification record'));
+assert.ok(!ui.details(node).includes('Engine version verified before launch'));
+flow.workflows.runs.run.engine={name:'nextflow',version:'25.10.4',source:'version-verified-before-launch'};
+flow.workflows.runs.run.stageMethods={filter:{tool:'Python',summary:'QUAL ≥ 100',source:'proposal-declared'}};
+assert.ok(ui.details(node).includes('Engine version verified before launch'));
+for(const status of ['planned','completed','failed','cancelled','unknown']){
+ node.status=status;
+ assert.ok(ui.card(node).includes('Python via Nextflow'));
+ assert.ok(ui.card(node).includes('QUAL ≥ 100'));
+}
+// Arbitrary script text must never establish tool identity.
+delete proposal.spec.stages[0].method;
+delete flow.workflows.runs.run.stageMethods;
+assert.ok(ui.card(node).includes('Tool unknown via Nextflow'));
+assert.ok(!ui.execution(node).tool.includes('Python'));
+proposal.spec.stages[0].method={tool:'Python',summary:'QUAL ≥ 100'};
 assert.ok(ui.details(node).includes('Tool version was not recorded'));
 node.workflowEvidence={source:'Trace',error:'Missing output',rows:[]};
 assert.ok(ui.details(node).includes('Missing output'));

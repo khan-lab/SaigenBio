@@ -81,6 +81,9 @@ class NextflowTests(unittest.TestCase):
             proc.return_value.pid = 1234
             proc.return_value.wait.side_effect = [KeyboardInterrupt, None]
             result = execute(service, p['id'], store.flow()['revision'])
+            self.assertEqual(result['engine']['name'], 'nextflow')
+            self.assertEqual(result['engine']['source'], 'version-verified-before-launch')
+            self.assertEqual(result['stageMethods']['filter']['source'], 'proposal-declared')
             self.assertEqual(result['status'], 'cancelled')
             self.assertTrue(all(s['status'] == 'cancelled' for s in result['stages'].values()))
             kill.assert_called_once()

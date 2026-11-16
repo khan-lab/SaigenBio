@@ -84,3 +84,7 @@ python3 examples/ecoli/ecoli_example.py --source /path/to/ecoli-evol --project /
 ```
 
 Consult each helper's --help and inspect its expected inputs before use.
+
+## Workflow comprehension review
+
+Review planned, completed, failed and repeated runs. Looking at each stage on its own, a reader must be able to identify the operation, tool, workflow engine, important settings and status. Confirm the relationship remains understandable without the shared workflow heading. Inspect a cropped card and the hover/detail view on desktop and narrow screens. Verify that declared method descriptions, verified engine identity and missing information remain distinguishable. Label existence and a screenshot without JavaScript errors do not alone establish comprehension.

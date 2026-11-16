@@ -61,6 +61,9 @@ def main():
     result = approve_and_run(proposal)
     (destination / 'first-run.json').write_text(json.dumps(result, indent=2))
     assert result['status'] == 'completed', result
+    assert result['engine']['source'] == 'version-verified-before-launch'
+    assert result['stageMethods']['filtered']['tool'] == 'Python'
+    assert result['stageMethods']['summary']['tool'] == 'Python'
     flow = store.flow()
     summary_id = result['stageNodes']['summary']
     node = next(n for n in flow['states'] if n['id'] == summary_id)

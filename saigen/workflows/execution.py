@@ -62,6 +62,8 @@ def execute(service, proposal_id, revision):
             node['workflowRun'] = run_id
         record = {'id': run_id, 'proposalId': proposal_id, 'executionDigest': digest, 'engineRunId': None,
             'status': 'running', 'registeredAt': now(), 'events': {}, 'stages': {}, 'stageNodes': nodes,
+            'engine': {**copy.deepcopy(current['spec']['engine']), 'source': 'version-verified-before-launch'},
+            'stageMethods': {s['key']: {**copy.deepcopy(s.get('method', {})), 'source': 'proposal-declared'} for s in current['spec']['stages']},
             'argv': argv, 'cwd': str(folder), 'runnerPid': os.getpid(), 'sourceArtifacts': [a['id'] for a in snapshots]}
         repo.collection(flow)['runs'][run_id] = record
         flow['artifacts'].update({a['id']: a for a in snapshots})
