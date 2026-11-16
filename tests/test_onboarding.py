@@ -89,6 +89,18 @@ class OnboardingTests(unittest.TestCase):
         command = viewer_command(self.store, port)
         self.assertIn(command, self.output.getvalue())
         self.assertEqual(shlex.split(command), ["saigen", "serve", "--project", str(self.store.root), "--port", str(port)])
+        self.assertIn("Viewer was not started.", self.output.getvalue())
+        self.assertIn("Saved viewer address:", self.output.getvalue())
+
+    def test_startup_instruction_uses_dot_in_the_workspace(self):
+        port = suggested_port()
+        with patch("saigen.onboarding.Path.cwd", return_value=self.store.root), \
+             patch("saigen.server.serve") as serve:
+            self.initialize(["y"], name="Local startup", agents=[], port=port,
+                            start_viewer=False)
+            serve.assert_not_called()
+        self.assertIn(f"saigen serve --project . --port {port}", self.output.getvalue())
+        self.assertIn("Stay in this workspace", self.output.getvalue())
 
     def test_existing_project_retains_records_and_settings(self):
         self.initialize(["", "n", "n", "n", "n", "", "n", "y"])
