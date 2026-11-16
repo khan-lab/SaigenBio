@@ -1,4 +1,4 @@
-"""Shared service for future CLI, UI and MCP clients. No engine launches here."""
+"""Shared service for future CLI, UI and MCP clients. Engine launches are delegated to execution.py."""
 import copy
 from ..store import RecordError, entity, now, uid, text
 from . import repository as repo

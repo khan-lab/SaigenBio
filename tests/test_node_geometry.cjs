@@ -3,7 +3,7 @@ const fs=require("node:fs");
 const vm=require("node:vm");
 const app=fs.readFileSync("ui/app.js","utf8");
 const context=vm.createContext({});
-for(const file of ["geometry.js","paths.js","api.js"])vm.runInContext(fs.readFileSync("ui/"+file,"utf8"),context);
+for(const file of ["geometry.js","paths.js","api.js","workflows.js"])vm.runInContext(fs.readFileSync("ui/"+file,"utf8"),context);
 vm.runInContext(app.slice(0,app.indexOf("function render(){")),context);
 const evaluate=code=>vm.runInContext(code,context);
 const statuses=["planned","running","completed","imported","failed","cancelled","unknown","saved"];

@@ -1,0 +1,47 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const context=vm.createContext({});
+vm.runInContext(fs.readFileSync('ui/workflows.js','utf8'),context);
+const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const node={id:'s',workflowProposal:'p',workflowStage:'filter',status:'planned',x:320,y:210};
+const proposal={spec:{engine:{name:'nextflow',version:'25.10.4'},pipeline:{name:'Variant summary',source:'/data/pipeline',revision:'local',contentDigest:'digest'},configuration:{parameters:{minimum_quality:100,fail_summary:false}},inputBindings:[],stages:[{key:'filter',expectedSummary:'Variants with QUAL >= 100',method:{tool:'Python',summary:'QUAL ≥ 100'}}]},executionDigest:'approved-digest',approval:null};
+const flow={states:[node],actions:[],artifacts:{},workflows:{proposals:{p:proposal},runs:{}}};
+const before=JSON.stringify(flow);
+const ui=context.SaigenWorkflows.create({getFlow:()=>flow,escape,displayPath:v=>v});
+assert.ok(ui.labels().includes('Nextflow 25.10.4'));
+assert.ok(ui.labels().includes('Variant summary'));
+assert.ok(ui.card(node).includes('Python via Nextflow'));
+assert.ok(ui.details(node).includes('Proposed parameters'));
+assert.ok(ui.details(node).includes('minimum_quality'));
+assert.ok(ui.details(node).includes('100'));
+assert.ok(ui.details(node).includes('proposal-declared'));
+assert.equal(JSON.stringify(flow),before);
+proposal.approval={declaredBy:'Agent',at:'2026-11-16'};
+node.workflowRun='run';flow.workflows.runs.run={id:'run',status:'completed',engineRunId:'session'};
+flow.actions=[{to:'s',workflowRun:'run',command:'python3 analyze.py input.tsv'}];
+assert.ok(ui.details(node).includes('Approved parameters'));
+assert.ok(ui.details(node).includes('older run has no structured engine verification record'));
+assert.ok(!ui.details(node).includes('Engine version verified before launch'));
+flow.workflows.runs.run.engine={name:'nextflow',version:'25.10.4',source:'version-verified-before-launch'};
+flow.workflows.runs.run.stageMethods={filter:{tool:'Python',summary:'QUAL ≥ 100',source:'proposal-declared'}};
+assert.ok(ui.details(node).includes('Engine version verified before launch'));
+for(const status of ['planned','completed','failed','cancelled','unknown']){
+ node.status=status;
+ assert.ok(ui.card(node).includes('Python via Nextflow'));
+ assert.ok(ui.card(node).includes('QUAL ≥ 100'));
+}
+// Arbitrary script text must never establish tool identity.
+delete proposal.spec.stages[0].method;
+delete flow.workflows.runs.run.stageMethods;
+assert.ok(ui.card(node).includes('Tool unknown via Nextflow'));
+assert.ok(!ui.execution(node).tool.includes('Python'));
+proposal.spec.stages[0].method={tool:'Python',summary:'QUAL ≥ 100'};
+assert.ok(ui.details(node).includes('Tool version was not recorded'));
+node.workflowEvidence={source:'Trace',error:'Missing output',rows:[]};
+assert.ok(ui.details(node).includes('Missing output'));
+proposal.spec.pipeline.name='<img src=x onerror=alert(1)>';
+proposal.spec.configuration.parameters.evil='<script>';
+assert.ok(!ui.labels().includes('<img'));
+assert.ok(!ui.details(node).includes('<script>'));
+assert.equal(ui.card({id:'old'}),'');
+assert.equal(ui.details({id:'old'}),'');
+console.log('Workflow UI checks passed: plan/run identity, methods, parameters, evidence provenance, escaping and legacy nodes.');

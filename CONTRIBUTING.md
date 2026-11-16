@@ -43,6 +43,7 @@ node tests/test_path_display.cjs
 node tests/test_action_junctions.cjs
 node tests/test_node_geometry.cjs
 node tests/test_reports_ui.cjs
+node tests/test_workflows_ui.cjs
 git diff --check
 ```
 
@@ -59,6 +60,8 @@ Add --with-quarto to verify PDF/source-bundle downloads. Change --agent to claud
 The checker creates an external directory under ../SaigenBio-lab/installations/ by default; --destination /outside/path/new-trial selects another new location. Build sources, wheel, environment, logs, cache, and trial outputs stay there. Existing destinations are rejected. Inspect installation-check.json and workspace/START.md.
 
 A successful package check does not prove an AI agent will follow the skill. Use the [agent acceptance procedure](docs/agent-testing.md) for that.
+
+Real Nextflow checks are opt-in: see [local workflow integration](docs/nextflow.md#reproduce-the-real-test). Supply a new external destination under SaigenBio-lab and keep downloaded data, pipeline work directories and engine installs there.
 
 ## Preparing a pull request
 
@@ -81,3 +84,7 @@ python3 examples/ecoli/ecoli_example.py --source /path/to/ecoli-evol --project /
 ```
 
 Consult each helper's --help and inspect its expected inputs before use.
+
+## Workflow comprehension review
+
+Review planned, completed, failed and repeated runs. Looking at each stage on its own, a reader must be able to identify the operation, tool, workflow engine, important settings and status. Confirm the relationship remains understandable without the shared workflow heading. Inspect a cropped card and the hover/detail view on desktop and narrow screens. Verify that declared method descriptions, verified engine identity and missing information remain distinguishable. Label existence and a screenshot without JavaScript errors do not alone establish comprehension.

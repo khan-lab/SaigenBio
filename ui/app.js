@@ -23,6 +23,7 @@ function tableMarkup(n,mini=false){
  const t=a.tablePreview,cols=t.columns.slice(0,mini?3:6),rows=t.rows.slice(0,mini?3:5);
  return '<div class="table-preview"><table><thead><tr>'+cols.map(c=>'<th>'+esc(c)+'</th>').join("")+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.slice(0,cols.length).map(c=>'<td>'+esc(c)+'</td>').join("")+'</tr>').join("")+'</tbody></table></div>';
 }
+const workflows=SaigenWorkflows.create({getFlow:()=>flow,escape:esc,displayPath:(...args)=>displayPath(...args)});
 const decisionSummary=n=>(n.note||flow.actions.filter(a=>a.to===n.id).map(a=>a.reason).filter(Boolean).join(" ")).trim();
 const shortDate=value=>value?new Date(value).toLocaleString():"Not recorded";
 const stamp=n=>n.finishedAt||n.createdAt;
@@ -155,13 +156,18 @@ function bindArtifactButtons(el){
 }
 
 function nodeContent(n){
- if(n.status==="running"||n.status==="planned")return '<span class="node-title">'+esc(n.title)+'</span><span class="node-bottom">'+(n.status==="running"?"Running":"Planned")+'</span>';
+ if(n.status==="running"||n.status==="planned")return '<span class="node-title">'+esc(n.title)+'</span>'+workflows.card(n)+'<span class="node-bottom">'+(n.status==="running"?"Running":"Planned")+'</span>';
  const plot=firstPlot(n),bad=["failed","cancelled","unknown"].includes(n.status);
- return '<span class="node-title">'+esc(n.title)+'</span>'+(plot?'<span class="mini-plot">'+imagePreview(n)+'</span>':firstTable(n)?tableMarkup(n,true):'<span class="node-excerpt">'+esc(decisionSummary(n))+'</span>')+'<span class="node-bottom">'+(bad?esc(n.status):n.status==="imported"?"Imported · "+n.files.length+" files":n.files.length+" saved outputs")+'</span>';
+ return '<span class="node-title">'+esc(n.title)+'</span>'+workflows.card(n)+(plot?'<span class="mini-plot">'+imagePreview(n)+'</span>':firstTable(n)?tableMarkup(n,true):'<span class="node-excerpt">'+esc(decisionSummary(n))+'</span>')+'<span class="node-bottom">'+(bad?esc(n.status):n.status==="imported"?"Imported · "+n.files.length+" files":n.files.length+" saved outputs")+'</span>';
 }
 
 function reportBadge(id){const i=reports.position(id);return reports.active&&i>=0?'<span class="report-badge" aria-label="Report position '+(i+1)+'">'+(i+1)+'</span>':"";}
+function renderWorkflowLabels(){
+ $("#workflow-labels").innerHTML=workflows.labels();
+ $("#workflow-labels").querySelectorAll("[data-workflow-state]").forEach(b=>b.onclick=()=>openState(b.dataset.workflowState));
+}
 function renderNodes(){
+ renderWorkflowLabels();
  $("#planned-help").hidden=!flow.states.some(n=>n.status==="planned");
  $("#nodes").innerHTML=flow.states.map(n=>'<button class="state '+esc(n.status)+(firstPlot(n)?" has-plot":"")+(selected===n.id?" selected":"")+'" data-state="'+esc(n.id)+'" style="left:'+n.x+'px;top:'+n.y+'px" aria-label="'+esc(n.title)+'">'+reportBadge(n.id)+nodeContent(n)+'<span class="port" title="Connect to another state" aria-hidden="true"></span></button>').join("");
 }
@@ -234,7 +240,7 @@ function renderPreview(n){
  const explanation=(pending?n.expectedSummary||note:note)?(pending?'<div class="preview-label">Expected result</div>':"")+'<p class="preview-note '+(plot?"preview-caption":"preview-summary")+'">'+esc(pending?n.expectedSummary||note:note)+'</p>':"";
  el.innerHTML='<div class="preview-inner preview-heading"><div class="preview-label">'+esc(n.status)+'</div><div class="preview-title">'+esc(n.title)+'</div></div>'+
    (plot?'<div class="preview-plot">'+imagePreview(n,"","eager")+'</div>':tableMarkup(n))+
-   '<div class="preview-inner preview-context">'+explanation+'<div class="preview-label">'+(pending?"Expected outputs":n.status==="imported"?"Preserved inputs":"Saved outputs")+'</div><ul class="preview-files">'+(pending?(n.expectedFiles||[]).map(f=>'<li>'+esc(f)+'</li>').join(""):items.slice(0,4).map(a=>'<li>'+esc(a.name)+'</li>').join(""))+'</ul></div><button class="preview-open" data-open="'+esc(n.id)+'">Show detail <span>→</span></button>';
+   '<div class="preview-inner preview-context">'+workflows.preview(n)+explanation+'<div class="preview-label">'+(pending?"Expected outputs":n.status==="imported"?"Preserved inputs":"Saved outputs")+'</div><ul class="preview-files">'+(pending?(n.expectedFiles||[]).map(f=>'<li>'+esc(f)+'</li>').join(""):items.slice(0,4).map(a=>'<li>'+esc(a.name)+'</li>').join(""))+'</ul></div><button class="preview-open" data-open="'+esc(n.id)+'">Show detail <span>→</span></button>';
 }
 function showPreview(id,anchor){
  if(reports.active||connecting||drag||!$("#detail-view").hidden)return;
@@ -315,7 +321,7 @@ function renderDetail(n){
  else if(["failed","cancelled","unknown"].includes(n.status))visual='<div class="run-display"><div class="preview-label">'+esc(n.status)+'</div><p>'+esc(displayText(incoming.find(a=>a.error)?.error||"This attempt did not produce a verified completion record."))+'</p></div>';
  const origin=n.status==="planned"?(n.origin==="manual"?"This is a human-supplied plan. No execution has been recorded.":"This is an agent-proposed plan. No execution has been recorded."):n.origin==="terminal"?"Selected files were preserved at this checkpoint. Command order records session activity; it does not establish file dependencies.":n.status==="imported"?"Existing files were recorded. Their earlier execution is not established by this import.":"Execution status was observed by the recorder. A successful command does not establish scientific correctness.";
  $("#detail-content").innerHTML='<nav class="detail-nav"><button class="back" id="back-flow">← Back to flow</button><button class="quiet" id="edit-detail">Edit state</button></nav><div class="detail-kicker">'+esc(n.status)+'</div><h1 class="detail-title">'+esc(n.title)+'</h1><p class="detail-note">'+esc(n.status==="planned"?"":n.note)+'</p><div class="detail-meta"><span class="mono">'+(n.codeRef?"Code "+esc(n.codeRef.slice(0,12))+(n.code?.dirty?" + working changes":""):"Code version not recorded")+'</span><span>Recorded by '+esc(n.writtenBy)+'</span><span>'+esc(shortDate(stamp(n)))+'</span></div>'+visual+
- planMarkup(n)+(n.status!=="planned"?'<section class="detail-section"><div class="section-label">'+(n.status==="imported"?"Saved inputs":"Saved outputs")+'</div><ul class="files">'+(items.length?fileRows(items):'<li>No output files recorded.</li>')+'</ul>': '<section class="detail-section">')+
+ workflows.details(n)+planMarkup(n)+(n.status!=="planned"?'<section class="detail-section"><div class="section-label">'+(n.status==="imported"?"Saved inputs":"Saved outputs")+'</div><ul class="files">'+(items.length?fileRows(items):'<li>No output files recorded.</li>')+'</ul>': '<section class="detail-section">')+
  (n.status!=="planned"&&n.expectedFiles?.length?'<div class="action-meta">Expected: '+n.expectedFiles.map(esc).join(", ")+'</div>':"")+
  (n.references?.length?'<div class="action-meta">Additional references · not verified: '+n.references.map(v=>esc(displayText(v))).join(", ")+'</div>':"")+'</section>'+
  '<section class="detail-section"><div class="section-label">'+(incoming.length?"How this state is reached":n.status==="planned"?"Execution":"Starting evidence")+'</div>'+
@@ -444,7 +450,7 @@ $("#viewport").addEventListener("pointerdown",e=>{
  if(e.button!==0||busy||!ready)return;
  const card=e.target.closest("[data-state]");
  if(e.target.closest(".port")&&!reports.active){e.preventDefault();startConnecting(card.dataset.state);return;}
- if(e.target.closest(".edge-group"))return;
+ if(e.target.closest(".edge-group,.workflow-label"))return;
  if(connecting&&card)return;
  if(card&&reports.active)return;
  hidePopups();e.preventDefault();$("#viewport").setPointerCapture(e.pointerId);
@@ -454,7 +460,7 @@ $("#viewport").addEventListener("pointerdown",e=>{
 $("#viewport").addEventListener("pointermove",e=>{
  if(!drag)return;const dx=e.clientX-drag.startX,dy=e.clientY-drag.startY;if(Math.abs(dx)+Math.abs(dy)>5)drag.moved=true;
  if(!drag.moved)return;
- if(drag.id){const n=getState(drag.id);n.x=Math.round(drag.x+dx/camera.scale);n.y=Math.round(drag.y+dy/camera.scale);const el=$("#nodes").querySelector('[data-state="'+CSS.escape(drag.id)+'"]');el.style.left=n.x+"px";el.style.top=n.y+"px";renderEdges();positionSelection();}
+ if(drag.id){const n=getState(drag.id);n.x=Math.round(drag.x+dx/camera.scale);n.y=Math.round(drag.y+dy/camera.scale);const el=$("#nodes").querySelector('[data-state="'+CSS.escape(drag.id)+'"]');el.style.left=n.x+"px";el.style.top=n.y+"px";renderEdges();renderWorkflowLabels();positionSelection();}
  else{camera.x=drag.x+dx;camera.y=drag.y+dy;applyCamera();}
 });
 
