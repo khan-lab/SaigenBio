@@ -96,6 +96,11 @@ def main():
         report["wheel"] = {"name": wheel.name, "sha256": hashlib.sha256(wheel.read_bytes()).hexdigest()}
         report["version"] = run("cli-version", [cli, "--version"]).strip()
 
+        workflow_engines = json.loads(run("workflow-foundation", [cli, "workflow", "engines"]))
+        require(workflow_engines == {"engines": [], "executionSupported": False}, "Unexpected workflow foundation capabilities.")
+        run("workflow-adapter-package", [python, "-c", "from saigen.workflows.adapters.base import WorkflowAdapter, LaunchSpec, EvidenceBatch"])
+        report["checks"]["installed_workflow_foundation"] = True
+
         bundled_skill = Path(probe["data"]) / "share" / "saigenbio" / "skills" / "saigen-record"
         require((bundled_skill / "SKILL.md").is_file(), "The wheel did not include the recording skill.")
         skill_folder = {"claude":".claude", "opencode":".opencode"}.get(args.agent, ".agents")
