@@ -1,0 +1,37 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const elements=new Map();
+const element=selector=>{if(!elements.has(selector))elements.set(selector,{hidden:false,textContent:'',innerHTML:'',showModal(){},focus(){},querySelector(){return {focus(){}};}});return elements.get(selector);};
+const context=vm.createContext({document:{querySelector:element},clearTimeout(){}});
+for(const name of ['geometry.js','paths.js','api.js','workflows.js'])vm.runInContext(fs.readFileSync('ui/'+name,'utf8'),context);
+const app=fs.readFileSync('ui/app.js','utf8');
+vm.runInContext(app.slice(0,app.indexOf('$("#editor-form").onsubmit')),context);
+const evaluate=code=>vm.runInContext(code,context);
+evaluate(`flow={states:[],actions:[],artifacts:{},removalOptions:{states:{unused:null,blocked:'Another state depends on this plan',recorded:'Recorded history'},proposals:{wf:null,used:'This workflow has recorded attempts'}}};`);
+context.node={id:'unused',origin:'agent-plan',status:'planned',title:'Agent plan'};
+evaluate('openStateEditor(node)');
+assert.equal(element('#delete-item').hidden,false);
+assert.equal(element('#delete-item').textContent,'Delete');
+context.node={id:'blocked',origin:'agent-plan',status:'planned',title:'Parent'};
+evaluate('openStateEditor(node)');
+assert.equal(element('#delete-item').hidden,true);
+assert.ok(element('#editor-fields').innerHTML.includes('Another state depends on this plan'));
+context.node={id:'stage',origin:'workflow-plan',status:'planned',workflowProposal:'wf',title:'Stage'};
+evaluate('openStateEditor(node)');
+assert.equal(element('#delete-item').hidden,false);
+assert.equal(element('#delete-item').textContent,'Cancel workflow');
+assert.ok(element('#editor-fields').innerHTML.includes('entire unexecuted workflow'));
+assert.ok(element('#editor-fields').innerHTML.includes('name="cancelReason"'));
+assert.ok(element('#editor-fields').innerHTML.includes('cannot be undone'));
+context.node.workflowProposal='used';
+evaluate('openStateEditor(node)');
+assert.equal(element('#delete-item').hidden,true);
+assert.ok(element('#editor-fields').innerHTML.includes('recorded attempts'));
+// A reserved workflow run can still have planned cards; those must not expose cancellation.
+context.node.workflowProposal='wf';context.node.workflowRun='run';context.node.id='recorded';
+evaluate('openStateEditor(node)');
+assert.equal(element('#delete-item').hidden,true);
+// No client inference when a capability was not supplied by the server.
+context.node={id:'missing',origin:'manual',status:'planned',title:'Missing capability'};
+evaluate('openStateEditor(node)');
+assert.equal(element('#delete-item').hidden,true);
+console.log('Plan removal UI checks passed: server eligibility, dependency explanations and whole-workflow cancellation.');

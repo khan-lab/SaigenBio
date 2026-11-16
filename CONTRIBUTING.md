@@ -44,6 +44,7 @@ node tests/test_action_junctions.cjs
 node tests/test_node_geometry.cjs
 node tests/test_reports_ui.cjs
 node tests/test_workflows_ui.cjs
+node tests/test_plan_removal_ui.cjs
 git diff --check
 ```
 

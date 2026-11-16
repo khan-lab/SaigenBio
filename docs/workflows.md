@@ -55,6 +55,21 @@ Publication adds all stage placeholders and the immutable proposal in one revisi
 
 The service calculates a canonical digest over the specification, excluding generated canvas layout, notes, IDs and approval metadata. A changed specification creates a new proposal with its own approval. Existing approved proposals remain historical records and are not overwritten. Graph layout and note edits do not change the proposal.
 
+## Cancel an unused proposal
+
+Open a planned workflow stage's editor and choose **Cancel workflow**, supplying a reason. This retires the whole proposal and removes all its planned cards from the active canvas. The agent can perform the same operation through the CLI:
+
+```sh
+saigen workflow cancel PROPOSAL_ID --revision PROJECT_REVISION --reason "Replaced by another approach"
+saigen workflow show PROPOSAL_ID
+```
+
+Cancellation is allowed only before any run is recorded and when no external plan, action, or workflow context depends on the stages. Otherwise the service explains the blocking reference. Historical proposal context also remains protected. Individual workflow stages cannot be deleted through generic canvas edits.
+
+The original specification, stage mapping, approval declaration, stage snapshots, reason and actor remain in the project and exported history. Cancelled stage IDs stay reserved. The proposal cannot be approved again, registered with a run, or executed. Cancellation is not an undoable canvas edit; publish a new proposal if you want to proceed later. Once execution has been recorded, including failed or uncertain attempts, its cards and history remain protected. This operation does not stop a running engine.
+
+Cancellation uses an optional `retirement` record on the existing proposal; older proposals without it remain active with no migration. UI removal options are derived from recorder/service rules by the HTTP server and are never stored as analysis facts.
+
 ## Evidence and compatibility
 
 Workflow records live under an optional `workflows` field in the existing project JSON and use the recorder's SQLite transaction, revision checks, and event history. Existing projects need no rewrite. Export preserves these records with the flow.

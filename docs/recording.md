@@ -109,6 +109,14 @@ Use another planned ID as --from to propose later steps. After user approval, ex
 
 Use a short result name for --title (usually 3–6 words) and one expected-result sentence for --expect, without an "Expected:" prefix. The canvas shows the title and status; hover shows the expected result. Optional --details describes the proposed method and --requires describes a prerequisite. Both appear in the detail view, alongside planned inputs and expected files. Prerequisites are explanatory text; SaigenBio does not enforce them or infer approval from them. The original plan remains in the state details after execution starts. Older records remain readable with their original text.
 
+Unused standalone plans created by a person or agent can be removed in the state editor with **Delete**, or through the CLI with an explicit current revision:
+
+```sh
+saigen remove-plan --project /path/to/analysis summary_plan --revision PROJECT_REVISION
+```
+
+Remove dependent unused plans first. Plans referenced by workflow proposals or recorded execution cannot be deleted. Deletion preserves an event and can be undone through the viewer if inputs and IDs are still available. Undo rechecks dependencies and refuses to overwrite newer work. Workflow stage cards belong to a proposal; [cancel the whole unexecuted proposal](workflows.md#cancel-an-unused-proposal) instead of removing individual stages.
+
 For immediate execution, run --expect describes the expected output on the running placeholder. Completion replaces the placeholder with preserved results. Failed attempts remain recorded.
 
 

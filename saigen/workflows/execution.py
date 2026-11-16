@@ -15,6 +15,7 @@ from .models import execution_digest
 def execute(service, proposal_id, revision):
     store = service.store
     proposal = service.show(proposal_id)
+    repo.require_active(proposal)
     engine = adapter(proposal['spec']['engine']['name'])
     launch = engine.prepare(proposal)
     # Verify artifacts before any process runs; stage immutable copies in this attempt.
@@ -39,6 +40,7 @@ def execute(service, proposal_id, revision):
     snapshots += [store.capture(folder / 'params.json', role='environment'), store.capture(config, role='environment')]
     def reserve(flow):
         current = repo.proposal(flow, proposal_id)
+        repo.require_active(current)
         digest = execution_digest(current['spec'])
         if digest != proposal['executionDigest'] or not current['approval'] or current['approval']['executionDigest'] != digest:
             raise RecordError('A matching approval is required before execution')

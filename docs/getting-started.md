@@ -101,7 +101,7 @@ Open the viewer address shown by serve.
 - When a command uses several input states, their paths meet at a small junction with one outgoing arrow and one command label. Longer ancestor-input paths route above intermediate cards. The execution details retain every recorded input.
 - Failed attempts stay available in gray. A successful retry is a separate attempt.
 
-Edits save to the project. Notes and layout can change; recorded execution facts are retained. Undo checks for conflicting changes.
+Edits save to the project. Notes and layout can change; recorded execution facts are retained. Unused standalone plans can be deleted, including agent-created plans; remove dependent plans first. For an unused workflow, open a stage editor and choose **Cancel workflow** to retire the entire proposal while retaining its history. Recorded attempts remain protected. Undo checks for conflicting changes and can restore deleted standalone plans when their inputs are still available; workflow cancellation cannot be undone.
 
 ## Plan before executing
 

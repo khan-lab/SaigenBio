@@ -10,6 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 from .store import Store, RecordError, Conflict, table_preview
 from .reports import Reports
+from .workflows.service import WorkflowService, removal_options
 
 UI=Path(__file__).resolve().parent.parent/"ui"
 if not (UI/"index.html").exists():UI=Path(sysconfig.get_path("data"))/"share"/"saigenbio"/"ui"
@@ -79,6 +80,7 @@ class Handler(BaseHTTPRequestHandler):
                         except (RecordError,OSError):
                             continue
                     a["tablePreview"]=self.server.preview_cache[key]
+                flow["removalOptions"]=removal_options(flow)
                 return self.reply(200,flow)
             if path=="/api/revision": return self.reply(200,{"revision":self.store.flow()["revision"]})
             if path=="/api/session": return self.reply(200,{"token":self.server.token,"projectRoot":str(self.store.root)})
@@ -126,8 +128,12 @@ class Handler(BaseHTTPRequestHandler):
             path=urlsplit(self.path).path
             if path=="/api/reports": return self.reply(202,self.server.reports.start(body.get("selected"),body["revision"]))
             if path=="/api/edit": flow=self.store.edit(body.get("operations"),body["revision"])
+            elif path.startswith("/api/workflows/") and path.endswith("/cancel") and len(path.split("/")) == 5:
+                WorkflowService(self.store).cancel(path.split("/")[3], revision=body["revision"], reason=body.get("reason"), actor="Human")
+                flow=self.store.flow()
             elif path=="/api/undo": flow=self.store.undo(body.get("event"),body["revision"])
             else: return self.reply(404,{"error":"Not found"})
+            flow["removalOptions"]=removal_options(flow)
             self.reply(200,flow)
         except Conflict as exc: self.reply(409,{"error":str(exc)})
         except (RecordError,ValueError,TypeError,KeyError) as exc: self.reply(400,{"error":str(exc)})

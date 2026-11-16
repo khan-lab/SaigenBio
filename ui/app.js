@@ -46,11 +46,14 @@ async function accept(next){
  flow=next;await loadHistory();redraw();
 }
 async function mutate(operations,undo=null){
+ return applyChange(undo?"/api/undo":"/api/edit",undo?{event:undo}:{operations},undo?"Change undone. History preserved.":"Saved to this project.");
+}
+async function applyChange(path,body,message){
  if(busy)throw new Error("A change is already being saved.");
  busy=true;
  try{
-   const next=await request(undo?"/api/undo":"/api/edit",undo?{revision:flow.revision,event:undo}:{revision:flow.revision,operations});
-   await accept(next);toast(undo?"Change undone. History preserved.":"Saved to this project.");
+   const next=await request(path,{...body,revision:flow.revision});
+   await accept(next);toast(message);
    return true;
  }catch(error){
    if(error.status===409){await accept(await request("/api/flow"));throw new Error(error.message);}
@@ -358,12 +361,22 @@ function field(name,label,value="",type="input",placeholder=""){
  return '<label class="field">'+label+c+'</label>';
 }
 function showEditor(context,title,fields,deletable=false){
+ $("#delete-item").textContent="Delete";
  hidePopups();editorContext=context;$("#editor-title").textContent=title;$("#editor-fields").innerHTML=fields;$("#form-error").textContent="";$("#delete-item").hidden=!deletable;$("#editor").showModal();$("#editor-fields input")?.focus();
 }
 
+function stateRemoval(n){
+ const options=flow.removalOptions;
+ const proposal=n.workflowProposal&&!n.workflowRun?n.workflowProposal:null;
+ const errors=proposal?options?.proposals:options?.states,key=proposal||n.id;
+ const available=errors&&Object.hasOwn(errors,key);
+ return {allowed:!!available&&errors[key]===null,reason:available?errors[key]:null,proposal};
+}
 function openStateEditor(n){
+ const removal=stateRemoval(n);
  const planned=n.origin==="manual"&&n.status==="planned";
- showEditor({type:"state",id:n.id},"Edit state",field("title","State name",n.title)+(planned?planFields(n):"")+field("note","Notes",n.note,"textarea")+field("files",planned?"Expected output names · one per line":"Additional file references · one per line",(planned?n.expectedFiles||[]:n.references||[]).join("\n"),"textarea")+'<p class="field-hint">'+(planned?"A plan does not execute a command.":"Saved output files and execution facts stay attached to the original record.")+'</p>',planned);
+ showEditor({type:"state",id:n.id},"Edit state",field("title","State name",n.title)+(planned?planFields(n):"")+field("note","Notes",n.note,"textarea")+field("files",planned?"Expected output names · one per line":"Additional file references · one per line",(planned?n.expectedFiles||[]:n.references||[]).join("\n"),"textarea")+'<p class="field-hint">'+(planned?"A plan does not execute a command.":"Saved output files and execution facts stay attached to the original record.")+'</p>'+(removal.reason&&n.status==="planned"?'<p class="field-hint">'+esc(removal.reason)+'</p>':"")+(removal.allowed&&removal.proposal?'<p class="field-hint">Cancels this entire unexecuted workflow and removes all its planned cards. The proposal and approval history are preserved. Cancellation cannot be undone; publish a new proposal to proceed.</p>'+field("cancelReason","Reason for cancelling the workflow","","textarea"):""),removal.allowed);
+ $("#delete-item").textContent=removal.proposal?"Cancel workflow":"Delete";
 }
 function planFields(n={}){
  return field("expectedSummary","Expected result · one short sentence",n.expectedSummary||"","textarea")+field("planDetails","Proposed method",n.planDetails||"","textarea")+field("planRequires","Prerequisite",n.planRequires||"","textarea")+'<p class="field-hint">Prerequisites describe when to proceed; SaigenBio does not enforce them.</p>';
@@ -423,6 +436,17 @@ $("#editor-form").onsubmit=async e=>{
 };
 $("#delete-item").onclick=async()=>{
  const ctx=editorContext;
+ if(busy)return;
+ if(ctx.type==="state"){
+  const removal=stateRemoval(getState(ctx.id));
+  if(removal.allowed&&removal.proposal){
+   const reason=String(new FormData($("#editor-form")).get("cancelReason")||"").trim();
+   if(!reason){$("#form-error").textContent="Enter a reason for cancelling the workflow.";return;}
+   try{await applyChange("/api/workflows/"+encodeURIComponent(removal.proposal)+"/cancel",{reason},"Workflow cancelled. History preserved.");$("#editor").close();location.hash="";}
+   catch(error){$("#form-error").textContent=error.message;}
+   return;
+  }
+ }
  try{await mutate([{op:ctx.type==="state"?"delete_state":"delete_action",id:ctx.id}]);$("#editor").close();if(ctx.type==="state"&&!$("#detail-view").hidden)location.hash="";}
  catch(error){$("#form-error").textContent=error.message;}
 };
