@@ -92,3 +92,10 @@ class NextflowTests(unittest.TestCase):
         with patch('saigen.workflows.execution.os.kill', side_effect=ProcessLookupError):
             self.assertEqual(recover(store)['recovered'], [result['id']])
         self.assertEqual(store.flow()['workflows']['runs'][result['id']]['status'], 'unknown')
+
+        previous_y = max(n['y'] for n in store.flow()['states'])
+        with patch('saigen.workflows.execution.adapter', return_value=self.adapter), patch.object(self.adapter, 'discover', return_value=self.info), patch('saigen.workflows.execution.subprocess.Popen') as proc:
+            proc.return_value.wait.return_value = 1
+            retry = execute(service, p['id'], store.flow()['revision'])
+        new_ids = set(retry['stageNodes'].values())
+        self.assertTrue(all(n['y'] > previous_y for n in store.flow()['states'] if n['id'] in new_ids))

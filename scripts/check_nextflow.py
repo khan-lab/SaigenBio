@@ -36,13 +36,14 @@ def main():
     inspection = NextflowAdapter().inspect(str(pipeline), {})
     if not inspection['engine']['available']:
         raise RuntimeError('Nextflow and compatible Java are required')
+    inspection['pipeline']['name'] = 'Data Carpentry variant summary'
     spec = {'schemaVersion': 1, 'engine': {'name': 'nextflow', 'version': inspection['engine']['version']},
         'pipeline': inspection['pipeline'], 'configuration': {'parameters': {'minimum_quality': 100}},
         'inputBindings': [{'name': 'samples', 'stateId': state['id'], 'artifactId': state['artifactIds'][0]}],
         'stages': [{'key': 'filtered', 'title': 'Quality-filtered variants', 'dependsOn': [],
-            'expectedSummary': 'Variants with QUAL >= 100', 'expectedFiles': ['filtered.csv'], 'mapping': {'process': 'FILTER'}},
+            'expectedSummary': 'Variants with QUAL >= 100', 'expectedFiles': ['filtered.csv'], 'mapping': {'process': 'FILTER'}, 'method': {'tool': 'Python', 'summary': 'QUAL ≥ 100'}},
             {'key': 'summary', 'title': 'Variants per sample', 'dependsOn': ['filtered'],
-             'expectedSummary': 'Variant counts per sample', 'expectedFiles': ['summary.tsv'], 'mapping': {'process': 'SUMMARY'}}]}
+             'expectedSummary': 'Variant counts per sample', 'expectedFiles': ['summary.tsv'], 'mapping': {'process': 'SUMMARY'}, 'method': {'tool': 'Python', 'summary': 'Count by sample_id'}}]}
     revision = lambda: store.flow()['revision']
     proposal = service.propose(spec, revision=revision())
     assert all(n['status'] == 'planned' for n in store.flow()['states'][1:])

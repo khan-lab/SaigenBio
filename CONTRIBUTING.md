@@ -43,6 +43,7 @@ node tests/test_path_display.cjs
 node tests/test_action_junctions.cjs
 node tests/test_node_geometry.cjs
 node tests/test_reports_ui.cjs
+node tests/test_workflows_ui.cjs
 git diff --check
 ```
 

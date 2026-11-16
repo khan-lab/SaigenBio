@@ -159,6 +159,17 @@ class WorkflowTests(unittest.TestCase):
             self.service.reconcile(observed['id'], [valid, invalid], revision=self.revision())
         self.assertEqual(self.store.flow(), before)
 
+    def test_pipeline_name_and_declared_method_are_preserved(self):
+        self.spec['pipeline']['name'] = 'Variant summary'
+        self.spec['stages'][0]['method'] = {'tool': 'Python', 'summary': 'QUAL ≥ 100'}
+        proposal = self.propose()
+        self.assertEqual(proposal['spec']['pipeline']['name'], 'Variant summary')
+        self.assertEqual(proposal['spec']['stages'][0]['method']['tool'], 'Python')
+        invalid = copy.deepcopy(self.spec)
+        invalid['stages'][0]['method'] = {'tool': 'Python'}
+        with self.assertRaises(RecordError):
+            self.propose(invalid)
+
     def test_cli_roundtrip_no_execution(self):
         spec = self.root / 'proposal.json'
         spec.write_text(json.dumps(self.spec))

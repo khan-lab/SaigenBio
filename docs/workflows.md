@@ -51,7 +51,7 @@ The following example uses placeholders for existing recorded state and artifact
 
 Stages must be in dependency order. Input artifacts must belong to the declared recorded input states. Context states explain scientific choices and do not automatically become consumed files or data dependency edges.
 
-Publication adds all stage placeholders and the immutable proposal in one revision. `planParents` carries proposed dependencies; no execution actions are invented. Workflow dependency drawing and a dedicated review panel are future UI work; the current canvas displays the planned cards. Approval can be reviewed through `workflow show`.
+Publication adds all stage placeholders and the immutable proposal in one revision. `planParents` carries proposed dependencies; no execution actions are invented. The canvas displays planned cards with workflow identity and method context. Clicking a workflow label opens the saved proposal parameters and evidence. Drawing proposed workflow dependencies and an interactive approval control remain future work; agents record approval through the CLI.
 
 The service calculates a canonical digest over the specification, excluding generated canvas layout, notes, IDs and approval metadata. A changed specification creates a new proposal with its own approval. Existing approved proposals remain historical records and are not overwritten. Graph layout and note edits do not change the proposal.
 

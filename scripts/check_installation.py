@@ -184,7 +184,7 @@ def main():
 
                 mime, page = get("/")
                 require(mime == "text/html" and b"SaigenBio" in page, "Packaged HTML could not be served.")
-                require(all(len(get(asset)[1]) > 100 for asset in ("/geometry.js", "/paths.js", "/api.js", "/reports.js")), "Installed UI modules are missing")
+                require(all(len(get(asset)[1]) > 100 for asset in ("/geometry.js", "/paths.js", "/api.js", "/reports.js", "/workflows.js")), "Installed UI modules are missing")
                 require(len(get("/app.js")[1]) > 1000 and len(get("/style.css")[1]) > 100,
                         "Packaged browser assets are missing.")
                 api_flow = json.loads(get("/api/flow")[1])

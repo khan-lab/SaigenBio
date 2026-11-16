@@ -23,6 +23,12 @@ Use `SAIGEN_NEXTFLOW=/absolute/path/to/nextflow` for a separately installed laun
 
 Static inspection reads source files and queries the engine version; it does not resolve the pipeline DAG or evaluate its scientific code. Source and helper files are hashed and copied into a separate attempt directory. Recorded input bytes and the detected engine version are verified before launch. The pipeline identity returned by inspection can be used in the proposal's `pipeline` field.
 
+## Workflow explanation in the viewer
+
+Each workflow attempt has a canvas label identifying its pipeline name, engine version and status. Clicking it opens a stage's workflow details. Cards show a concise tool/method line; hover includes supplied parameters. Details show proposed or approved parameters as a readable table, recorded input bindings, source identity, approval declaration, engine session and stage evidence/errors. Existing execution commands and output previews remain accessible.
+
+`pipeline.name` is optional. Each stage can optionally provide `method: {"tool": "Python", "summary": "QUAL ≥ 100"}` and a declared `version`. These descriptions are part of the proposal; they do not establish actual execution. Python commands can also be identified from preserved task scripts. The UI explicitly distinguishes script evidence from proposed tool descriptions and marks unrecorded versions. Older proposals fall back to their source directory name and expected-result descriptions; they need no rewrite.
+
 ## Proposal configuration
 
 Use `configuration: {"parameters": {...}}` and a stage `mapping: {"process": "FILTER"}`. Match the qualified process name exactly. Input binding names become Nextflow parameter names and refer to verified input copies. They cannot also be supplied in parameters. Each stage must declare at least one relative expected output path within that task's work directory.

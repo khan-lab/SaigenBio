@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>SaigenBio</title><link rel="stylesheet" href="/style.css"><script defer src="/geometry.js"></script><script defer src="/paths.js"></script><script defer src="/api.js"></script><script defer src="/reports.js"></script><script defer src="/app.js"></script></head><body>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>SaigenBio</title><link rel="stylesheet" href="/style.css"><script defer src="/geometry.js"></script><script defer src="/paths.js"></script><script defer src="/api.js"></script><script defer src="/reports.js"></script><script defer src="/workflows.js"></script><script defer src="/app.js"></script></head><body>
 <header id="topbar">
   <div class="project"><span class="brand">SaigenBio</span><span class="slash">/</span><span class="project-name">Project</span></div>
   <div class="header-actions"><span id="connection" role="status" hidden></span><button id="report-toggle" aria-pressed="false" disabled>Report</button></div>
@@ -7,7 +7,7 @@
 <main id="flow-view">
   <div id="intro"><div class="eyebrow">Your analysis starts here</div><p>Record a starting state with the agent or the SaigenBio CLI.</p></div>
   <div id="viewport" class="editing" aria-label="Analysis flow. Drag the background to pan; scroll to zoom.">
-    <div id="scene"><svg id="edges" aria-label="Analysis actions"></svg><div id="nodes"></div></div>
+    <div id="scene"><svg id="edges" aria-label="Analysis actions"></svg><div id="workflow-labels"></div><div id="nodes"></div></div>
   </div>
   <div id="report-tools" hidden><span id="report-count">Select states in report order</span><button id="report-clear">Clear</button><button id="report-create" disabled>Create PDF</button><button id="report-cancel">Cancel</button><span id="report-status" role="status"></span><button id="report-pdf" hidden>Download PDF</button><button id="report-source" hidden>Source bundle</button></div>
   <div id="edit-tools"><button id="undo" class="outline" disabled>Undo</button><button id="add-state" class="outline">+ State</button></div>

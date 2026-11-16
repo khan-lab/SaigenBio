@@ -47,9 +47,11 @@ def execute(service, proposal_id, revision):
         nodes = dict(current['stageNodes'])
         if any(r['proposalId'] == proposal_id for r in repo.collection(flow)['runs'].values()):
             # Preserve previous results; retries get their own result states.
+            next_y = max(n['y'] for n in flow['states']) + 210
+            offset_y = next_y - min(entity(flow, 'states', i)['y'] for i in nodes.values())
             for key, old in list(nodes.items()):
                 node = copy.deepcopy(entity(flow, 'states', old))
-                node.update(id=uid('st'), status='planned', artifactIds=[], files=[], manifest=[], y=node['y']+210)
+                node.update(id=uid('st'), status='planned', artifactIds=[], files=[], manifest=[], y=node['y']+offset_y)
                 for field in ('workflowEvidence', 'finishedAt', 'plan'):
                     node.pop(field, None)
                 flow['states'].append(node)
