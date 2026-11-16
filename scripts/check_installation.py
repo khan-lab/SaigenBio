@@ -97,7 +97,7 @@ def main():
         report["version"] = run("cli-version", [cli, "--version"]).strip()
 
         workflow_engines = json.loads(run("workflow-foundation", [cli, "workflow", "engines"]))
-        require(workflow_engines == {"engines": [], "executionSupported": False}, "Unexpected workflow foundation capabilities.")
+        require(workflow_engines["executionSupported"] and workflow_engines["engines"][0]["name"] == "nextflow", "Unexpected workflow foundation capabilities.")
         run("workflow-adapter-package", [python, "-c", "from saigen.workflows.adapters.base import WorkflowAdapter, LaunchSpec, EvidenceBatch"])
         report["checks"]["installed_workflow_foundation"] = True
 
@@ -184,7 +184,7 @@ def main():
 
                 mime, page = get("/")
                 require(mime == "text/html" and b"SaigenBio" in page, "Packaged HTML could not be served.")
-                require(all(len(get(asset)[1]) > 100 for asset in ("/geometry.js", "/paths.js", "/api.js", "/reports.js")), "Installed UI modules are missing")
+                require(all(len(get(asset)[1]) > 100 for asset in ("/geometry.js", "/paths.js", "/api.js", "/reports.js", "/workflows.js")), "Installed UI modules are missing")
                 require(len(get("/app.js")[1]) > 1000 and len(get("/style.css")[1]) > 100,
                         "Packaged browser assets are missing.")
                 api_flow = json.loads(get("/api/flow")[1])

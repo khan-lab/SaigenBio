@@ -31,7 +31,7 @@ def document(value):
     canonical(result)
     for key, fields in (("engine", {"name", "version"}), ("pipeline", {"source", "revision", "contentDigest"})):
         obj = result[key]
-        if not isinstance(obj, dict) or set(obj) != fields:
+        if not isinstance(obj, dict) or not fields <= obj.keys() or obj.keys() - fields - ({"name"} if key == "pipeline" else set()):
             raise RecordError(f"Invalid {key} identity")
         for field, entry in obj.items():
             text(entry, field, 20000, True)
@@ -59,8 +59,14 @@ def document(value):
     keys = set()
     # Require topological ordering; no inference or partial publication on invalid DAGs.
     for stage in result["stages"]:
-        if not isinstance(stage, dict) or set(stage) != {"key", "title", "dependsOn", "expectedSummary", "expectedFiles", "mapping"}:
+        if not isinstance(stage, dict) or set(stage) - {"method"} != {"key", "title", "dependsOn", "expectedSummary", "expectedFiles", "mapping"}:
             raise RecordError("Invalid workflow stage")
+        if "method" in stage:
+            method = stage["method"]
+            if not isinstance(method, dict) or not {"tool", "summary"} <= method.keys() or method.keys() - {"tool", "summary", "version"}:
+                raise RecordError("Method needs a declared tool and short summary")
+            for field, value in method.items():
+                text(value, field, 1000, True)
         key = identifier(stage["key"])
         if key in keys or not isinstance(stage["dependsOn"], list) or any(not isinstance(i, str) for i in stage["dependsOn"]) or not set(stage["dependsOn"]) <= keys:
             raise RecordError("Stages must have unique keys and topologically ordered dependencies")

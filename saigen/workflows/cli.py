@@ -7,9 +7,18 @@ from .adapters.registry import engines
 
 
 def register(command):
-    parser = command("workflow", help="Publish and review workflow proposals (execution not yet supported)")
+    parser = command("workflow", help="Publish and review workflow proposals (local Nextflow execution)")
     commands = parser.add_subparsers(dest="workflow_command", required=True)
     commands.add_parser("engines")
+    commands.add_parser("recover")
+    inspect = commands.add_parser("inspect")
+    inspect.add_argument("--engine", required=True)
+    inspect.add_argument("--source", required=True)
+    execute = commands.add_parser("execute")
+    execute.add_argument("proposal")
+    execute.add_argument("--revision", required=True, type=int)
+    status = commands.add_parser("status")
+    status.add_argument("run")
     propose = commands.add_parser("propose")
     propose.add_argument("--spec", required=True)
     propose.add_argument("--revision", required=True, type=int)
@@ -24,7 +33,19 @@ def register(command):
 def dispatch(store, args):
     service = WorkflowService(store)
     if args.workflow_command == "engines":
-        return {"engines": engines(), "executionSupported": False}
+        return {"engines": engines(), "executionSupported": True}
+    if args.workflow_command == "recover":
+        from .execution import recover
+        return recover(store)
+    if args.workflow_command == "inspect":
+        from .adapters.registry import adapter
+        return adapter(args.engine).inspect(args.source, {})
+    if args.workflow_command == "execute":
+        from .execution import execute
+        return execute(service, args.proposal, args.revision)
+    if args.workflow_command == "status":
+        from .repository import run
+        return run(store.flow(), args.run)
     if args.workflow_command == "show":
         return service.show(args.proposal)
     if args.workflow_command == "approve":

@@ -19,5 +19,5 @@ packages = ["saigen", "saigen.workflows", "saigen.workflows.adapters"]
 saigen = ["shell/*.zsh"]
 
 [tool.setuptools.data-files]
-"share/saigenbio/ui" = ["ui/index.html", "ui/app.js", "ui/geometry.js", "ui/paths.js", "ui/api.js", "ui/reports.js", "ui/style.css"]
+"share/saigenbio/ui" = ["ui/index.html", "ui/app.js", "ui/geometry.js", "ui/paths.js", "ui/api.js", "ui/reports.js", "ui/workflows.js", "ui/style.css"]
 "share/saigenbio/skills/saigen-record" = ["skills/saigen-record/SKILL.md"]

@@ -134,3 +134,12 @@ The recorder captures declared files and the launched command. It does not autom
 - Save paths are relative to the current shell directory. Declare scripts with --script; scripts and Git context are captured at save time.
 - Use pause/resume as separate shell submissions for private activity. Command redaction is limited; optional output transcripts are unredacted.
 - A successful wrapped run becomes the next starting state. Use --from to branch elsewhere; this selects a record, not a filesystem checkout.
+
+
+## Existing workflow pipelines
+
+Start from existing data and analysis context; EDA is optional. For pipeline requests, inspect `saigen workflow --help`, `workflow engines`, and local source with `workflow inspect --engine nextflow --source PATH` before searching the web. Static inspection does not resolve a task DAG. The first adapter supports local pipeline directories and one observed task per mapped stage; do not claim general nf-core, resume or many-sample stage support.
+
+Publish the concrete configuration and stage mappings with `workflow propose`, inspect `workflow show`, and obtain the user's agreement. Record that agreement with `workflow approve` using its digest and current project revision, then initiate `workflow execute` with the new revision. Approval never runs the pipeline by itself. Flexible mode still respects this explicit workflow review checkpoint. The user need not enter these commands; the agent performs them after agreement. Changing source, engine version, inputs or configuration requires inspection and a matching new proposal. Do not amend launch parameters outside the approved proposal.
+
+Execution is foreground and stage cards finalize at engine exit. Check `workflow status`, recorded output contents, and failure/unknown states before claiming success. `workflow recover` can mark lost-supervisor runs unknown; it cannot infer completion. Unsupported dynamic, cached or multi-task mappings must be reported honestly rather than replaced with invented stage success. Engines and dependencies are installed only within the user's authorized scope; SaigenBio does not install them automatically.

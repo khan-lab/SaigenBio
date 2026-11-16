@@ -99,10 +99,10 @@ class Handler(BaseHTTPRequestHandler):
                 if mime not in {"image/svg+xml","image/png","image/jpeg","image/webp","image/gif"}:
                     mime="text/plain; charset=utf-8"
                 return self.reply(200,source.read_bytes(),mime,{"Content-Security-Policy":"sandbox; default-src 'none'; style-src 'unsafe-inline'"})
-            routes={"/":"index.html","/app.js":"app.js","/geometry.js":"geometry.js","/paths.js":"paths.js","/api.js":"api.js","/reports.js":"reports.js","/style.css":"style.css"}
+            routes={"/":"index.html","/app.js":"app.js","/geometry.js":"geometry.js","/paths.js":"paths.js","/api.js":"api.js","/reports.js":"reports.js","/workflows.js":"workflows.js","/style.css":"style.css"}
             if path in routes:
                 name=routes[path]
-                mime={"api.js":"text/javascript; charset=utf-8","reports.js":"text/javascript; charset=utf-8","geometry.js":"text/javascript; charset=utf-8","paths.js":"text/javascript; charset=utf-8","index.html":"text/html; charset=utf-8","app.js":"text/javascript; charset=utf-8","style.css":"text/css; charset=utf-8"}[name]
+                mime={"workflows.js":"text/javascript; charset=utf-8","api.js":"text/javascript; charset=utf-8","reports.js":"text/javascript; charset=utf-8","geometry.js":"text/javascript; charset=utf-8","paths.js":"text/javascript; charset=utf-8","index.html":"text/html; charset=utf-8","app.js":"text/javascript; charset=utf-8","style.css":"text/css; charset=utf-8"}[name]
                 return self.reply(200,(UI/name).read_bytes(),mime,{"Content-Security-Policy":"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'"})
             self.reply(404,{"error":"Not found"})
         except (RecordError,OSError) as exc: self.reply(409,{"error":str(exc)})
