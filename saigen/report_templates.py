@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from .store import RecordError
+from .records import RecordError
 
 DEFAULT_TEMPLATE = "analysis-notebook"
 TEMPLATES = {

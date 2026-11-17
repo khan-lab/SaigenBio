@@ -1,6 +1,6 @@
 """Shared service for future CLI, UI and MCP clients. Engine launches are delegated to execution.py."""
 import copy
-from ..store import RecordError, entity, now, uid, text, plan_removal_error
+from ..records import RecordError, entity, now, uid, text, plan_removal_error
 from . import repository as repo
 from .models import document, execution_digest, canonical
 

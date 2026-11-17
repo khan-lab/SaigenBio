@@ -3,7 +3,7 @@ import copy
 import hashlib
 import json
 from pathlib import Path
-from .store import RecordError, now, text, ID
+from .records import RecordError, now, text, ID
 
 
 def evidence_fingerprint(spec, sources, files):

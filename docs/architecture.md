@@ -1,17 +1,44 @@
 # Architecture and provenance
 
-SaigenBio has a Python standard-library backend and a plain HTML/CSS/JavaScript viewer. A shared agent skill guides analysis recording; agent-specific setup only supplies instruction locations and project context.
+SaigenBio consists of **Saigen Engine** (Python), **Saigen Skills** (agent instructions and references), and **Saigen Canvas** (HTML/CSS/JavaScript). They ship in one repository and one installation. Codex, Claude Code and other external tools are the AI agents; Saigen Skills guides those tools rather than providing another agent.
 
 ## Components
 
 ```text
-Agent or human -> CLI -> project records and preserved artifacts
-                              ^
-                              |
-                         local HTTP server <-> browser
+Researcher -> existing AI agent -> follows Saigen Skills
+                       |
+                       v
+                      CLI --------> Saigen Engine services -> records/artifacts
+                                           ^
+                                           |
+Researcher -> Saigen Canvas -> local HTTP API
 ```
 
 The browser edits annotations and layout and requests reports. It does not execute scientific commands. The CLI executes explicitly supplied commands; it is not a sandbox or an automatic dependency detector.
+
+Skills guide behavior, Engine enforces record integrity, and Canvas presents records and submits changes through the API. CLI and HTTP are Engine interfaces. Workspace setup is an Engine service that installs Skills and saves context. These component names do not imply separate distributions or require renaming the existing directories.
+
+### Module map and dependency direction
+
+| Component / area | Files | Owns |
+| --- | --- | --- |
+| Engine: record rules | `saigen/records.py` | Shared errors, identifiers, field validation, graph validation and plan-removal guards; no storage or transport dependencies |
+| Engine: persistence | `saigen/store.py` | SQLite transactions, revisions, events, artifact capture and checked mutations; calls record rules before committing |
+| Engine: execution | `saigen/runner.py`, `sessions.py`, `shell_session.py` | Observed attempts and shell checkpoints, using record rules and store transactions |
+| Engine: reconstruction | `saigen/reconstruction.py` | Evidence proposals, preservation, review and archives |
+| Engine: workflows | `saigen/workflows/` | Proposal models, approval, execution and adapters; adapters never write records directly |
+| Engine: reporting | `saigen/reports.py`, `report_templates.py` | Frozen evidence and rendering; templates compose presentation without reading analysis files |
+| Engine: Canvas response models | `saigen/views.py` | Derived table previews, removal capabilities and public history; display enrichment never updates stored facts |
+| Engine: interfaces | `saigen/__main__.py`, `server.py` | CLI dispatch and HTTP transport/security; invoke shared services and persistence operations |
+| Engine: setup | `saigen/onboarding.py`, `terminal.py`, `workspace.py` | Interview, instruction installation and workspace configuration |
+| Skills | `skills/saigen-record/SKILL.md`, `references/` | Agent behavior, evidence interpretation and CLI usage |
+| Canvas | `ui/` | Browser presentation, navigation and interaction through the HTTP API |
+
+Dependencies point from interfaces to services and then to storage and record rules. `records.py` imports only the standard library; it must not import the CLI, server, storage, Canvas, or Skills. Services do not import HTTP handlers or CLI dispatch. Skills use the CLI contract; Canvas uses the HTTP contract. The existing setup interview starts the viewer through a lazy server import after setup, so Engine is not yet a fully isolated library package.
+
+The initial dependency review identified shared rules embedded in `store.py` and derived Canvas responses built inside HTTP handlers. Those responsibilities now live in `records.py` and `views.py`. Store continues to re-export its previous record helpers so existing integrations keep the same exception classes and imports. CLI and HTTP mutations still call the same checked store/service operations; Canvas removal capabilities are descriptive and cannot bypass deletion guards. Database schema, CLI commands, HTTP response shapes, skill locations, and packaged asset paths remain compatible.
+
+Further splitting should follow concrete maintenance needs: storage still owns artifact capture and checked edit operations, while CLI dispatch and browser coordination remain broad modules. Extract a responsibility with its callers and tests in a focused PR, preserve existing entry points, and verify the installed package before changing directories. Component naming alone is not a reason to move every file.
 
 ## Storage
 
@@ -76,14 +103,15 @@ Shell capture observes top-level zsh submissions, not arbitrary child commands o
 
 | Component | Owns | Boundary |
 | --- | --- | --- |
-| Recorder (`store.py`, `runner.py`, `sessions.py`) | Execution facts, artifact identity, revisions and provenance | An annotation cannot manufacture an observed execution |
-| Canvas (`ui/`) | Rendering, navigation, layout, plans and annotations | Scientific commands run through the CLI, outside browser rendering |
-| Agent integration (`workspace.py`, `skills/`) | Portable instructions and workspace context | Instructions express user choices; the host enforces access |
+| Saigen Engine (`records.py`, `store.py`, services) | Record rules, execution facts, artifact identity, revisions and provenance | An annotation cannot manufacture an observed execution |
+| Saigen Canvas (`ui/`) | Rendering, navigation, layout, plans and annotations | Scientific commands run through the CLI, outside browser rendering |
+| Saigen Skills (`skills/`) | Portable instructions and supporting references | External AI agents follow guidance; host permissions still apply |
+| Workspace integration (`workspace.py`) | Skill installation and workspace context | Setup preserves user choices and instructions |
 | Initialization (`onboarding.py`, `terminal.py`) | Setup interview, terminal presentation and viewer settings | Reuse workspace preparation; do not duplicate recording logic |
 | Reporting (`reports.py`) | Fixed-revision evidence exports | Rendering must not silently rerun scientific analysis |
 | Agent host | Filesystem, network and command access | SaigenBio does not change global host permission settings |
 
-`__main__.py` dispatches CLI requests; `server.py` translates HTTP requests into recorder operations. Keep validation of record invariants in the recorder so every entry point gets the same protections. Terminal controls belong in `terminal.py`; configuration preparation and conflict detection belong in `workspace.py`.
+`__main__.py` dispatches CLI requests; `server.py` translates HTTP requests into recorder operations. `views.py` builds derived Canvas responses without writing to the store. Keep validation of record invariants in shared Engine rules and services so every entry point gets the same protections. Terminal controls belong in `terminal.py`; configuration preparation and conflict detection belong in `workspace.py`.
 
 Keep three locations distinct: a scientific workspace contains records and inputs; an installed application supplies executable code; a source checkout contains development changes. Test installations and biological analyses in external directories. A workspace's analysis permission does not identify a writable application checkout.
 

@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 import shlex
 from . import __version__
-from .store import RecordError, entity, now, text, uid
+from .records import RecordError, entity, now, text, uid
 from .runner import code_info
 
 SECRET = re.compile(

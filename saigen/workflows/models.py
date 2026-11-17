@@ -2,7 +2,7 @@
 import copy
 import hashlib
 import json
-from ..store import ID, RecordError, text, names
+from ..records import ID, RecordError, text, names
 
 
 def canonical(value):

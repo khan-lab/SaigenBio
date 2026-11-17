@@ -5,7 +5,8 @@ import os
 from pathlib import Path
 import sys
 from . import __version__
-from .store import Store, RecordError
+from .store import Store
+from .records import RecordError
 from .runner import run, code_info
 from .server import serve
 from . import sessions

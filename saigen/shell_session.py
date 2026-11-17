@@ -14,7 +14,7 @@ import tempfile
 import termios
 import tty
 import time
-from .store import RecordError
+from .records import RecordError
 from . import sessions
 
 def _forward(store, ident, argv, env, output_path=None):
