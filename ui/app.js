@@ -8,6 +8,8 @@ const copy = value => JSON.parse(JSON.stringify(value));
 const {W,H}=SaigenGeometry;
 let flow={schemaVersion:1,project:"Project",revision:0,states:[],actions:[],artifacts:{},revisions:[]};
 let history=[],selected=null,connecting=null,editorContext=null;
+const storyCache=new Map(),storyPending=new Set();
+let explanationContext=null;
 let reports;
 let camera={x:70,y:90,scale:.72},savedCamera=null,drag=null,hoverTimer=null,hideTimer=null,toastTimer=null;
 let ready=false,busy=false,token="",allEvents=[],artifactRequest=0;
@@ -38,7 +40,7 @@ async function loadHistory(){
 }
 function redraw(){
  hidePopups();render();
- if(!$("#detail-view").hidden){const top=$("#detail-view").scrollTop;const n=getState(decodeURIComponent(location.hash.slice(7)));if(n)renderDetail(n);else location.hash="";$("#detail-view").scrollTop=top;}
+ if(!$("#detail-view").hidden){const top=$("#detail-view").scrollTop;const id=decodeURIComponent(location.hash.slice(7)),n=getState(id)||storyCache.get(id)?.state;if(n)renderDetail(n);else location.hash="";$("#detail-view").scrollTop=top;}
  $("#intro").hidden=flow.states.length>0;
  $(".project-name").textContent=flow.project;
 }
@@ -285,11 +287,6 @@ function showAction(id,anchor){
 function fileRows(items){
  return items.map(a=>'<li><button class="filename mono file-button" data-artifact="'+esc(a.id)+'">'+esc(a.name)+'</button><span class="file-type">'+esc(a.storage==="reference"?"External reference":(a.size/1024).toFixed(1)+" KB")+'</span></li>').join("");
 }
-function stateHistory(n){
- const related=new Set([n.id,...flow.actions.filter(a=>a.to===n.id).map(a=>a.id)]);
- const events=allEvents.filter(e=>e.payload.state?.id===n.id||e.payload.action?.to===n.id||e.payload.operations?.some(op=>related.has(op.id))||e.payload.actions?.some(id=>related.has(id)));
- return '<details class="history"><summary>History · '+events.length+' records</summary>'+events.slice().reverse().map(e=>'<details class="history-event"><summary>'+esc(e.kind.replaceAll("."," "))+' · '+esc(e.actor)+' <span>'+esc(shortDate(e.at))+'</span></summary><pre>'+esc(JSON.stringify(displayRecord(e.payload),null,2))+'</pre></details>').join("")+'</details>';
-}
 function terminalMarkup(activity){
  if(!activity)return "";
  const commands=activity.commands||[];
@@ -314,19 +311,40 @@ function planMarkup(n){
    (parents.length?'<h3>Planned inputs</h3><p>'+parents.map(s=>'<button class="source-link" data-open="'+esc(s.id)+'">'+esc(s.title)+'</button>').join(" + ")+'</p>':"")+
    (p.expectedFiles?.length?'<h3>Expected files</h3><ul class="files">'+p.expectedFiles.map(f=>'<li>'+esc(f)+'</li>').join("")+'</ul>':"")+'</section>';
 }
+function loadStory(id){
+ const key=id+":"+flow.revision;
+ if(storyPending.has(key)||storyCache.get(id)?.revision===flow.revision)return;
+ storyPending.add(key);
+ request("/api/story/"+encodeURIComponent(id)).then(story=>{
+  if(story.revision!==flow.revision)return;
+  storyCache.set(id,story);
+  if(location.hash==="#state/"+encodeURIComponent(id)){const top=$("#detail-view").scrollTop;renderDetail(getState(id)||story.state);$("#detail-view").scrollTop=top;}
+ }).catch(error=>{if(location.hash==="#state/"+encodeURIComponent(id)){toast(error.message);$("#detail-content").innerHTML='<button class="back" id="failed-story-back">← Back to flow</button><p>'+esc(error.message)+'</p>';$("#failed-story-back").onclick=()=>location.hash='';}}).finally(()=>storyPending.delete(key));
+}
 function renderDetail(n){
  if(!n)return;
- const incoming=flow.actions.filter(a=>a.to===n.id),plot=firstPlot(n),pending=["running","planned"].includes(n.status);
+ const story=storyCache.get(n.id)?.revision===flow.revision?storyCache.get(n.id):null;
+ loadStory(n.id);
+ const incoming=story?.actions||flow.actions.filter(a=>a.to===n.id),plot=firstPlot(n),pending=["running","planned"].includes(n.status);
  let visual="";
  if(plot)visual='<figure class="figure"><div class="figure-title">'+esc(plot.name)+'</div>'+imagePreview(n,"detail-image")+'<figcaption>Preserved output · SHA-256 '+esc(plot.sha256.slice(0,16))+'…</figcaption></figure>';
  else if(firstTable(n))visual=tableMarkup(n);
  else if(pending)visual='<div class="run-display"><div class="preview-label">'+esc(n.status)+'</div><p>'+(n.status==="running"?"The recorder is waiting for the command to finish.":"This is a plan. No command has been executed.")+'</p></div>';
  else if(["failed","cancelled","unknown"].includes(n.status))visual='<div class="run-display"><div class="preview-label">'+esc(n.status)+'</div><p>'+esc(displayText(incoming.find(a=>a.error)?.error||"This attempt did not produce a verified completion record."))+'</p></div>';
  const origin=n.status==="planned"?(n.origin==="manual"?"This is a human-supplied plan. No execution has been recorded.":"This is an agent-proposed plan. No execution has been recorded."):n.origin==="terminal"?"Selected files were preserved at this checkpoint. Command order records session activity; it does not establish file dependencies.":n.status==="imported"?"Existing files were recorded. Their earlier execution is not established by this import.":"Execution status was observed by the recorder. A successful command does not establish scientific correctness.";
- $("#detail-content").innerHTML='<nav class="detail-nav"><button class="back" id="back-flow">← Back to flow</button><button class="quiet" id="edit-detail">Edit state</button></nav><div class="detail-kicker">'+esc(n.status)+'</div><h1 class="detail-title">'+esc(n.title)+'</h1><p class="detail-note">'+esc(n.status==="planned"?n.expectedSummary||n.note:n.note)+'</p><div class="detail-meta"><span class="mono">'+(n.codeRef?"Code "+esc(n.codeRef.slice(0,12))+(n.code?.dirty?" + working changes":""):"Code version not recorded")+'</span><span>Recorded by '+esc(n.writtenBy)+'</span><span>'+esc(shortDate(stamp(n)))+'</span></div>'+visual+
- SaigenDetails.create({getFlow:()=>flow,escape:esc,fileRows,displayCommand,displayRecord,displayText,shortDate,workflows}).render(n)+
- (n.plan?'<details class="detail-section detail-card"><summary>Original plan</summary>'+planMarkup(n)+'</details>':"")+
- '<p class="origin-note">'+esc(origin)+'</p>'+terminalMarkup(n.terminal)+stateHistory(n);
+ $("#detail-content").innerHTML='<nav class="detail-nav"><button class="back" id="back-flow">← Back to flow</button><div class="detail-tools"><button class="quiet" id="add-explanation">Add explanation</button>'+(story?.archive?'':'<button class="quiet" id="edit-detail">Edit state</button>')+'</div></nav><div class="detail-kicker">'+esc(story?.archive?.label||n.status)+'</div><h1 class="detail-title">'+esc(n.title)+'</h1><nav class="story-jumps" aria-label="Result detail sections">'+['What','Why','Who','When'].map(label=>'<button data-story-jump="'+label+'">'+label+'</button>').join('')+'</nav>'+
+ SaigenStory.create({escape:esc,shortDate,fileRows}).render(story,visual,flow.artifacts)+
+ (story?.entries.length?'<button class="quiet" id="correct-explanation">Correct a recorded explanation</button>':'')+
+ SaigenDetails.create({getFlow:()=>story?.archive?{...flow,actions:story.actions}:flow,escape:esc,fileRows,displayCommand,displayRecord,displayText,shortDate,workflows}).render(n)+
+ (n.plan?'<details class="detail-section detail-card"><summary>Plan at execution start</summary>'+planMarkup(n)+'</details>':"")+
+ '<p class="origin-note">'+esc(origin)+'</p>'+terminalMarkup(n.terminal);
+ $("#detail-content").querySelectorAll("[data-story-jump]").forEach(button=>button.onclick=()=>$('[aria-label="'+button.dataset.storyJump+'"]').scrollIntoView({block:"start",behavior:"smooth"}));
+ $("#add-explanation").onclick=()=>openExplanation(n,story);
+ $("#correct-explanation")?.addEventListener("click",()=>openExplanation(n,story,true));
+ $("#detail-content").querySelectorAll("[data-event-link],[data-entry-link]").forEach(link=>link.onclick=event=>{
+  event.preventDefault();const target=document.getElementById(link.dataset.eventLink?'event-'+link.dataset.eventLink:'explanation-'+link.dataset.entryLink);
+  if(target){for(let parent=target.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;target.querySelector('details')?.setAttribute('open','');target.scrollIntoView({block:'center'});}else if(link.dataset.eventLink){const record=allEvents.find(e=>String(e.revision)===link.dataset.eventLink);if(record){$("#artifact-title").textContent='Recorded event '+record.revision;$("#artifact-body").innerHTML='<pre>'+esc(JSON.stringify(displayRecord(record),null,2))+'</pre>';$("#artifact-dialog").showModal();}else toast('Referenced event is unavailable.');}
+ });
 
  $("#detail-content").querySelectorAll("[data-reconstruction]").forEach(button=>button.onclick=async()=>{
   button.disabled=true;
@@ -335,7 +353,7 @@ function renderDetail(n){
  });
  bindOriginalCommands($("#detail-content"));
  $("#back-flow").onclick=()=>location.hash="";
- $("#edit-detail").onclick=()=>openStateEditor(n);
+ $("#edit-detail")?.addEventListener("click",()=>openStateEditor(n));
  $("#detail-content").querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openState(b.dataset.open));
  $("#detail-content").querySelectorAll("[data-artifact]").forEach(b=>b.onclick=()=>openArtifact(b.dataset.artifact));
 }
@@ -353,13 +371,65 @@ async function openArtifact(id){
  }catch(error){if(requestId===artifactRequest)$("#artifact-body").textContent=error.message;}
 }
 
-function openState(id){if(!getState(id))return;hidePopups();if($("#detail-view").hidden)savedCamera={...camera};location.hash="state/"+encodeURIComponent(id);}
+function openState(id){hidePopups();if($("#detail-view").hidden)savedCamera={...camera};location.hash="state/"+encodeURIComponent(id);}
 function route(){
  hidePopups();const match=location.hash.match(/^#state\/(.+)$/);let n;
- try{n=match?getState(decodeURIComponent(match[1])):null;}catch{}
+ try{const id=match?decodeURIComponent(match[1]):null;n=id?(getState(id)||storyCache.get(id)?.state):null;
+ if(id&&!n){$("#flow-view").hidden=true;$("#detail-view").hidden=false;$("#detail-content").textContent="Loading recorded state…";loadStory(id);return;}}catch{}
  if(n){$("#flow-view").hidden=true;$("#detail-view").hidden=false;$("#selection-tools").hidden=true;renderDetail(n);$("#detail-view").scrollTop=0;}
  else{$("#flow-view").hidden=false;$("#detail-view").hidden=true;if(savedCamera){camera={...savedCamera};savedCamera=null;}applyCamera();}
 }
+function openExplanation(n,story,correct=false,previous=null){
+ const entries=(story?.entries||[]).filter(e=>!e.supersededBy);
+ if(correct&&!previous)previous=entries[0];
+ if(correct&&!previous){toast("No current explanation to correct.");return;}
+ explanationContext={state:n.id,previous,revision:flow.revision};
+ const e=previous||{},select=(name,label,values,value)=>'<label class="field">'+label+'<select name="'+name+'">'+values.map(([v,t])=>'<option value="'+esc(v)+'"'+(v===value?' selected':'')+'>'+esc(t)+'</option>').join('')+'</select></label>';
+ const participant=p=>'<div class="story-form-row">'+field('participantName','Name (declared)',p.name||'')+select('participantRole','Role',['proposer','contributor','approver','executor','recorder'].map(v=>[v,v]),p.role||'contributor')+'<button type="button" data-remove-row>Remove</button></div>';
+ const alternative=a=>'<div class="story-form-row">'+field('alternativeOption','Alternative',a.option||'')+field('alternativeReason','Reason / tradeoff',a.reason||'')+'<button type="button" data-remove-row>Remove</button></div>';
+ const kinds=[['question','Scientific question'],['finding','Finding'],['interpretation','Interpretation'],['limitation','Limitation'],['decision','Decision'],['replacement','Replacement relationship']];
+ $("#explanation-title").textContent=correct?'Correct explanation':'Add explanation';
+ $("#explanation-error").textContent='';
+ $("#explanation-fields").innerHTML=(correct?select('correction','Statement to correct',entries.map(v=>[v.id,v.summary]),e.id):'')+
+ select('kind','Type',correct?kinds.filter(([kind])=>kind===e.kind):kinds,e.kind||'interpretation')+
+ field('summary','Summary',e.summary||'','textarea')+
+ select('action','Applies to', [['','Whole state'],...(story?.actions||[]).map(a=>[a.id,a.label||a.id])],e.actions?.[0]||'')+
+ '<div id="decision-fields">'+field('rationale','Rationale',e.rationale||'','textarea')+field('agreementBasis','Basis for agreement',e.agreementBasis||'','textarea')+'<h3>Alternatives considered</h3><div id="alternative-rows">'+(e.alternatives||[]).map(alternative).join('')+'</div><button type="button" id="add-alternative">+ Alternative</button></div>'+
+ '<div id="replacement-fields">'+select('replacementStateId','Replacement result or proposal',flow.states.filter(s=>s.id!==n.id).map(s=>[s.id,s.title]),e.replacementStateId||'')+'<p class="edit-notice">Use the summary to explain why. This link preserves the original attempt and its status.</p></div>'+
+ select('evidenceKind','Evidence classification',[['reported','Reported statement'],['direct','Direct evidence'],['inferred','Inferred explanation'],['unresolved','Unresolved']],e.evidenceKind||'reported')+
+ '<h3>Supporting evidence</h3>'+(e.evidence?.length?'<p>Existing references will be retained.</p>':'')+
+ select('source','Add a source',[['','None'],...Object.values(flow.artifacts).map(a=>['artifact:'+a.id,a.name]),...flow.states.map(s=>['state:'+s.id,s.title])],'')+field('location','Source location (lines, section, or panel)','','input','For example: lines 42–45')+
+ field('historicalAt','Historical date, if known (with timezone)',e.historicalAt||'','input','2026-11-17T10:00:00+04:00')+
+ '<h3>Participants (optional, declared)</h3><div id="participant-rows">'+(e.participants||[]).map(participant).join('')+'</div><button type="button" id="add-participant">+ Participant</button>';
+ const update=()=>{const kind=$("#explanation-fields [name=kind]").value;$("#decision-fields").hidden=kind!=='decision';$("#replacement-fields").hidden=kind!=='replacement';};
+ update();$("#explanation-fields [name=kind]").onchange=update;
+ $("#explanation-fields [name=correction]")?.addEventListener('change',event=>openExplanation(n,story,true,entries.find(v=>v.id===event.target.value)));
+ $("#add-alternative").onclick=()=>$("#alternative-rows").insertAdjacentHTML('beforeend',alternative({}));
+ $("#add-participant").onclick=()=>$("#participant-rows").insertAdjacentHTML('beforeend',participant({}));
+ $("#explanation-fields").onclick=event=>{if(event.target.matches('[data-remove-row]'))event.target.closest('.story-form-row').remove();};
+ if(!$("#explanation-dialog").open)$("#explanation-dialog").showModal();
+}
+$("#open-archive").onclick=async()=>{
+ try{const archived=await request('/api/archive');$("#archive-body").innerHTML=archived.length?archived.map(n=>'<p><button class="source-link" data-archive-state="'+esc(n.id)+'">'+esc(n.title)+'</button> · '+esc(n.label)+'</p>').join(''):'<p>No archived work recorded.</p>';
+ $("#archive-body").querySelectorAll('[data-archive-state]').forEach(button=>button.onclick=()=>{$("#archive-dialog").close();openState(button.dataset.archiveState);});$("#archive-dialog").showModal();}catch(error){toast(error.message);}
+};
+$("#close-archive").onclick=()=>$("#archive-dialog").close();
+$("#close-explanation").onclick=()=>$("#explanation-dialog").close();
+$("#explanation-form").onsubmit=async event=>{
+ event.preventDefault();const data=new FormData(event.target),context=explanationContext,kind=data.get('kind');
+ const entry={kind,states:context.previous?.states||[context.state],summary:data.get('summary'),evidenceKind:data.get('evidenceKind'),
+  actions:context.previous?.actions?.length>1?context.previous.actions:(data.get('action')?[data.get('action')]:[]),
+  participants:data.getAll('participantName').map((name,index)=>({name,role:data.getAll('participantRole')[index]})).filter(p=>p.name.trim()),evidence:[...(context.previous?.evidence||[])]};
+ if(kind==='decision'){entry.rationale=data.get('rationale');entry.agreementBasis=data.get('agreementBasis');entry.alternatives=data.getAll('alternativeOption').map((option,index)=>({option,reason:data.getAll('alternativeReason')[index]}));}
+ if(kind==='replacement')entry.replacementStateId=data.get('replacementStateId');
+ if(data.get('historicalAt'))entry.historicalAt=data.get('historicalAt');
+ if(context.previous)entry.supersedes=context.previous.id;
+ if(data.get('source')){const [type,id]=data.get('source').split(':');entry.evidence.push({type,id,location:data.get('location')});}
+ const submit=event.target.querySelector('[type=submit]');submit.disabled=true;
+ try{const next=await request('/api/explanations',{entry,revision:context.revision});$("#explanation-dialog").close();await accept(next);toast('Explanation recorded. Earlier history preserved.');}
+ catch(error){$("#explanation-error").textContent=error.message;}
+ finally{submit.disabled=false;}
+};
 function field(name,label,value="",type="input",placeholder=""){
  const c=type==="textarea"?'<textarea name="'+name+'" rows="3" placeholder="'+esc(placeholder)+'">'+esc(value)+'</textarea>':'<input name="'+name+'" value="'+esc(value)+'" '+(name==="title"||name==="label"?"required":"")+' maxlength="'+(name==="title"?80:1000)+'" placeholder="'+esc(placeholder)+'">';
  return '<label class="field">'+label+c+'</label>';

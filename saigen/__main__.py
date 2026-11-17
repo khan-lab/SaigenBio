@@ -16,7 +16,7 @@ def main():
     parser.add_argument("--version",action="version",version="%(prog)s "+__version__)
     parser.add_argument("--project",default=os.environ.get("SAIGEN_PROJECT","."))
     parser.add_argument("--actor",default=None,help="Declared identity; not authenticated")
-    sub=parser.add_subparsers(dest="command",required=True,metavar="{workflow,annotate,acquire,setup,init,snapshot,plan,run,serve,flow,history,recover,export,start,save,pause,resume,status,commands}")
+    sub=parser.add_subparsers(dest="command",required=True,metavar="{workflow,reconstruct,explain,story,annotate,acquire,setup,init,snapshot,plan,remove-plan,run,serve,flow,history,recover,export,start,save,pause,resume,status,commands}")
     def command(name,**kwargs):
         p=sub.add_parser(name,**kwargs)
         p.add_argument("--project",default=argparse.SUPPRESS)
@@ -50,6 +50,11 @@ def main():
     p.add_argument("--file",help="Proposal JSON file")
     p.add_argument("--id")
     p.add_argument("--revision",type=int)
+    p=command("explain",help="Append an attributed statement, decision, correction or replacement link")
+    p.add_argument("--file",required=True,help="Explanation JSON document")
+    p.add_argument("--revision",type=int,required=True)
+    p=command("story",help="Read What, Why, Who and When evidence for a current or archived state")
+    p.add_argument("state")
     p=command("snapshot");p.add_argument("--title",required=True);p.add_argument("--id");p.add_argument("--note",default="");p.add_argument("--file",action="append",default=[]);p.add_argument("--reference",action="append",default=[]);p.add_argument("--source-repo")
     p=command("plan",help="Publish an expected result without an execution edge")
     p.add_argument("--title",required=True);p.add_argument("--id")
@@ -104,6 +109,12 @@ def main():
             from .onboarding import initialize
             return initialize(store,existing_project=args.existing_project,history_files=args.history_file,name=args.name,agents=args.agent,port=args.port,
                               permission=args.permissions,ui_development=args.ui_development,non_interactive=args.non_interactive,start_viewer=args.start_viewer)
+        elif args.command=="explain":
+            from .story import append
+            result=append(store,json.loads(Path(args.file).read_text()),args.revision,args.actor or "AI agent")
+        elif args.command=="story":
+            from .story import read
+            result=read(store,args.state)
         elif args.command=="reconstruct":
             from .reconstruction import propose, review, show
             if args.operation=="show":result=show(store,args.id)

@@ -9,12 +9,14 @@ const ui=context.SaigenDetails.create({...deps,workflows,fileRows:items=>items.m
 const n={id:'result',status:'completed',artifactIds:['output']};
 flow.actions=[{id:'a',to:'result',from:['source'],inputArtifacts:['input','code'],command:'python filter.py',code:{scriptArtifacts:['code']}}];
 let html=ui.render(n);
-assert.ok(html.indexOf('>Inputs<')<html.indexOf('>Method<'));
+assert.ok(html.indexOf('>How<')<html.indexOf('>Method<'));
+assert.ok(html.indexOf('>Where<')<html.indexOf('>Inputs<'));
+assert.ok(html.indexOf('>Inputs<')<html.indexOf('>Outputs<'));
 assert.ok(html.indexOf('>Method<')<html.indexOf('>Outputs<'));
 assert.ok(html.includes('Original calls'));
 assert.ok(html.includes('calls.csv'));
 assert.ok(html.includes('Method explanation not recorded.'));
-assert.ok(!html.slice(0,html.indexOf('>Method<')).includes('filter.py'));
+assert.ok(!html.slice(html.indexOf('>Where<'),html.indexOf('>Outputs<')).includes('filter.py'));
 flow.actions[0].code.explanation={summary:'Keep DP ≥ 5 <script>',recordedBy:'Agent',excerpts:[{artifactId:'code',start:2,end:3,text:'if a < b:\n    keep()'}]};
 html=ui.render(n);
 assert.ok(html.includes('Keep DP ≥ 5 &lt;script&gt;'));

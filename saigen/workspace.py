@@ -134,10 +134,9 @@ def prepare(workspace, agent, project, inputs, viewer=None, permission=None, ui_
         context["uiDevelopment"] = ui_development
     skill_text = source.read_text()
     files = instruction_files(agents, skill_text, permission, ui_development)
-    reference=source.parent/"references/reconstruction.md"
-    if reference.is_file():
+    for reference in sorted((source.parent/"references").glob("*.md")):
         for selected_agent in agents:
-            files[ADAPTERS[selected_agent][0]+"/saigen-record/references/reconstruction.md"]=reference.read_text()
+            files[ADAPTERS[selected_agent][0]+"/saigen-record/references/"+reference.name]=reference.read_text()
     files["saigen-workspace.json"] = json.dumps(context, indent=2) + "\n"
     old_files = instruction_files(old_agents, skill_text, previous.get("permissionMode"), previous.get("uiDevelopment"))
     instruction_names = {ADAPTERS[a][1] for a in agents}

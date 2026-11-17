@@ -79,7 +79,13 @@ class Store:
             flow = json.loads(db.execute("SELECT data FROM project WHERE id=1").fetchone()[0])
             if expected is not None and (type(expected) is not int or flow["revision"] != expected):
                 raise Conflict("The project changed. Review the latest state and save again.")
+            prior_ids = {n['id'] for n in flow['states']}
+            explained_ids = {sid for e in flow.get('explanations', {}).values()
+                             for sid in e['states'] + ([e['replacementStateId']] if e.get('replacementStateId') else [])
+                             + [r['id'] for r in e.get('evidence', []) if r['type'] == 'state']}
             payload, inverse = change(flow)
+            if kind != 'flow.undo' and ({n['id'] for n in flow['states']} - prior_ids) & explained_ids:
+                raise RecordError('State ID belongs to existing explanation history; use a new ID')
             validate(flow)
             flow["revision"] += 1
             at = now()
@@ -205,7 +211,7 @@ class Store:
             if existing:
                 n["x"], n["y"] = existing["x"], existing["y"]
                 n["plan"] = {k:copy.deepcopy(existing[k]) for k in
-                             ("title","expectedSummary","planDetails","planRequires","note","expectedFiles","planParents","createdAt") if k in existing}
+                             ("title","expectedSummary","planDetails","planRequires","note","expectedFiles","planParents","createdAt","writtenBy","origin") if k in existing}
                 f["states"][f["states"].index(existing)] = n
             else:
                 f["states"].append(n)
