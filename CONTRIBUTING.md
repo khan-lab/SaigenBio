@@ -66,7 +66,7 @@ The checker creates an external directory under ../SaigenBio-lab/installations/ 
 
 A successful package check does not prove an AI agent will follow the skill. Use the [agent acceptance procedure](docs/agent-testing.md) for that.
 
-For reconstruction changes, run the [installed mixed-source journey](docs/verification.md#reports-and-acceptance-checks). It exercises selective review, later evidence, explicit verification outcomes and frozen reports using synthetic data outside the source checkout. Keep live-agent acceptance evidence separate from deterministic integration results.
+For reconstruction changes, run the [installed mixed-source journey](docs/agent-testing.md#installed-reconstruction-journey). It exercises selective review, later evidence, explicit verification outcomes and frozen reports using synthetic data outside the source checkout. Keep live-agent acceptance evidence separate from deterministic integration results.
 
 Real Nextflow checks are opt-in: see [local workflow integration](docs/nextflow.md#reproduce-the-real-test). Supply a new external destination under SaigenBio-lab and keep downloaded data, pipeline work directories and engine installs there.
 

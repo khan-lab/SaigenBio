@@ -68,17 +68,6 @@ saigen verify compare --id ATTEMPT --revision REV
 
 If its supervisor was lost, `verify recover --id ATTEMPT --revision REV` checks supervisor liveness and records uncertainty rather than inferring success. If preparation never reached an observed attempt, inspect the recorded failure/gap and start a separate attempt. `verify cancel --id PROPOSAL --reason "..." --revision REV` prevents future executions; it does not terminate an active process.
 
-## Reports and acceptance checks
+## Reports
 
 Reports preserve selected explanations, review context, verification configurations, observed attempt metadata and comparisons. Cited narrative and verification files are copied to `evidence/` in the frozen source bundle, capped at 5 MB per file and 20 MB total. Unavailable or oversized evidence retains hash/reference metadata and a warning. Original source contents are copied unchanged; select excerpts during reconstruction when full conversations are inappropriate.
-
-Reproduce the deterministic mixed-source journey using an isolated installed runtime:
-
-```sh
-python3 -B scripts/check_installation.py --agent codex --destination /outside/new-install
-python3 -B scripts/check_reconstruction.py \
-  --python /outside/new-install/runtime/bin/python \
-  --destination /outside/new-reconstruction-trial --with-quarto
-```
-
-The fixture contains contradictory chat/log thresholds, missing historical code identity, selective review, later evidence, matching numeric data with different bytes, a differing result, a failed attempt and all three report templates. All source hashes are checked. This deterministic test complements a separate fresh-agent acceptance trial; it does not establish behavior for every AI agent.
