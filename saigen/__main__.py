@@ -16,7 +16,7 @@ def main():
     parser.add_argument("--version",action="version",version="%(prog)s "+__version__)
     parser.add_argument("--project",default=os.environ.get("SAIGEN_PROJECT","."))
     parser.add_argument("--actor",default=None,help="Declared identity; not authenticated")
-    sub=parser.add_subparsers(dest="command",required=True,metavar="{workflow,reconstruct,explain,story,annotate,acquire,setup,init,snapshot,plan,remove-plan,run,serve,flow,history,recover,export,start,save,pause,resume,status,commands}")
+    sub=parser.add_subparsers(dest="command",required=True,metavar="{verify,workflow,reconstruct,explain,story,annotate,acquire,setup,init,snapshot,plan,remove-plan,run,serve,flow,history,recover,export,start,save,pause,resume,status,commands}")
     def command(name,**kwargs):
         p=sub.add_parser(name,**kwargs)
         p.add_argument("--project",default=argparse.SUPPRESS)
@@ -24,6 +24,8 @@ def main():
         return p
     from .workflows.cli import register as register_workflows
     register_workflows(command)
+    from .verification_cli import register as register_verification
+    register_verification(command)
     p=command("setup",help="Prepare a workspace for an AI agent")
     p.add_argument("--workspace",required=True)
     p.add_argument("--agent",choices=["codex","claude","opencode","antigravity"],action="append",required=True)
@@ -50,6 +52,10 @@ def main():
     p.add_argument("--file",help="Proposal JSON file")
     p.add_argument("--id")
     p.add_argument("--revision",type=int)
+    p.add_argument("--state",help="Review one reconstruction state")
+    p.add_argument("--connection",help="Review one reconstruction relationship")
+    p.add_argument("--evidence",help="Review one additional-evidence item")
+    p.add_argument("--reason",default="",help="Reason for the review decision")
     p=command("explain",help="Append an attributed statement, decision, correction or replacement link")
     p.add_argument("--file",required=True,help="Explanation JSON document")
     p.add_argument("--revision",type=int,required=True)
@@ -99,7 +105,10 @@ def main():
             raise RecordError("Use this command inside the project's saigen start session")
         return ident
     try:
-        if args.command=="workflow":
+        if args.command=="verify":
+            from .verification_cli import dispatch
+            result=dispatch(store,args)
+        elif args.command=="workflow":
             from .workflows.cli import dispatch
             result=dispatch(store,args)
         elif args.command=="setup":
@@ -122,7 +131,7 @@ def main():
             elif args.operation=="propose":
                 if not args.file:raise RecordError("Supply --file")
                 result=propose(store,json.loads(Path(args.file).read_text()),args.revision,args.actor or "AI agent")
-            else:result=review(store,args.id,args.operation,args.revision,args.actor or "Human")
+            else:result=review(store,args.id,args.operation,args.revision,args.actor or "Human",state_id=args.state,connection_id=args.connection,evidence_id=args.evidence,reason=args.reason)
         elif args.command=="annotate":
             f=store.flow()
             sid=sessions.resolve_state(f,args.state)

@@ -93,13 +93,13 @@ class Handler(BaseHTTPRequestHandler):
                 if mime not in {"image/svg+xml","image/png","image/jpeg","image/webp","image/gif"}:
                     mime="text/plain; charset=utf-8"
                 return self.reply(200,source.read_bytes(),mime,{"Content-Security-Policy":"sandbox; default-src 'none'; style-src 'unsafe-inline'"})
-            routes={"/story.js":"story.js","/details.js":"details.js","/":"index.html","/app.js":"app.js","/geometry.js":"geometry.js","/paths.js":"paths.js","/api.js":"api.js","/reports.js":"reports.js","/workflows.js":"workflows.js","/style.css":"style.css"}
+            routes={"/reconstruction.js":"reconstruction.js","/verification.js":"verification.js","/story.js":"story.js","/details.js":"details.js","/":"index.html","/app.js":"app.js","/geometry.js":"geometry.js","/paths.js":"paths.js","/api.js":"api.js","/reports.js":"reports.js","/workflows.js":"workflows.js","/style.css":"style.css"}
             assets={"logo.svg":"image/svg+xml","logo-512.png":"image/png","logo-1024.png":"image/png","favicon.svg":"image/svg+xml","favicon-16.png":"image/png","favicon-32.png":"image/png","favicon-48.png":"image/png","favicon.ico":"image/vnd.microsoft.icon"}
             routes.update({"/assets/"+name:"assets/"+name for name in assets})
             routes["/favicon.ico"]="assets/favicon.ico"
             if path in routes:
                 name=routes[path]
-                mime={"story.js":"text/javascript; charset=utf-8","details.js":"text/javascript; charset=utf-8","workflows.js":"text/javascript; charset=utf-8","api.js":"text/javascript; charset=utf-8","reports.js":"text/javascript; charset=utf-8","geometry.js":"text/javascript; charset=utf-8","paths.js":"text/javascript; charset=utf-8","index.html":"text/html; charset=utf-8","app.js":"text/javascript; charset=utf-8","style.css":"text/css; charset=utf-8"}.get(name,assets.get(Path(name).name))
+                mime={"reconstruction.js":"text/javascript; charset=utf-8","verification.js":"text/javascript; charset=utf-8","story.js":"text/javascript; charset=utf-8","details.js":"text/javascript; charset=utf-8","workflows.js":"text/javascript; charset=utf-8","api.js":"text/javascript; charset=utf-8","reports.js":"text/javascript; charset=utf-8","geometry.js":"text/javascript; charset=utf-8","paths.js":"text/javascript; charset=utf-8","index.html":"text/html; charset=utf-8","app.js":"text/javascript; charset=utf-8","style.css":"text/css; charset=utf-8"}.get(name,assets.get(Path(name).name))
                 return self.reply(200,(UI/name).read_bytes(),mime,{"Content-Security-Policy":"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'"})
             self.reply(404,{"error":"Not found"})
         except (RecordError,OSError) as exc: self.reply(409,{"error":str(exc)})
@@ -122,6 +122,10 @@ class Handler(BaseHTTPRequestHandler):
                 from .story import append
                 flow=append(self.store,body.get("entry"),body["revision"],"Human")
                 return self.reply(200,self.server.canvas.with_removal_options(flow))
+            if path.startswith("/api/verifications/") and path.endswith("/approve") and len(path.split("/"))==5:
+                from .verification import approve
+                flow=approve(self.store,path.split("/")[3],body.get("digest"),body["revision"],"Human")
+                return self.reply(200,self.server.canvas.with_removal_options(flow))
             if path=="/api/reports":
                 options={"template":body["template"]} if "template" in body else {}
                 return self.reply(202,self.server.reports.start(body.get("selected"),body["revision"],**options))
@@ -131,7 +135,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(202,self.server.reports.render_preview(path.split("/")[3],body["revision"]))
             if path.startswith("/api/reconstructions/") and len(path.split("/"))==5:
                 from .reconstruction import review
-                review(self.store,path.split("/")[3],path.split("/")[4],body["revision"],"Human")
+                review(self.store,path.split("/")[3],path.split("/")[4],body["revision"],"Human",state_id=body.get("stateId"),connection_id=body.get("connectionId"),evidence_id=body.get("evidenceId"),reason=body.get("reason",""))
                 flow=self.store.flow()
             elif path=="/api/edit": flow=self.store.edit(body.get("operations"),body["revision"])
             elif path.startswith("/api/workflows/") and path.endswith("/cancel") and len(path.split("/")) == 5:

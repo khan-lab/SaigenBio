@@ -13,6 +13,7 @@ from pathlib import Path
 from xml.etree import ElementTree
 from .records import RecordError, Conflict, now
 from .report_templates import DEFAULT_TEMPLATE, template_definition, compose, literal, code_cell, table_cell
+from .report_evidence import collect as collect_evidence, describe as describe_evidence
 
 FORMATS = {"image/svg+xml": ".svg", "image/png": ".png", "image/jpeg": ".jpg"}
 RENDER = ["quarto", "render", "report.qmd", "--to", "typst", "--output", "report.pdf", "--no-execute"]
@@ -136,6 +137,7 @@ class Reports:
         states = {n["id"]: n for n in flow["states"]}
         selected = [states[x] for x in selection]
         actions = [a for a in flow["actions"] if a["to"] in selection]
+        evidence_context,evidence_ids=collect_evidence(flow,selection,self.store.events())
         # Alias paths recursively in all exported records and free text. File contents
         # are preserved unchanged, so their own embedded labels may contain paths.
         roots = {str(self.store.root): "{project}"}
@@ -173,7 +175,7 @@ class Reports:
             return re.sub(r'(?<![\w}:/])(?:/[\w.~+%:@=-]+){2,}', lambda m: "{external}/" + Path(m.group()).name, value)
         def txt(v):
             return literal(clean(v))
-        ids = set()
+        ids = set(evidence_ids)
         for n in selected:
             ids.update(n.get("artifactIds", []))
             ids.update(e["artifactId"] for e in n.get("reconstruction",{}).get("evidence",[]))
@@ -197,7 +199,7 @@ class Reports:
                                    [p for n in selected for p in n.get("planParents", [])])
         context = [{"id": key, "title": states[key]["title"]}
                    for key in parent_ids if key not in selection and key in states]
-        snapshot = clean({"project": flow["project"], "revision": flow["revision"], "selectedOrder": selection, "states": selected, "actions": actions, "artifacts": records, "omittedParentContext": context, "workflows": workflow_context})
+        snapshot = clean({"project": flow["project"], "revision": flow["revision"], "selectedOrder": selection, "states": selected, "actions": actions, "artifacts": records, "omittedParentContext": context, "workflows": workflow_context, **evidence_context})
         manifest = {"schemaVersion": 1, "createdAt": now(), "projectRevision": flow["revision"], "selectedOrder": selection, "orderMeaning": "Presentation order only; no execution or dependency order inferred", "renderer": "Quarto with bundled Typst", "renderArgv": RENDER, "figures": [], "artifacts": {}, "warnings": [], "files": {}}
         model = {"project": clean(flow["project"]), "revision": flow["revision"], "states": [], "warnings": manifest["warnings"]}
         manifest["template"] = template
@@ -210,6 +212,7 @@ class Reports:
             state = {"title": clean(n["title"]), "status": n.get("status", "unknown"),
                      **{key: [] for key in ("overview", "method_summary", "scripts", "excerpts", "commands", "execution", "previews", "inventory", "environment")}}
             model["states"].append(state)
+            describe_evidence(state,n,clean(evidence_context),txt,code_cell)
             body = state["overview"]
             if n.get('reconstruction'):
                 body += ['Reconstruction · '+txt(n['reconstruction']['review'])+' · historical execution was not observed by SaigenBio.', '']
@@ -394,6 +397,27 @@ class Reports:
                 state["environment"] += code_cell(json.dumps(clean({"status": action.get("status"), "exitCode": action.get("exitCode"), "recordedBy": action.get("writtenBy"), "performedBy": action.get("performedBy"), "startedAt": action.get("startedAt"), "finishedAt": action.get("finishedAt"), "code": {k:v for k,v in action.get("code", {}).items() if k != "explanation"}, "environment": action.get("environment", {})}), indent=2), "json")
             if not incoming:
                 state["environment"] += ["No wrapped execution record; software environment not established.", ""]
+        snapshot['evidenceFiles']={}
+        evidence_size=0
+        for aid in sorted(evidence_ids):
+            ar=records.get(aid)
+            try:
+                if not ar or ar.get('storage')!='preserved':raise RecordError('preserved evidence unavailable')
+                name='evidence/'+ar['sha256']
+                if name in manifest['files']:
+                    snapshot['evidenceFiles'][aid]=name
+                    continue
+                if ar['size']>5*1024*1024 or evidence_size+ar['size']>20*1024*1024:raise RecordError('evidence exceeds report copy limits; hash/reference retained')
+                path=self.store.artifact_path(ar)
+                data=path.read_bytes()
+                if sha(data)!=ar['sha256']:raise RecordError('evidence changed during copy')
+                (folder/'evidence').mkdir(exist_ok=True)
+                (folder/name).write_bytes(data)
+                manifest['files'][name]=sha(data)
+                snapshot['evidenceFiles'][aid]=name
+                evidence_size+=len(data)
+            except (RecordError,OSError) as exc:
+                manifest['warnings'].append('Evidence '+aid+': '+str(exc))
         manifest["artifacts"] = {aid: clean({k:ar.get(k) for k in ("name", "sha256", "size", "role", "storage", "sourcePath")}) for aid,ar in records.items()}
         source, outline = compose(model, template)
         manifest["outline"] = outline

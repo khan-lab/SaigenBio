@@ -18,14 +18,15 @@ def evidence_fingerprint(spec, sources, files):
 
     states = {s['id']: encoded([sorted(files[s['id']]), citations(s['evidence'])])
               for s in spec['states']}
-    connections = sorted(encoded([sorted(states[s] for s in c['from']),
-                                  states[c['to']], citations(c['evidence'])])
+    connections = sorted(encoded([sorted(states.get(s,'existing:'+s) for s in c['from']),
+                                  states.get(c['to'], 'existing:'+c['to']), citations(c['evidence'])])
                          for c in spec['connections'])
-    return hashlib.sha256(encoded([sorted(states.values()), connections]).encode()).hexdigest()
+    additions=sorted(encoded([u['targetType'],u['targetId'],sorted(encoded([sources[e['source']],e['location'],e['kind'],e['note']]) for e in u['evidence'])]) for u in spec.get('addEvidence',[]))
+    return hashlib.sha256(encoded([sorted(states.values()), connections, additions]).encode()).hexdigest()
 
 
 def stored_fingerprint(proposal, flow):
-    if proposal.get('evidenceFingerprint'):
+    if proposal.get('evidenceFingerprint') and proposal.get('fingerprintVersion') == 2:
         return proposal['evidenceFingerprint']
     # Compatibility with proposals recorded before evidence-based deduplication.
     artifacts = flow['artifacts']
@@ -39,6 +40,13 @@ def stored_fingerprint(proposal, flow):
          for sid in proposal['states']})
 
 
+def state_identity(node, artifacts):
+    if not node.get('artifactIds'):return None
+    hashes=sorted(artifacts[aid]['sha256'] for aid in node['artifactIds'])
+    citations=sorted((artifacts[e['artifactId']]['sha256'],e['location']) for e in node.get('reconstruction',{}).get('evidence',[]))
+    return json.dumps([hashes,citations],sort_keys=True)
+
+
 def show(store, ident=None):
     """Return current review records alongside the immutable submitted proposal."""
     flow = store.flow()
@@ -49,11 +57,11 @@ def show(store, ident=None):
         proposals = {ident: proposals[ident]}
     for proposal in proposals.values():
         archived = proposal['status'] == 'rejected'
-        states = proposal.get('archivedStates', []) if archived else flow['states']
-        actions = proposal.get('archivedActions', []) if archived else flow['actions']
+        states = flow['states'] + proposal.get('archivedStates', [])
+        actions = flow['actions'] + proposal.get('archivedActions', [])
         proposal['projectRevision'] = flow['revision']
         proposal['graph'] = {
-            'source': 'archive' if archived else 'current',
+            'source': 'archive' if archived else 'mixed' if proposal.get('archivedStates') or proposal.get('archivedActions') else 'current',
             'states': [s for s in states if s['id'] in proposal['states']],
             'actions': [a for a in actions if a['id'] in proposal['actions']],
         }
@@ -77,15 +85,21 @@ def setup_context(root, existing, sources):
 
 def propose(store, spec, revision, actor):
     required = {'id','sources','states','connections'}
-    if not isinstance(spec,dict) or not required <= spec.keys() or spec.keys() - required - {'relation'}:raise RecordError('Proposal needs id, sources, states, connections and optional relation')
+    if not isinstance(spec,dict) or not required <= spec.keys() or spec.keys() - required - {'relation','existingStates','addEvidence'}:raise RecordError('Proposal needs id, sources, states, connections and optional relation')
     relation = spec.get('relation')
     if 'relation' in spec:
         if not isinstance(relation,dict) or set(relation) != {'proposal','kind','reason'}:raise RecordError('Relation needs proposal, kind and reason')
-        if not isinstance(relation['proposal'],str) or not isinstance(relation['kind'],str) or relation['kind'] not in {'revision','alternative'}:raise RecordError('Choose a revision or alternative relation')
+        if not isinstance(relation['proposal'],str) or not isinstance(relation['kind'],str) or relation['kind'] not in {'revision','alternative','extension'}:raise RecordError('Choose a revision or alternative relation')
         text(relation['reason'], 'relation reason', 4000, True)
     ident=spec['id']
     if not isinstance(ident,str) or not ID.fullmatch(ident):raise RecordError('Invalid reconstruction ID')
-    if not isinstance(spec['states'],list) or not 1<=len(spec['states'])<=50:raise RecordError('Supply 1–50 states')
+    if not isinstance(spec['states'],list) or not 0<=len(spec['states'])<=50:raise RecordError('Supply up to 50 states')
+    existing=spec.get('existingStates',[])
+    if not isinstance(existing,list) or len(existing)>50 or any(not isinstance(v,str) for v in existing) or len(set(existing))!=len(existing):raise RecordError('Supply up to 50 unique existing state IDs')
+    additions=spec.get('addEvidence',[])
+    if not isinstance(additions,list) or len(additions)>100:raise RecordError('Supply up to 100 evidence additions')
+    if (existing or additions) and (not relation or relation['kind']!='extension'):raise RecordError('Existing targets require an explicit extension relation')
+    if not spec['states'] and not spec['connections'] and not additions:raise RecordError('Proposal has no new work')
     if not isinstance(spec['sources'],dict) or not spec['sources']:raise RecordError('Supply named evidence sources')
     if len(spec['sources'])>50 or any(not isinstance(k,str) or not isinstance(v,str) for k,v in spec['sources'].items()):raise RecordError('Supply up to 50 named source paths')
     if not isinstance(spec['connections'],list) or len(spec['connections'])>100:raise RecordError('Supply up to 100 connections')
@@ -119,8 +133,13 @@ def propose(store, spec, revision, actor):
         records.update({v['id']:v for v in files})
     actions=[]
     for index,item in enumerate(spec['connections']):
-        if not item['from'] or any(v not in ids for v in item['from']) or item['to'] not in ids:raise RecordError('Connections must refer to proposal states')
+        if not item['from'] or any(v not in ids|set(existing) for v in item['from']) or item['to'] not in ids|set(existing):raise RecordError('Connections must refer to proposal states or explicit existing states')
         actions.append({'id':ident+'_'+str(index),'from':item['from'],'to':item['to'],'label':text(item.get('label','Reconstructed relationship'),'label',160,True),'command':text(item.get('command',''),'reported command'),'status':'unknown','origin':'reconstructed','writtenBy':actor,'performedBy':None,'createdAt':now(),'reconstruction':{'id':ident,'evidence':evidence(item['evidence']),'review':'draft'},'methodSource':'Reconstructed relationship; execution was not observed by SaigenBio.'})
+    updates=[]
+    for index,item in enumerate(additions):
+        if not isinstance(item,dict) or set(item)!={'targetType','targetId','evidence'} or item['targetType'] not in ('state','action') or not isinstance(item['targetId'],str):raise RecordError('Evidence addition needs targetType, targetId and evidence')
+        updates.append({'id':ident+'_e'+str(index),'targetType':item['targetType'],'targetId':item['targetId'],
+                        'evidence':evidence(item['evidence']),'review':'draft','writtenBy':actor,'createdAt':now(),'proposalId':ident})
     fingerprint = evidence_fingerprint(spec,
         {k: v['sha256'] for k, v in source_records.items()},
         {n['id']: [records[aid]['sha256'] for aid in n['artifactIds']] for n in nodes})
@@ -135,32 +154,33 @@ def propose(store, spec, revision, actor):
         duplicates = [p['id'] for p in proposals.values() if stored_fingerprint(p, flow) == fingerprint]
         if duplicates and (not relation or relation['proposal'] not in duplicates):
             raise RecordError('This evidence graph was already imported: ' + ', '.join(duplicates) + '. Inspect it, or explicitly link a revision or alternative with a reason.')
+        artifacts={**flow['artifacts'],**{v['id']:v for v in records.values()}}
+        previous_nodes=flow['states']+[n for p in proposals.values() for n in p.get('archivedStates',[])]
+        for node in nodes:
+            key=state_identity(node,artifacts)
+            match=next((n for n in previous_nodes if n.get('reconstruction') and key and state_identity(n,artifacts)==key),None)
+            if match and (not relation or relation['kind'] not in {'alternative','revision'} or relation['proposal']!=match['reconstruction']['id']):
+                raise RecordError('Existing evidence matches state '+match['id']+'; reference it explicitly or explain an intentional alternative')
+        for sid in existing:
+            node=next((n for n in flow['states'] if n['id']==sid),None)
+            if not node or node.get('reconstruction',{}).get('review','accepted')!='accepted':raise RecordError('Existing state must be present and accepted')
+        for update in updates:
+            group='states' if update['targetType']=='state' else 'actions'
+            target=next((v for v in flow[group] if v['id']==update['targetId']),None)
+            if not target or target.get('reconstruction',{}).get('review','accepted')!='accepted':raise RecordError('Evidence target must be present and accepted')
+            old=target.get('reconstruction',{}).get('evidence',[])+[e for u in target.get('evidenceUpdates',[]) for e in u['evidence']]
+            def signature(e):return (flow['artifacts'].get(e['artifactId'],records.get(e['source'],{})).get('sha256'),e['location'],e['kind'],e['note'])
+            if all(signature(e) in {signature(v) for v in old} for e in update['evidence']):raise RecordError('This evidence is already attached to the target')
         if ids.intersection({n['id'] for n in flow['states']} | {sid for p in proposals.values() for sid in p['states']}):raise RecordError('A state ID already exists')
         flow['artifacts'].update({v['id']:v for v in records.values()})
         for node in nodes:node['y']=len(flow['states'])*190
         flow['states'].extend(nodes);flow['actions'].extend(actions)
-        proposals[ident]={'id':ident,'status':'draft','writtenBy':actor,'createdAt':now(),'evidenceFingerprint':fingerprint,'spec':copy.deepcopy(spec),'states':[n['id'] for n in nodes],'actions':[a['id'] for a in actions],'sources':{k:v['id'] for k,v in source_records.items()}}
+        proposals[ident]={'id':ident,'status':'draft','writtenBy':actor,'createdAt':now(),'evidenceFingerprint':fingerprint,'fingerprintVersion':2,'spec':copy.deepcopy(spec),'states':[n['id'] for n in nodes],'actions':[a['id'] for a in actions],'sources':{k:v['id'] for k,v in source_records.items()},'evidenceUpdates':updates,'existingStates':list(existing)}
         return {'reconstruction':proposals[ident]},None
     return store.update('reconstruction.proposed',actor,change,revision)
 
 
-def review(store, ident, decision, revision, actor):
-    if decision not in {'accept','reject'}:raise RecordError('Choose accept or reject')
-    def change(flow):
-        proposal=flow.get('reconstructions',{}).get(ident)
-        if not proposal or proposal['status']!='draft':raise RecordError('No pending reconstruction with this ID')
-        if decision=='reject':
-            ids=set(proposal['states']);aids=set(proposal['actions'])
-            if any(ids.intersection(p['spec'].get('contextStateIds',[])) for p in flow.get('workflows',{}).get('proposals',{}).values()):raise RecordError('A workflow references this reconstruction')
-            if any(a['id'] not in aids and (a['to'] in ids or ids.intersection(a['from'])) for a in flow['actions']) or any(n['id'] not in ids and ids.intersection(n.get('planParents',[])) for n in flow['states']):raise RecordError('Other work depends on this reconstruction')
-            proposal['archivedStates']=[n for n in flow['states'] if n['id'] in ids]
-            proposal['archivedActions']=[a for a in flow['actions'] if a['id'] in aids]
-            flow['states']=[n for n in flow['states'] if n['id'] not in ids];flow['actions']=[a for a in flow['actions'] if a['id'] not in aids]
-        else:
-            for item in flow['states']+flow['actions']:
-                if item.get('reconstruction',{}).get('id')==ident:
-                    item['reconstruction'].update(review='accepted',reviewedBy=actor,reviewedAt=now())
-                    if item in flow['states']:item['origin']='reconstructed'
-        proposal.update(status='accepted' if decision=='accept' else 'rejected',reviewedBy=actor,reviewedAt=now())
-        return {'reconstruction':proposal},None
-    return store.update('reconstruction.reviewed',actor,change,revision)
+def review(store, ident, decision, revision, actor, *, state_id=None, connection_id=None, evidence_id=None, reason=''):
+    from .reconstruction_review import review as review_items
+    return review_items(store, ident, decision, revision, actor, state_id=state_id,
+                        connection_id=connection_id, evidence_id=evidence_id, reason=reason)

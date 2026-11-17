@@ -27,6 +27,8 @@ Skills guide behavior, Engine enforces record integrity, and Canvas presents rec
 | Engine: execution | `saigen/runner.py`, `sessions.py`, `shell_session.py` | Observed attempts and shell checkpoints, using record rules and store transactions |
 | Engine: reconstruction | `saigen/reconstruction.py` | Evidence proposals, preservation, review and archives |
 | Engine: result history | `saigen/story.py` | Attributed statements, decisions, corrections, replacement links and timeline view models |
+| Engine: reconstruction review | `saigen/reconstruction_review.py` | Selective state/relationship review, additive evidence acceptance and archives |
+| Engine: verification | `saigen/verification.py`, `comparison.py` | Digest-bound proposals, isolated attempts and deterministic artifact comparisons |
 | Engine: workflows | `saigen/workflows/` | Proposal models, approval, execution and adapters; adapters never write records directly |
 | Engine: reporting | `saigen/reports.py`, `report_templates.py` | Frozen evidence and rendering; templates compose presentation without reading analysis files |
 | Engine: Canvas response models | `saigen/views.py` | Derived table previews, removal capabilities and public history; display enrichment never updates stored facts |
@@ -154,3 +156,9 @@ The optional workflow foundation uses existing recorder transactions for proposa
 `story.py` owns optional, revision-checked explanation declarations, append-only corrections, participant roles, evidence validation and replacement links. It prepares the What/Why/Who/When response from records and explicitly associated events, including archived work. Recorded dates and declared historical dates remain separate. Storage reserves IDs referenced by explanation history against unrelated reuse; undo can restore removed plans. Existing workspaces need no migration, and absent rationale or attribution remains absent. A replacement link does not change an execution status or perform workflow cancellation.
 
 `ui/story.js` presents that Engine response. `details.js` retains supporting How/Where content; `app.js` coordinates fetching, explanation forms and archive navigation. CLI and HTTP explanation writes share the same service. Skills guide evidence interpretation and do not authorize execution through a story entry. See [result and decision history](result-history.md) for commands and compatibility behavior.
+
+### Selective review and verification
+
+Reconstruction extensions explicitly reference accepted state IDs and append reviewable evidence to existing states/actions. `reconstruction_review.py` checks endpoint acceptance, preserves accepted items and archives rejected draft items. Legacy whole-proposal commands review remaining drafts. Fingerprint versioning retains duplicate detection for older records; partial graph imports also check strong preserved-state identity. Semantic reconciliation across different excerpts remains a deliberate user/agent decision.
+
+`verification.py` owns configuration validation, approval digests, runtime/artifact identity, attempt reservation, recovery and comparison records. `comparison.py` computes exact byte and explicitly scoped keyed numeric results without recorder writes. `verification_cli.py` provides transport; HTTP can record approval but cannot launch the command. `ui/reconstruction.js` and `ui/verification.js` present these records through explicit factories. Reports use `report_evidence.py` to select narrative, review and verification context; frozen source bundles include cited source copies within documented limits. See the [review design](reconstruction-review.md) and [verification guide](verification.md).
