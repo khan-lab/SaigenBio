@@ -15,6 +15,8 @@ For files already present, use snapshot and describe unknown upstream provenance
 
 ## Publish progress and plans
 
+When recording a wrapped run or acquisition, supply `--explanation` with a short plain-English description of the actual method, important operations, and relevant parameter values. Keep `--reason` for why the analysis is being done. When selected source lines help explain the method, use repeatable `--script-excerpt PATH:START:END` before `-- COMMAND` (1–40 lines per excerpt). Select meaningful lines, not an arbitrary prefix; the recorder preserves the script and attributes your explanation and selection. Full scripts remain available. Do not invent explanations for historical records or treat workflow-wide input bindings as observed per-stage file consumption. Workflow stages already support a declared `method.summary`; keep it specific to each stage.
+
 For ordinary execution, provide `saigen run --expect "…"` with a brief description of the output. The wrapper publishes a running placeholder and animated incoming edge before launching the command; completion attaches actual results to that same state.
 
 Name each planned result with a short, concrete title, usually 3–6 words. Describe the result the user will inspect, such as "Spatial QC summary" or "Spatial cluster map". Keep method names when they distinguish results. The canvas supplies the status: leave "Planned", approval reminders, and "REVIEW CHECKPOINT" out of titles.

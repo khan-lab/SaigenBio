@@ -94,3 +94,19 @@ summary{cursor:pointer;padding:9px 0}.history-event{margin:8px 0;padding:0 12px;
 .workflow-details h2{font-size:18px;margin:10px 0}.workflow-details h3{font-size:12px;margin:20px 0 7px}.workflow-details p,.workflow-details small{overflow-wrap:anywhere;white-space:pre-wrap}.workflow-details small{display:block;color:var(--muted)}.workflow-parameters{border-collapse:collapse;width:100%;font-size:12px}.workflow-parameters th,.workflow-parameters td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;overflow-wrap:anywhere}.workflow-parameters th{font-weight:500;width:35%}.workflow-digest{font:11px ui-monospace,monospace;color:var(--muted)}
 
 .workflow-executor{white-space:normal;line-height:1.25;max-height:24px;overflow:hidden;color:var(--ink)}.workflow-setting{font-size:9px;margin-top:1px}.state .workflow-executor{flex-shrink:0}
+
+/* Readable state details; files, method and execution have distinct scopes. */
+.detail-card{background:#fff;border:1px solid var(--line);border-radius:8px;padding:24px;margin-top:24px;min-width:0}
+.detail-card h2.section-label{font-size:12px;font-weight:600;color:#52694f;margin:0 0 18px}
+.detail-card h3{font-size:13px;font-weight:600;margin:20px 0 10px}
+.detail-card p{font-size:13px;line-height:1.7;overflow-wrap:anywhere}
+.detail-card .detail-empty{color:#788171;font-size:12px}
+.method-summary{max-width:72ch;color:#294e43}
+.method-facts{display:grid;grid-template-columns:minmax(100px,1fr) minmax(0,3fr);gap:10px 20px;font-size:13px;line-height:1.6}
+.method-facts dt{color:#718067;overflow-wrap:anywhere}.method-facts dd{margin:0;overflow-wrap:anywhere}
+.detail-sources{display:flex;flex-wrap:wrap;gap:10px}.command-details{margin-top:22px}
+.detail-card summary{cursor:pointer;font-size:13px;color:#486547;padding:4px 0}
+.command-details pre{font:12px/1.7 ui-monospace,monospace;background:#f4f6ef;padding:16px;white-space:pre-wrap;overflow-wrap:anywhere;border-radius:5px}
+.expected-files{font:12px/1.8 ui-monospace,monospace;padding-left:20px;overflow-wrap:anywhere}
+.detail-card .files li{flex-wrap:wrap}.detail-card .file-button{overflow-wrap:anywhere;text-align:left;max-width:100%}
+@media(max-width:700px){.detail-card{padding:18px}.method-facts{grid-template-columns:minmax(75px,1fr) minmax(0,2fr);gap:8px 12px}}

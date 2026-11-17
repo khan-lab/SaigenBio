@@ -25,6 +25,28 @@ class RecorderTests(unittest.TestCase):
         self.parent=self.store.snapshot("Input",[self.input],ident="input")
     def execute(self,code,outputs=(),**kw):
         return run(self.store,["input"],"Attempt",[sys.executable,"-c",code],outputs=outputs,**kw)
+    def test_method_explanation_and_preserved_excerpt(self):
+        script=self.root/"method.py"
+        script.write_text("# purpose\nvalue = 5\nprint(value)\n")
+        result=self.execute("pass",explanation="Apply the depth threshold",scripts=["method.py"],script_excerpts=["method.py:2:3"])
+        action=next(a for a in self.store.flow()["actions"] if a["to"]==result["state"])
+        self.assertEqual(len(action["code"]["scriptArtifacts"]),1)
+        explanation=action["code"]["explanation"]
+        self.assertEqual(explanation["summary"],"Apply the depth threshold")
+        self.assertEqual(explanation["recordedBy"],"AI agent")
+        excerpt=explanation["excerpts"][0]
+        self.assertEqual(excerpt["text"],"value = 5\nprint(value)")
+        script.write_text("changed")
+        artifact=self.store.artifact(excerpt["artifactId"])
+        self.assertIn(excerpt["text"],self.store.artifact_path(artifact).read_text())
+
+    def test_invalid_excerpt_never_starts_command(self):
+        script=self.root/"method.py";script.write_text("pass\n")
+        for selection in ("method.py:0:1","method.py:1:2","method.py:1:41","malformed"):
+            with self.subTest(selection=selection), self.assertRaises(RecordError):
+                self.execute("raise Exception('must not run')",script_excerpts=[selection])
+        self.assertEqual(self.store.flow()["actions"],[])
+
     def test_root_acquisition_preserves_provenance_and_preview(self):
         result=run(self.store,[],"Dataset",[sys.executable,"-c",
             "import pathlib;pathlib.Path('samples.tsv').write_text('sample\\tgeneration\\nA\\t5000\\n')"],

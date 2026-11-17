@@ -12,7 +12,7 @@ import sys
 import threading
 import time
 from . import __version__
-from .store import Store, RecordError, digest, now, entity
+from .store import Store, RecordError, digest, now, entity, text
 
 def code_info(folder):
     folder=Path(folder).resolve()
@@ -37,7 +37,7 @@ def local_output(work, name):
 
 def run(store, parents, title, command, *, inputs=(), outputs=(), actor="AI agent",
         reason="", label=None, ident=None, stdout_name=None, source_repo=None,
-        scripts=(), environment_files=(), tool_versions=(), planned=None, expected="", acquisition=False, source_urls=()):
+        scripts=(), environment_files=(), tool_versions=(), planned=None, expected="", acquisition=False, source_urls=(), explanation="", script_excerpts=()):
     if not command or not all(isinstance(v,str) and v for v in command):
         raise RecordError("Supply a command after --")
     outputs=list(outputs)
@@ -58,14 +58,32 @@ def run(store, parents, title, command, *, inputs=(), outputs=(), actor="AI agen
     code=code_info(source_repo or store.root)
     extra_records=[]
     explicit=list(scripts)
+    selections=[]
+    explanation=text(explanation,"explanation",4000)
+    for spec in script_excerpts:
+        try:
+            filename, first, last = spec.rsplit(":", 2)
+            first, last = int(first), int(last)
+        except (ValueError, AttributeError):
+            raise RecordError("Script excerpt must be PATH:START:END") from None
+        if first < 1 or last < first or last-first >= 40:
+            raise RecordError("Select 1–40 script lines using positive line numbers")
+        path=Path(filename).expanduser()
+        path=(path if path.is_absolute() else store.root/path).resolve()
+        explicit.append(str(path))
+        selections.append((path,first,last))
     for argument in command:
         path=Path(argument)
         candidate=path if path.is_absolute() else store.root/path
         if path.suffix.lower() in {".py",".r",".sh",".pl",".jl",".ipynb"} and candidate.is_file():
             explicit.append(str(candidate))
-    for spec in dict.fromkeys(explicit):
+    seen_scripts=set()
+    for spec in explicit:
         p=Path(spec).expanduser()
-        extra_records.append(store.capture(p if p.is_absolute() else store.root/p,role="code"))
+        p=(p if p.is_absolute() else store.root/p).resolve()
+        if p not in seen_scripts:
+            extra_records.append(store.capture(p,role="code"))
+            seen_scripts.add(p)
     for spec in environment_files:
         p=Path(spec).expanduser()
         extra_records.append(store.capture(p if p.is_absolute() else store.root/p,role="environment"))
@@ -73,6 +91,19 @@ def run(store, parents, title, command, *, inputs=(), outputs=(), actor="AI agen
     environment={"platform":platform.platform(),"recorderPython":sys.version,"recorderVersion":__version__,"executable":executable,"executableSha256":digest(executable) if executable and Path(executable).is_file() else None,"declaredToolVersions":list(tool_versions),"capturedFiles":[r["id"] for r in extra_records]}
     environment["declaredSourceURLs"]=list(source_urls)
     code["scriptArtifacts"]=[r["id"] for r in extra_records if r["role"]=="code"]
+    if explanation or selections:
+        excerpts=[]
+        for path,first,last in selections:
+            artifact=next(r for r in extra_records if r["role"]=="code" and Path(r["sourcePath"])==path)
+            try:
+                lines=store.artifact_path(artifact).read_text(encoding="utf-8").splitlines()
+            except UnicodeError:
+                raise RecordError("Script excerpts require UTF-8 text") from None
+            if last > len(lines):
+                raise RecordError("Script excerpt extends beyond the preserved script")
+            excerpt=text("\n".join(lines[first-1:last]),"script excerpt",8000)
+            excerpts.append({"artifactId":artifact["id"],"start":first,"end":last,"text":excerpt})
+        code["explanation"]={"summary":explanation,"recordedBy":actor,"source":"author-stated","excerpts":excerpts}
     session_id=os.environ.get("SAIGEN_SESSION")
     if session_id:
         from . import sessions
