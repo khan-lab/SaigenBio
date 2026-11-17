@@ -6,6 +6,62 @@ from pathlib import Path
 from .store import RecordError, now, text, ID
 
 
+def evidence_fingerprint(spec, sources, files):
+    """Identify the same evidence graph despite renamed IDs, aliases or paths."""
+    def encoded(value):
+        return json.dumps(value, sort_keys=True, separators=(',', ':'))
+
+    def citations(entries):
+        # Classification and explanatory prose can be corrected in a revision;
+        # they do not make the underlying evidence new.
+        return sorted(encoded([sources[e['source']], e['location']]) for e in entries)
+
+    states = {s['id']: encoded([sorted(files[s['id']]), citations(s['evidence'])])
+              for s in spec['states']}
+    connections = sorted(encoded([sorted(states[s] for s in c['from']),
+                                  states[c['to']], citations(c['evidence'])])
+                         for c in spec['connections'])
+    return hashlib.sha256(encoded([sorted(states.values()), connections]).encode()).hexdigest()
+
+
+def stored_fingerprint(proposal, flow):
+    if proposal.get('evidenceFingerprint'):
+        return proposal['evidenceFingerprint']
+    # Compatibility with proposals recorded before evidence-based deduplication.
+    artifacts = flow['artifacts']
+    nodes = {s['id']: s for s in flow['states'] + proposal.get('archivedStates', [])}
+    if any(sid not in nodes for sid in proposal['states']):
+        return None
+    return evidence_fingerprint(
+        proposal['spec'],
+        {alias: artifacts[aid]['sha256'] for alias, aid in proposal['sources'].items()},
+        {sid: [artifacts[aid]['sha256'] for aid in nodes[sid]['artifactIds']]
+         for sid in proposal['states']})
+
+
+def show(store, ident=None):
+    """Return current review records alongside the immutable submitted proposal."""
+    flow = store.flow()
+    proposals = copy.deepcopy(flow.get('reconstructions', {}))
+    if ident is not None:
+        if ident not in proposals:
+            raise RecordError('Unknown reconstruction ID')
+        proposals = {ident: proposals[ident]}
+    for proposal in proposals.values():
+        archived = proposal['status'] == 'rejected'
+        states = proposal.get('archivedStates', []) if archived else flow['states']
+        actions = proposal.get('archivedActions', []) if archived else flow['actions']
+        proposal['projectRevision'] = flow['revision']
+        proposal['graph'] = {
+            'source': 'archive' if archived else 'current',
+            'states': [s for s in states if s['id'] in proposal['states']],
+            'actions': [a for a in actions if a['id'] in proposal['actions']],
+        }
+        proposal['missingStateIds'] = sorted(set(proposal['states']) - {s['id'] for s in proposal['graph']['states']})
+        proposal['missingActionIds'] = sorted(set(proposal['actions']) - {a['id'] for a in proposal['graph']['actions']})
+    return proposals
+
+
 def setup_context(root, existing, sources):
     directory=Path(existing).expanduser()
     directory=(directory if directory.is_absolute() else root/directory).resolve(strict=True)
@@ -20,7 +76,13 @@ def setup_context(root, existing, sources):
 
 
 def propose(store, spec, revision, actor):
-    if not isinstance(spec,dict) or set(spec)!={'id','sources','states','connections'}:raise RecordError('Proposal needs id, sources, states, connections')
+    required = {'id','sources','states','connections'}
+    if not isinstance(spec,dict) or not required <= spec.keys() or spec.keys() - required - {'relation'}:raise RecordError('Proposal needs id, sources, states, connections and optional relation')
+    relation = spec.get('relation')
+    if 'relation' in spec:
+        if not isinstance(relation,dict) or set(relation) != {'proposal','kind','reason'}:raise RecordError('Relation needs proposal, kind and reason')
+        if not isinstance(relation['proposal'],str) or not isinstance(relation['kind'],str) or relation['kind'] not in {'revision','alternative'}:raise RecordError('Choose a revision or alternative relation')
+        text(relation['reason'], 'relation reason', 4000, True)
     ident=spec['id']
     if not isinstance(ident,str) or not ID.fullmatch(ident):raise RecordError('Invalid reconstruction ID')
     if not isinstance(spec['states'],list) or not 1<=len(spec['states'])<=50:raise RecordError('Supply 1–50 states')
@@ -37,13 +99,13 @@ def propose(store, spec, revision, actor):
     for key,value in spec['sources'].items():
         path=Path(value).expanduser();path=path if path.is_absolute() else store.root/path
         records[key]=store.capture(path,role='input')
-    fingerprint=hashlib.sha256(json.dumps({'spec':spec,'hashes':{k:v['sha256'] for k,v in records.items()}},sort_keys=True).encode()).hexdigest()
+    source_records = dict(records)
     def evidence(value):
         if not isinstance(value,list) or not value:raise RecordError('Each state and connection needs evidence')
         result=[]
         for entry in value:
-            if not isinstance(entry,dict) or set(entry)!={'source','location','kind','note'} or not isinstance(entry['source'],str) or not isinstance(entry['kind'],str) or entry['source'] not in records or entry['kind'] not in {'direct','reported','inferred','unresolved'}:raise RecordError('Evidence needs source, location, kind and note')
-            result.append({**entry,'artifactId':records[entry['source']]['id'],'location':text(entry['location'],'source location',1000,True),'note':text(entry['note'],'evidence note',4000,True)})
+            if not isinstance(entry,dict) or set(entry)!={'source','location','kind','note'} or not isinstance(entry['source'],str) or not isinstance(entry['kind'],str) or entry['source'] not in source_records or entry['kind'] not in {'direct','reported','inferred','unresolved'}:raise RecordError('Evidence needs source, location, kind and note')
+            result.append({**entry,'artifactId':source_records[entry['source']]['id'],'location':text(entry['location'],'source location',1000,True),'note':text(entry['note'],'evidence note',4000,True)})
         return result
     nodes=[];ids=set()
     for index,item in enumerate(spec['states']):
@@ -59,16 +121,25 @@ def propose(store, spec, revision, actor):
     for index,item in enumerate(spec['connections']):
         if not item['from'] or any(v not in ids for v in item['from']) or item['to'] not in ids:raise RecordError('Connections must refer to proposal states')
         actions.append({'id':ident+'_'+str(index),'from':item['from'],'to':item['to'],'label':text(item.get('label','Reconstructed relationship'),'label',160,True),'command':text(item.get('command',''),'reported command'),'status':'unknown','origin':'reconstructed','writtenBy':actor,'performedBy':None,'createdAt':now(),'reconstruction':{'id':ident,'evidence':evidence(item['evidence']),'review':'draft'},'methodSource':'Reconstructed relationship; execution was not observed by SaigenBio.'})
+    fingerprint = evidence_fingerprint(spec,
+        {k: v['sha256'] for k, v in source_records.items()},
+        {n['id']: [records[aid]['sha256'] for aid in n['artifactIds']] for n in nodes})
     def change(flow):
         proposals=flow.setdefault('reconstructions',{})
         if ident in proposals:
             raise RecordError('Reconstruction ID already exists; inspect it before importing again')
-        if any(p['fingerprint']==fingerprint for p in proposals.values()):raise RecordError('This proposal was already imported')
+        if relation:
+            target = proposals.get(relation['proposal'])
+            if not target:raise RecordError('Related reconstruction does not exist')
+            if relation['kind'] == 'revision' and target['status'] != 'rejected':raise RecordError('Reject the earlier draft before proposing a revision')
+        duplicates = [p['id'] for p in proposals.values() if stored_fingerprint(p, flow) == fingerprint]
+        if duplicates and (not relation or relation['proposal'] not in duplicates):
+            raise RecordError('This evidence graph was already imported: ' + ', '.join(duplicates) + '. Inspect it, or explicitly link a revision or alternative with a reason.')
         if ids.intersection({n['id'] for n in flow['states']} | {sid for p in proposals.values() for sid in p['states']}):raise RecordError('A state ID already exists')
         flow['artifacts'].update({v['id']:v for v in records.values()})
         for node in nodes:node['y']=len(flow['states'])*190
         flow['states'].extend(nodes);flow['actions'].extend(actions)
-        proposals[ident]={'id':ident,'status':'draft','writtenBy':actor,'createdAt':now(),'fingerprint':fingerprint,'spec':copy.deepcopy(spec),'states':list(ids),'actions':[a['id'] for a in actions],'sources':{k:v['id'] for k,v in records.items() if k in spec['sources']}}
+        proposals[ident]={'id':ident,'status':'draft','writtenBy':actor,'createdAt':now(),'evidenceFingerprint':fingerprint,'spec':copy.deepcopy(spec),'states':[n['id'] for n in nodes],'actions':[a['id'] for a in actions],'sources':{k:v['id'] for k,v in source_records.items()}}
         return {'reconstruction':proposals[ident]},None
     return store.update('reconstruction.proposed',actor,change,revision)
 

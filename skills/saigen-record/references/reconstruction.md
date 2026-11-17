@@ -17,3 +17,15 @@ All relative file paths are resolved from the SaigenBio workspace. Source files 
 ```
 
 A proposal can omit connections when relationships are unknown. Evidence locations are author-supplied citations, not automatically verified line matches. Multiple entries can document contradictions. Include preserved log or Git-summary files as additional named sources. Preserve originals when creating any summary, and identify its author and original references.
+
+Repeated evidence graphs are rejected independently of proposal IDs, state IDs, source aliases, file paths and display titles. Identity uses preserved source hashes and citation locations, result-file hashes, and graph relationships. This detects repeat submissions, not semantic overlap between different excerpts or partially overlapping graphs.
+
+For a corrected proposal, reject the earlier draft, use new IDs, and add this top-level field:
+
+```json
+"relation": {"proposal": "history1", "kind": "revision", "reason": "Correct the source attribution after review."}
+```
+
+For an intentional alternative interpretation, use `"kind": "alternative"` and explain why both should remain. The related proposal must exist; a revision must refer to a rejected proposal. Changing IDs alone is not a revision.
+
+`saigen reconstruct show --id history1` returns the original `spec` alongside `graph.states` and `graph.actions`, which reflect current edits. Resume from `graph`; do not overwrite user corrections with `spec`. `graph.source` is `current` or, after rejection, `archive`. The entry also includes `projectRevision`, review status/attribution and lists of any missing state or action IDs.

@@ -58,7 +58,25 @@ def instruction_files(agents, skill_text, permission=None, ui_development=None):
                 "This workflow preference does not grant filesystem or network access or override host permissions.\n"
     return files
 
-def prepare(workspace, agent, project, inputs, viewer=None, permission=None, ui_development=None):
+BLOCK_START = "<!-- saigenbio:instructions:start -->"
+BLOCK_END = "<!-- saigenbio:instructions:end -->"
+
+
+def merge_instructions(existing, content, previous=None):
+    """Preserve user text; replace only an unchanged, explicitly managed block."""
+    block = BLOCK_START + "\n" + content + BLOCK_END
+    if BLOCK_START not in existing and BLOCK_END not in existing:
+        return existing + ("\n\n" if existing else "") + block + "\n"
+    if existing.count(BLOCK_START) != 1 or existing.count(BLOCK_END) != 1:
+        raise RecordError("Invalid SaigenBio instruction markers; merge instructions manually")
+    start = existing.index(BLOCK_START)
+    end = existing.index(BLOCK_END)
+    if end < start or existing[start + len(BLOCK_START):end] not in ("\n" + content, "\n" + (previous or content)):
+        raise RecordError("SaigenBio instruction block was edited; merge instructions manually")
+    return existing[:start] + block + existing[end + len(BLOCK_END):]
+
+
+def prepare(workspace, agent, project, inputs, viewer=None, permission=None, ui_development=None, *, preserve_instructions=False):
     """Build and preflight all files before initialization or setup writes anything."""
     root = Path(workspace).expanduser().resolve()
     source = Path(__file__).resolve().parent.parent / "skills/saigen-record/SKILL.md"
@@ -122,6 +140,8 @@ def prepare(workspace, agent, project, inputs, viewer=None, permission=None, ui_
             files[ADAPTERS[selected_agent][0]+"/saigen-record/references/reconstruction.md"]=reference.read_text()
     files["saigen-workspace.json"] = json.dumps(context, indent=2) + "\n"
     old_files = instruction_files(old_agents, skill_text, previous.get("permissionMode"), previous.get("uiDevelopment"))
+    instruction_names = {ADAPTERS[a][1] for a in agents}
+    managed = dict(previous.get("managedInstructions", {}))
     # Preflight every destination before writing any content.
     for name, content in files.items():
         dest = root / name
@@ -132,12 +152,21 @@ def prepare(workspace, agent, project, inputs, viewer=None, permission=None, ui_
                 raise RecordError("Setup will not replace or write through a symlink: " + str(path))
             if path != dest and path.exists() and not path.is_dir():
                 raise RecordError("Expected a directory: " + str(path))
+        if name in instruction_names and (dest.is_file() or not dest.exists()):
+            existing = dest.read_bytes().decode("utf-8") if dest.is_file() else ""
+            if name in managed or (preserve_instructions and existing != content and existing != old_files.get(name)):
+                files[name] = merge_instructions(existing, content, managed.get(name))
+                managed[name] = content
+                continue
         if dest.exists() and (not dest.is_file() or dest.read_text() != content):
             if name == "saigen-workspace.json" and previous:
                 continue
             if dest.is_file() and dest.read_text() == old_files.get(name):
                 continue
             raise RecordError("Existing file differs: " + str(dest) + ". Merge instructions manually or choose a fresh workspace.")
+    if managed:
+        context["managedInstructions"] = managed
+        files["saigen-workspace.json"] = json.dumps(context, indent=2) + "\n"
     return root, files, context
 
 def write_files(root, files):

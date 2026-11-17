@@ -104,8 +104,8 @@ def main():
             return initialize(store,existing_project=args.existing_project,history_files=args.history_file,name=args.name,agents=args.agent,port=args.port,
                               permission=args.permissions,ui_development=args.ui_development,non_interactive=args.non_interactive,start_viewer=args.start_viewer)
         elif args.command=="reconstruct":
-            from .reconstruction import propose, review
-            if args.operation=="show":result=store.flow().get("reconstructions",{})
+            from .reconstruction import propose, review, show
+            if args.operation=="show":result=show(store,args.id)
             elif args.revision is None:raise RecordError("Supply --revision after reviewing the current project")
             elif args.operation=="propose":
                 if not args.file:raise RecordError("Supply --file")

@@ -148,7 +148,8 @@ def initialize(store, *, name=None, agents=None, port=None, permission=None,
                 raise RecordError(f"Port {port} is in use. Choose another --port; no existing service was stopped.")
             raise RecordError(f"Port {port} became unavailable. Run init again and choose another port.")
         viewer = f"http://127.0.0.1:{port}/"
-        root, files, context = prepare(store.root, agents, ".", [], viewer, permission, ui_development)
+        root, files, context = prepare(store.root, agents, ".", [], viewer, permission, ui_development,
+                                       preserve_instructions=existing_project is not None)
         if history_files and existing_project is None:
             raise RecordError("History files require --existing-project")
         if existing_project is not None:
