@@ -176,8 +176,10 @@ class Reports:
         ids = set()
         for n in selected:
             ids.update(n.get("artifactIds", []))
+            ids.update(e["artifactId"] for e in n.get("reconstruction",{}).get("evidence",[]))
         for a in actions:
             ids.update(a.get("inputArtifacts", []))
+            ids.update(e["artifactId"] for e in a.get("reconstruction",{}).get("evidence",[]))
             ids.update(a.get("logs", []))
             ids.update(a.get("code", {}).get("scriptArtifacts", []))
             ids.update(a.get("environment", {}).get("capturedFiles", []))
@@ -209,6 +211,8 @@ class Reports:
                      **{key: [] for key in ("overview", "method_summary", "scripts", "excerpts", "commands", "execution", "previews", "inventory", "environment")}}
             model["states"].append(state)
             body = state["overview"]
+            if n.get('reconstruction'):
+                body += ['Reconstruction · '+txt(n['reconstruction']['review'])+' · historical execution was not observed by SaigenBio.', '']
             status = n.get("status")
             if status != "completed":
                 body += [txt(status) + (' · not run' if status == 'planned' else ' · earlier execution not recorded' if status == 'imported' else ''), '']
@@ -370,7 +374,7 @@ class Reports:
             if not figures and not tables and not note and status != "planned":
                 body += ['No saved preview or summary is available.', '']
             artifact_groups = {"Declared input files": [aid for a in incoming for aid in a.get("inputArtifacts", []) if flow["artifacts"].get(aid, {}).get("role") not in {"code", "environment", "log"}],
-                               "Preserved files" if n.get("origin") == "terminal" else "Imported inputs" if status == "imported" else "Produced files": n.get("artifactIds", [])}
+                               "Preserved files" if n.get("origin") == "terminal" or n.get("reconstruction") else "Imported inputs" if status == "imported" else "Produced files": n.get("artifactIds", [])}
             if status == "planned":
                 artifact_groups.pop("Produced files", None)
             for label, artifact_ids in artifact_groups.items():

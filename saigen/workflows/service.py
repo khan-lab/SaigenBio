@@ -39,6 +39,8 @@ class WorkflowService:
         def change(flow):
             for binding in spec["inputBindings"]:
                 state = entity(flow, "states", binding["stateId"])
+                if state.get("reconstruction",{}).get("review")=="draft":
+                    raise RecordError("Accept reconstruction before using workflow inputs")
                 if state["status"] not in {"imported", "completed", "saved"}:
                     raise RecordError("Workflow inputs must be recorded results")
                 if binding["artifactId"] not in state.get("manifest", []) + state.get("artifactIds", []):

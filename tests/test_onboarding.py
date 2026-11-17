@@ -25,9 +25,15 @@ class OnboardingTests(unittest.TestCase):
 
     def initialize(self, answers=(), **kwargs):
         self.output = io.StringIO()
+        replies=iter(answers)
+        def reply(prompt):
+            if "Bring in an existing analysis?" in prompt:return "n"
+            answer=next(replies)
+            if isinstance(answer,BaseException):raise answer
+            return answer
         with patch("sys.stdin.isatty", return_value=True), \
              patch("sys.stdout.isatty", return_value=True), \
-             patch("builtins.input", side_effect=answers), \
+             patch("builtins.input", side_effect=reply), \
              patch("saigen.onboarding.can_select", return_value=False), \
              contextlib.redirect_stdout(self.output):
             # redirect_stdout replaces the stream whose isatty was patched.

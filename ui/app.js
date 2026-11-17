@@ -161,7 +161,7 @@ function bindArtifactButtons(el){
 function nodeContent(n){
  if(n.status==="running"||n.status==="planned")return '<span class="node-title">'+esc(n.title)+'</span>'+workflows.card(n)+'<span class="node-bottom">'+(n.status==="running"?"Running":"Planned")+'</span>';
  const plot=firstPlot(n),bad=["failed","cancelled","unknown"].includes(n.status);
- return '<span class="node-title">'+esc(n.title)+'</span>'+workflows.card(n)+(plot?'<span class="mini-plot">'+imagePreview(n)+'</span>':firstTable(n)?tableMarkup(n,true):'<span class="node-excerpt">'+esc(decisionSummary(n))+'</span>')+'<span class="node-bottom">'+(bad?esc(n.status):n.status==="imported"?"Imported · "+n.files.length+" files":n.files.length+" saved outputs")+'</span>';
+ return '<span class="node-title">'+esc(n.title)+'</span>'+workflows.card(n)+(plot?'<span class="mini-plot">'+imagePreview(n)+'</span>':firstTable(n)?tableMarkup(n,true):'<span class="node-excerpt">'+esc(decisionSummary(n))+'</span>')+'<span class="node-bottom">'+(n.reconstruction?"Reconstruction · "+esc(n.reconstruction.review):bad?esc(n.status):n.status==="imported"?"Imported · "+n.files.length+" files":n.files.length+" saved outputs")+'</span>';
 }
 
 function reportBadge(id){const i=reports.position(id);return reports.active&&i>=0?'<span class="report-badge" aria-label="Report position '+(i+1)+'">'+(i+1)+'</span>':"";}
@@ -228,7 +228,7 @@ function renderEdges(){
  html+='</g>';});}
  $("#edges").innerHTML=html;
 }
-function render(){reports.render();renderNodes();renderEdges();$("#undo").disabled=!history.length;positionSelection();}
+function render(){$("#reconstruction-notice").hidden=!flow.states.some(n=>n.reconstruction?.review==="draft");reports.render();renderNodes();renderEdges();$("#undo").disabled=!history.length;positionSelection();}
 function applyCamera(){ $("#scene").style.transform="translate("+camera.x+"px,"+camera.y+"px) scale("+camera.scale+")";$("#zoom-label").textContent=Math.round(camera.scale*100)+"%";positionSelection();}
 function bounds(){const ns=flow.states;if(!ns.length)return {x:0,y:0,w:1000,h:600};const x=Math.min(...ns.map(n=>n.x)),y=Math.min(...ns.map(n=>n.y));return {x,y,w:Math.max(...ns.map(n=>n.x+W))-x,h:Math.max(...ns.map(n=>n.y+H))-y};}
 function fit(initial=false){const v=$("#viewport"),b=bounds(),w=v.clientWidth,h=v.clientHeight;let scale=Math.min(1,(w-100)/b.w,(h-170)/b.h);if(initial)scale=Math.max(scale,w<800?.67:.62);scale=Math.max(.22,scale);camera={scale,x:w>b.w*scale?(w-b.w*scale)/2-b.x*scale:65-b.x*scale,y:Math.max(90,(h-b.h*scale)/2)-b.y*scale};applyCamera();}
@@ -328,6 +328,11 @@ function renderDetail(n){
  (n.plan?'<details class="detail-section detail-card"><summary>Original plan</summary>'+planMarkup(n)+'</details>':"")+
  '<p class="origin-note">'+esc(origin)+'</p>'+terminalMarkup(n.terminal)+stateHistory(n);
 
+ $("#detail-content").querySelectorAll("[data-reconstruction]").forEach(button=>button.onclick=async()=>{
+  button.disabled=true;
+  try{const next=await request('/api/reconstructions/'+button.dataset.reconstruction+'/'+button.dataset.decision,{revision:flow.revision});location.hash='';await accept(next);}
+  catch(error){toast(error.message);button.disabled=false;}
+ });
  bindOriginalCommands($("#detail-content"));
  $("#back-flow").onclick=()=>location.hash="";
  $("#edit-detail").onclick=()=>openStateEditor(n);

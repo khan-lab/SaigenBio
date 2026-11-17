@@ -140,3 +140,17 @@ Use another empty directory and repeat the interview. You do not need to delete 
 Do not copy the old .saigen/, saigen-workspace.json, agent instruction files, or workspace-local recording skills into the new directory. Let init generate the new configuration and instructions. Reacquire the public data or explicitly import the existing evidence with its provenance described honestly.
 
 If an older CLI already initialized your supposedly fresh folder, upgrading and rerunning init will retain that project rather than open an interview. Use another unused directory name. If you want to continue the existing project instead, [refresh its instructions](agent-integrations.md#refresh-existing-workspace-instructions) and use standalone setup deliberately.
+
+## Bring in an existing analysis
+
+In `saigen init`, choose **Bring in an existing analysis** and specify the existing project directory and optional conversation/notes files, one at a time. You can also use flags:
+
+```sh
+saigen init --existing-project . --history-file notes.md --agent codex
+```
+
+Setup saves source locations without reading the analysis or executing historical commands. In a fresh agent session, the recording skill offers a quick overview before deeper reconstruction, explaining the possible time and token cost. You can supply scripts, outputs and local Git evidence even without conversation history. Selected source files in a proposal are preserved in full locally; choose relevant excerpts when retaining an entire conversation is inappropriate.
+
+The agent uses `saigen reconstruct propose --file proposal.json --revision REV` to publish evidence-linked draft cards. Inspect their details, source copies, classifications and unresolved gaps. Edit titles and notes in the normal editor. Accept or reject the whole reconstruction from its detail screen, or use `saigen reconstruct accept --id ID --revision REV`. To correct structure or evidence, reject the draft and publish a revised proposal with new IDs. Rejected proposals remain archived. `saigen reconstruct show` lets another session resume the review.
+
+Acceptance records your review and keeps historical execution unobserved. Accepted states can be inputs to new recorded runs. Drafts cannot be used in wrapped runs or as workflow input bindings. Existing results can be exported with reconstruction labels and evidence references. Large-folder discovery, automatic chat-provider ingestion, and per-item acceptance are outside this first version. Git history can support code identity but cannot alone prove historical execution.

@@ -47,7 +47,7 @@ def instruction_files(agents, skill_text, permission=None, ui_development=None):
     for instructions, skills in groups.items():
         files[instructions] = "# SaigenBio analysis workspace\n\n" \
             "For analysis requests, read saigen-workspace.json for the active project, " \
-            "available inputs, and viewer. Paths are relative to this workspace. " \
+            "available inputs, viewer, and any reconstruction context. If reconstruction is configured, inspect `saigen reconstruct show` and follow the existing-analysis section of the recording skill. Paths are relative to this workspace. " \
             "Read and follow " + " and ".join(skills) + " even when the user does not name SaigenBio. " \
             "Use the exact cli path in saigen-workspace.json rather than another saigen found on PATH. Inspect existing records before importing or executing. " \
             "Do not launch a duplicate viewer. Stop at the requested scientific decision checkpoint.\n"
@@ -116,6 +116,10 @@ def prepare(workspace, agent, project, inputs, viewer=None, permission=None, ui_
         context["uiDevelopment"] = ui_development
     skill_text = source.read_text()
     files = instruction_files(agents, skill_text, permission, ui_development)
+    reference=source.parent/"references/reconstruction.md"
+    if reference.is_file():
+        for selected_agent in agents:
+            files[ADAPTERS[selected_agent][0]+"/saigen-record/references/reconstruction.md"]=reference.read_text()
     files["saigen-workspace.json"] = json.dumps(context, indent=2) + "\n"
     old_files = instruction_files(old_agents, skill_text, previous.get("permissionMode"), previous.get("uiDevelopment"))
     # Preflight every destination before writing any content.

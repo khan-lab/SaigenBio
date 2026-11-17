@@ -285,6 +285,7 @@ class Store:
             elif existing:
                 raise RecordError("State ID already exists")
             ps = [entity(f,"states",i) for i in parents]
+            if any(n.get("reconstruction",{}).get("review")=="draft" for n in ps):raise RecordError("Accept reconstruction before running from its states")
             if not ps and not acquisition: raise RecordError("A run needs at least one parent")
             if acquisition and ps: raise RecordError("Acquisition must be a root state")
             if any(n["status"] not in {"imported","completed","saved"} for n in ps):
