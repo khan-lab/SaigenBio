@@ -1,19 +1,30 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm');
 const elements=new Map();
-const query=id=>{if(!elements.has(id))elements.set(id,{hidden:false,textContent:'',classList:{remove(){},toggle(){}},setAttribute(){}});return elements.get(id);};
+const query=id=>{if(!elements.has(id))elements.set(id,{value:'analysis-notebook',hidden:false,textContent:'',innerHTML:'',close(){this.open=false;},showModal(){this.open=true;},classList:{remove(){},toggle(){}},setAttribute(){}});return elements.get(id);};
 const context=vm.createContext({location:{hash:''},fetch:async()=>({ok:true,json:async()=>({status:'ready',revision:3,warnings:[]})})});
 vm.runInContext(fs.readFileSync('ui/reports.js','utf8'),context);
-let flow={revision:3,states:[{id:'a'},{id:'b'}]},submitted;
-const reports=context.SaigenReports.create({query,getFlow:()=>flow,getToken:()=>'',request:async(path,body)=>{submitted=body;return {id:'report1'};},render(){reports.render();},hidePopups(){},clearSelection(){},toast(){}});
+let flow={revision:3,states:[{id:'a'},{id:'b'}]},submitted=[];
+const reports=context.SaigenReports.create({query,getFlow:()=>flow,getToken:()=>'',request:async(path,body)=>{submitted.push({path,body});return path.endsWith('/preview')?{id:'report1',revision:3,template:{name:'Notebook',description:'<script>'},outline:[{title:'<img>',status:'planned',sections:['Method']}],warnings:[]}:{id:'report1'};},render(){reports.render();},hidePopups(){},clearSelection(){},toast(){}});
 (async()=>{
  reports.setMode(true);reports.toggleState('b');reports.toggleState('a');
  assert.equal(reports.position('b'),0);assert.equal(reports.position('a'),1);
  await query('#report-create').onclick();
- assert.equal(submitted.revision,3);assert.deepEqual(Array.from(submitted.selected),['b','a']);
+ assert.equal(submitted[0].path,'/api/reports/preview');
+ assert.equal(submitted[0].body.revision,3);assert.deepEqual(Array.from(submitted[0].body.selected),['b','a']);
+ assert.equal(submitted[0].body.template,'analysis-notebook');
+ assert.equal(query('#report-preview').open,true);
+ assert.ok(!query('#report-preview-body').innerHTML.includes('<script>'));
+ assert.ok(query('#report-preview-body').innerHTML.includes('&lt;img&gt;'));
+ flow.revision=4; // Export must use the reviewed revision, not the live canvas.
+ await query('#report-export').onclick();
+ assert.equal(submitted[1].path,'/api/reports/report1/render');
+ assert.equal(submitted[1].body.revision,3);
  assert.equal(query('#report-pdf').hidden,false);
+ query('#report-template').onchange();assert.equal(query('#report-pdf').hidden,true);
+ await query('#report-export').onclick();assert.equal(submitted.length,2);
  reports.toggleState('b');assert.equal(query('#report-pdf').hidden,true);
  flow={...flow,states:[]};reports.render();assert.equal(query('#report-create').disabled,true);
  reports.setMode(false);assert.equal(reports.active,false);assert.equal(reports.position('a'),-1);
- console.log('Report UI checks passed: ordered selection, snapshot revision, completion, invalidation and exit.');
+ console.log('Report UI checks passed: ordered selection, template preview, escaping, frozen export, invalidation and exit.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

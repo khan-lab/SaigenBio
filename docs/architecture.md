@@ -111,3 +111,7 @@ The optional workflow foundation uses existing recorder transactions for proposa
 `ui/workflows.js` owns workflow identity, method summaries, parameter tables and evidence presentation through a read-only factory. It reads proposal/run records supplied by `app.js`; it never edits configuration or infers success.
 
 `details.js` presents state input/output roles, method declarations, script excerpts, and expandable execution evidence. It receives formatting helpers and workflow context from the coordinator; it never runs analyses or writes records. The runner records optional `code.explanation` author declarations and validates excerpt ranges against preserved source before launching a command. Missing fields on older records remain missing.
+
+### Report presentation
+
+`reports.py` owns frozen record selection, artifact verification/copying, path aliasing, render jobs and source bundles. It prepares one content model shared by all report styles. `report_templates.py` owns the bundled presentation definitions and composition of inert Quarto text; it has no analysis-file access. Template identity and generated-source hashes are saved with each export. A contents preview prepares the fixed source once, and export renders that same source without consulting the live graph. `ui/reports.js` owns selection, template choice, preview invalidation and download controls.
