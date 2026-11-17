@@ -125,3 +125,13 @@ summary{cursor:pointer;padding:9px 0}.history-event{margin:8px 0;padding:0 12px;
 
 #reconstruction-notice{position:absolute;bottom:22px;left:20px;max-width:calc(100% - 220px);z-index:5;padding:10px 14px;background:#fff;border:1px dashed #9aaa94;border-radius:7px;font-size:12px;color:#52694f}
 @media(max-width:700px){#reconstruction-notice{bottom:65px;max-width:calc(100% - 40px)}}
+
+#report-progress{position:fixed;z-index:45;right:20px;bottom:24px;width:310px;max-width:calc(100vw - 24px);padding:18px;background:var(--paper,#fff);border:1px solid var(--line);border-radius:12px;box-shadow:0 5px 24px #0002;overflow-wrap:anywhere}
+#report-progress[hidden]{display:none}.report-progress-heading{display:flex;align-items:center;gap:10px}#report-progress #report-status{color:var(--ink)}
+#report-error:empty{display:none}#report-error{font-size:13px;line-height:1.5;margin:12px 0}
+#report-pdf{display:block;width:100%;margin:16px 0 10px;padding:12px;background:#245345;color:#fff;border:0;border-radius:6px;font:inherit;font-weight:600}#report-pdf[hidden]{display:none}
+.report-progress-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:12px;margin-top:10px}.report-progress-actions button{font-size:12px}
+.report-spinner{display:none}.processing .report-spinner{display:inline-block;width:14px;height:14px;border:2px solid #cbd6cc;border-top-color:#245345;border-radius:50%;animation:report-spin 1s linear infinite}
+.report-inclusion-issue{color:#80502c}@keyframes report-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.processing .report-spinner{animation:none}}
+@media(max-width:700px){#report-progress{right:12px;bottom:76px;width:290px}}

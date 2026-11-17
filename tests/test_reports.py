@@ -194,7 +194,36 @@ class ReportTests(unittest.TestCase):
             self.assertEqual(run.call_args.kwargs['cwd'], folder)
             self.assertNotIn('shell', run.call_args.kwargs)
         self.assertEqual(self.reports.status('test')['status'], 'failed')
+        self.assertEqual(self.reports.file('test', 'log').read_bytes(), b'failure')
+        with self.assertRaises(RecordError): self.reports.file('test', 'pdf')
         self.assertEqual(self.store.flow()['revision'], self.flow['revision'])
+
+    def test_backend_phases_and_preparation_failure_log(self):
+        self.reports.jobs['phases'] = {'id':'phases','status':'queued'}
+        observed=[]
+        original_prepare=self.reports.prepare
+        def prepare(*args):
+            observed.append(self.reports.status('phases')['status'])
+            return original_prepare(*args)
+        def command(argv, **kwargs):
+            from types import SimpleNamespace
+            observed.append(self.reports.status('phases')['status'])
+            return SimpleNamespace(returncode=1, stdout=b'Quarto failure')
+        with patch.object(self.reports,'prepare',side_effect=prepare), patch('saigen.reports.shutil.which',return_value='quarto'), patch('saigen.reports.subprocess.run',side_effect=command):
+            self.reports.build('phases',self.flow,['first'])
+        self.assertEqual(observed,['preparing','preparing','rendering'])
+        self.reports.jobs['missing']={'id':'missing','status':'queued'}
+        with patch('saigen.reports.shutil.which',return_value=None):
+            self.reports.build('missing',self.flow,['first'])
+        self.assertIn('Quarto is unavailable',self.reports.file('missing','log').read_text())
+
+    def test_inclusion_issue_attached_to_affected_result(self):
+        artifact=self.flow['artifacts'][self.a['artifactIds'][0]]
+        self.store.artifact_path(artifact).unlink()
+        folder,manifest=self.prepare(['first','second'])
+        self.assertIn('Figure unavailable',manifest['outline'][0]['inclusionIssues'][0])
+        self.assertEqual(manifest['outline'][1]['inclusionIssues'],[])
+        self.assertTrue(manifest['warnings'])
 
     def test_template_variants_share_evidence_and_bundle_identity(self):
         script = self.root / 'method.py'; script.write_text('print("full source marker")\nprint("selected line")\n')
@@ -299,9 +328,15 @@ class ReportTests(unittest.TestCase):
         def call(path, body=None, headers=None):
             return urlopen(Request(base + path, data=json.dumps(body).encode() if body else None, headers=headers or {}))
         try:
-            for suffix in ['/api/reports/guess','/api/reports/guess/pdf','/api/reports/../project.sqlite/pdf']:
+            for suffix in ['/api/reports/guess','/api/reports/guess/pdf','/api/reports/guess/log','/api/reports/../project.sqlite/pdf']:
                 with self.assertRaises(HTTPError) as ctx: call(suffix)
                 self.assertEqual(ctx.exception.code,403)
+            folder=self.store.home/'reports'/'failure';folder.mkdir(parents=True)
+            (folder/'render.log').write_text('Render failure details')
+            server.reports.jobs['failure']={'id':'failure','status':'failed'}
+            with call('/api/reports/failure/log', headers={'X-Saigen-Token':server.token}) as response:
+                self.assertEqual(response.read(),b'Render failure details')
+                self.assertEqual(response.headers.get_content_type(),'text/plain')
             headers={'X-Saigen-Token':server.token,'Content-Type':'application/json'}
             with self.assertRaises(HTTPError) as ctx: call('/api/reports', {'revision':self.flow['revision'],'selected':['first']}, dict(headers, Origin='https://example.com'))
             self.assertEqual(ctx.exception.code,403)
