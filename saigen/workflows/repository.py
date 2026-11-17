@@ -1,5 +1,5 @@
 """Workflow records use the recorder's revision-checked SQLite transaction."""
-from ..store import RecordError
+from ..records import RecordError
 
 
 def collection(flow):

@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 import sysconfig
 import sys
-from .store import RecordError
+from .records import RecordError
 
 ADAPTERS = {
     "codex": (".agents/skills", "AGENTS.md"),

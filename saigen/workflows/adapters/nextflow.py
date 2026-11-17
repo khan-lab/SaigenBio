@@ -8,7 +8,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
-from ...store import RecordError
+from ...records import RecordError
 from .base import EngineInfo, LaunchSpec, EvidenceBatch
 
 

@@ -11,7 +11,7 @@ import uuid
 import zipfile
 from pathlib import Path
 from xml.etree import ElementTree
-from .store import RecordError, Conflict, now
+from .records import RecordError, Conflict, now
 from .report_templates import DEFAULT_TEMPLATE, template_definition, compose, literal, code_cell, table_cell
 
 FORMATS = {"image/svg+xml": ".svg", "image/png": ".png", "image/jpeg": ".jpg"}

@@ -1,23 +1,23 @@
 """Loopback-only viewer and edit API. The HTTP API never executes recorded analysis commands."""
 from __future__ import annotations
 import json
-import mimetypes
 from pathlib import Path
 import secrets
 import sysconfig
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
-from .store import Store, RecordError, Conflict, table_preview
+from .records import RecordError, Conflict
 from .reports import Reports
-from .workflows.service import WorkflowService, removal_options
+from .workflows.service import WorkflowService
+from .views import CanvasView
 
 UI=Path(__file__).resolve().parent.parent/"ui"
 if not (UI/"index.html").exists():UI=Path(sysconfig.get_path("data"))/"share"/"saigenbio"/"ui"
 class Server(ThreadingHTTPServer):
     daemon_threads=True
     def __init__(self, address, store):
-        self.preview_cache={}
+        self.canvas=CanvasView(store)
         self.store=store
         self.reports=Reports(store)
         self.token=secrets.token_urlsafe(32)
@@ -69,25 +69,11 @@ class Handler(BaseHTTPRequestHandler):
                     return self.reply(200,source.read_bytes(),"application/pdf" if parts[4]=="pdf" else "application/zip",{"Content-Disposition":f'attachment; filename="saigen-report.{parts[4]}"',"Content-Security-Policy":"sandbox; default-src 'none'"})
                 return self.reply(404,{"error":"Not found"})
             if path=="/api/flow":
-                flow=self.store.flow()
-                for a in flow["artifacts"].values():
-                    if a.get("tablePreview") or a.get("storage")!="preserved" or Path(a["name"]).suffix.lower() not in {".csv",".tsv"}:
-                        continue
-                    key=(a["sha256"],Path(a["name"]).suffix.lower())
-                    if key not in self.server.preview_cache:
-                        try:
-                            self.server.preview_cache[key]=table_preview(self.store.artifact_path(a),a["name"])
-                        except (RecordError,OSError):
-                            continue
-                    a["tablePreview"]=self.server.preview_cache[key]
-                flow["removalOptions"]=removal_options(flow)
-                return self.reply(200,flow)
+                return self.reply(200,self.server.canvas.flow())
             if path=="/api/revision": return self.reply(200,{"revision":self.store.flow()["revision"]})
             if path=="/api/session": return self.reply(200,{"token":self.server.token,"projectRoot":str(self.store.root)})
             if path=="/api/history":
-                events=self.store.events()
-                for event in events: event.pop("inverse",None)
-                return self.reply(200,events)
+                return self.reply(200,self.server.canvas.history())
             if path.startswith("/api/artifacts/"):
                 ident=path.removeprefix("/api/artifacts/")
                 artifact=self.store.artifact(ident)
@@ -143,8 +129,7 @@ class Handler(BaseHTTPRequestHandler):
                 flow=self.store.flow()
             elif path=="/api/undo": flow=self.store.undo(body.get("event"),body["revision"])
             else: return self.reply(404,{"error":"Not found"})
-            flow["removalOptions"]=removal_options(flow)
-            self.reply(200,flow)
+            self.reply(200,self.server.canvas.with_removal_options(flow))
         except Conflict as exc: self.reply(409,{"error":str(exc)})
         except (RecordError,ValueError,TypeError,KeyError) as exc: self.reply(400,{"error":str(exc)})
 

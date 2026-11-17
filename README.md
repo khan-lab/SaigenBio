@@ -16,14 +16,13 @@ SaigenBio is a local tool that helps bioinformaticians and AI agents keep track 
 
 | Component | Role |
 | --- | --- |
-| Agent skills | Instructions explaining how AI agents should plan analyses and record commands, inputs, outputs, and decisions |
-| CLI | Commands for recording data, publishing plans, running analyses, and exporting results |
-| Recording system | Stores analysis states, execution records, preserved files, and the relationships between them |
-| Visual UI | Lets researchers review plans and results, inspect their provenance, and edit the canvas |
+| Saigen Engine | Python recording system and services, accessed through the CLI and local HTTP API; validates and stores states, execution records, artifacts, and provenance |
+| Saigen Skills | Instructions and references explaining how existing AI agents should plan analyses, record evidence, and resume work |
+| Saigen Canvas | Browser UI for reviewing plans and results, inspecting provenance, and editing the canvas |
 
 The researcher and agent decide what to investigate. Scripts, analysis tools, and workflow engines perform the computation; SaigenBio records and visualizes the work. On the canvas, nodes represent analysis states or results, and arrows represent the actions connecting them.
 
-For implementation responsibilities and storage details, see [Architecture](docs/architecture.md).
+Codex, Claude Code, and other supported tools remain the researcher's AI agents. Saigen Skills supplies their recording guidance. All three components ship together in one SaigenBio installation. For implementation responsibilities and storage details, see [Architecture](docs/architecture.md).
 
 ## What you can do
 

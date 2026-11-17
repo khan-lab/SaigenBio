@@ -12,7 +12,8 @@ import sys
 import threading
 import time
 from . import __version__
-from .store import Store, RecordError, digest, now, entity, text
+from .store import Store, digest
+from .records import RecordError, now, entity, text
 
 def code_info(folder):
     folder=Path(folder).resolve()

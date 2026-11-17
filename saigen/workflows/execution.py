@@ -6,7 +6,7 @@ from pathlib import Path
 import shutil
 import signal
 import subprocess
-from ..store import RecordError, now, uid, entity
+from ..records import RecordError, now, uid, entity
 from . import repository as repo
 from .adapters.registry import adapter
 from .models import execution_digest

@@ -30,6 +30,8 @@ The backend has no third-party Python runtime dependencies. Run source commands 
 
 Read [responsibility ownership](docs/architecture.md#responsibility-ownership) before adding behavior. Identify which component owns it and keep shared record validation in the recorder. PRs that change configuration or stored records should explain compatibility with existing workspaces. Keep scientific workspaces, installed applications, and development checkouts distinct.
 
+Use the component names **Saigen Engine**, **Saigen Skills**, and **Saigen Canvas**. Consult the [module map and dependency direction](docs/architecture.md#module-map-and-dependency-direction) when choosing where code belongs. Shared record rules live in `saigen/records.py`; persistence and services enforce them for both CLI and HTTP callers. Derived Canvas responses belong in `saigen/views.py`, while browser presentation belongs in `ui/`. Codex and Claude Code remain external agents guided by Skills. Keep one installation and preserve existing record formats and entry points during focused refactors.
+
 For workflow extensions, read the [adapter contract](docs/workflow-adapters.md) and [current integration status](docs/workflows.md). Keep adapters independent of recorder writes and distinguish declared plans from observed engine evidence.
 
 ## Checks

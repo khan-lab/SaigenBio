@@ -5,7 +5,7 @@ import socket
 import sys
 from pathlib import Path
 
-from .store import RecordError, text
+from .records import RecordError, text
 from .workspace import ADAPTERS, PERMISSIONS, prepare, write_files
 from .terminal import can_select, checkboxes, color, question
 

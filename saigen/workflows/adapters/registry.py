@@ -1,6 +1,6 @@
 """Explicit registry; engine installation remains a separate user choice."""
 from dataclasses import asdict
-from ...store import RecordError
+from ...records import RecordError
 from .nextflow import NextflowAdapter
 
 

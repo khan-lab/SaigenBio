@@ -1,7 +1,7 @@
 """Thin CLI over the workflow service; approval never starts execution."""
 import json
 from pathlib import Path
-from ..store import RecordError
+from ..records import RecordError
 from .service import WorkflowService
 from .adapters.registry import engines
 
