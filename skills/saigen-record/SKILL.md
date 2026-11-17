@@ -146,6 +146,10 @@ Publish the concrete configuration and stage mappings with `workflow propose`, i
 
 Execution is foreground and stage cards finalize at engine exit. Check `workflow status`, recorded output contents, and failure/unknown states before claiming success. `workflow recover` can mark lost-supervisor runs unknown; it cannot infer completion. Unsupported dynamic, cached or multi-task mappings must be reported honestly rather than replaced with invented stage success. Engines and dependencies are installed only within the user's authorized scope; SaigenBio does not install them automatically.
 
+## Explain results and decisions
+
+Use `saigen story STATE_ID` to inspect What, Why, Who and When evidence. When the user supplies findings, interpretations, limitations or a decision rationale, record it as an optional attributed explanation rather than rewriting execution facts. Follow the [result and decision reference](references/story.md) for `saigen explain`, evidence citations, participant roles, corrections and replacement links. Do not invent missing scientific conclusions or agreement history; these records do not grant execution permission.
+
 ## Bring in an existing analysis
 
 For selected Codex JSONL conversations, follow [Reading selected Codex JSONL sessions](references/reconstruction.md#reading-selected-codex-jsonl-sessions) to interpret messages and tool records and cite their original locations.

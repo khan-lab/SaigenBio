@@ -19,8 +19,8 @@ packages = ["saigen", "saigen.workflows", "saigen.workflows.adapters"]
 saigen = ["shell/*.zsh"]
 
 [tool.setuptools.data-files]
-"share/saigenbio/ui" = ["ui/index.html", "ui/app.js", "ui/geometry.js", "ui/paths.js", "ui/api.js", "ui/reports.js", "ui/workflows.js", "ui/details.js", "ui/style.css"]
+"share/saigenbio/ui" = ["ui/index.html", "ui/app.js", "ui/geometry.js", "ui/paths.js", "ui/api.js", "ui/reports.js", "ui/workflows.js", "ui/details.js", "ui/story.js", "ui/style.css"]
 "share/saigenbio/ui/assets" = ["ui/assets/logo.svg", "ui/assets/logo-512.png", "ui/assets/logo-1024.png", "ui/assets/favicon.svg", "ui/assets/favicon-16.png", "ui/assets/favicon-32.png", "ui/assets/favicon-48.png", "ui/assets/favicon.ico"]
 "share/saigenbio/skills/saigen-record" = ["skills/saigen-record/SKILL.md"]
 
-"share/saigenbio/skills/saigen-record/references" = ["skills/saigen-record/references/reconstruction.md"]
+"share/saigenbio/skills/saigen-record/references" = ["skills/saigen-record/references/reconstruction.md", "skills/saigen-record/references/story.md"]

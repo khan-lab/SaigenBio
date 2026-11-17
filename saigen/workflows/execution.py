@@ -168,7 +168,7 @@ def finish(store, run_id, observations, exit_code, cancelled=False, error=None):
             key = stage['key']
             result = results[key]
             node = entity(flow, 'states', record['stageNodes'][key])
-            node['plan'] = {k: copy.deepcopy(node[k]) for k in ('title','expectedSummary','expectedFiles','planParents')}
+            node['plan'] = {k: copy.deepcopy(node[k]) for k in ('title','expectedSummary','expectedFiles','planParents','writtenBy','createdAt','origin') if k in node}
             node.update(status=result['status'], origin='workflow-recorded', performedBy='Nextflow', finishedAt=now(),
                 workflowEvidence={'source': 'Nextflow trace; stage dependencies use the approved mapping', 'rows': result['rows'], 'error': result['error']},
                 artifactIds=[a['id'] for a in result['outputs']], files=[a['name'] for a in result['outputs']])

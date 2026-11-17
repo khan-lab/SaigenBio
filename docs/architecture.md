@@ -26,6 +26,7 @@ Skills guide behavior, Engine enforces record integrity, and Canvas presents rec
 | Engine: persistence | `saigen/store.py` | SQLite transactions, revisions, events, artifact capture and checked mutations; calls record rules before committing |
 | Engine: execution | `saigen/runner.py`, `sessions.py`, `shell_session.py` | Observed attempts and shell checkpoints, using record rules and store transactions |
 | Engine: reconstruction | `saigen/reconstruction.py` | Evidence proposals, preservation, review and archives |
+| Engine: result history | `saigen/story.py` | Attributed statements, decisions, corrections, replacement links and timeline view models |
 | Engine: workflows | `saigen/workflows/` | Proposal models, approval, execution and adapters; adapters never write records directly |
 | Engine: reporting | `saigen/reports.py`, `report_templates.py` | Frozen evidence and rendering; templates compose presentation without reading analysis files |
 | Engine: Canvas response models | `saigen/views.py` | Derived table previews, removal capabilities and public history; display enrichment never updates stored facts |
@@ -147,3 +148,9 @@ The optional workflow foundation uses existing recorder transactions for proposa
 ### Historical reconstruction
 
 `reconstruction.py` owns proposal validation, source/result preservation, evidence classifications, review transitions and rejection archives. Setup records source locations; the agent performs bounded interpretation and supplies a proposal. The CLI and token-protected HTTP review endpoint share the same service. Drafts are visible as existing evidence and are guarded from wrapped execution until accepted. Acceptance records a review decision and never changes historical commands into observed runs. Source locations are author-supplied citations; hashes identify preserved versions, not scientific correctness. Reconstruction fields remain separate from recorder execution facts.
+
+### Result and decision history
+
+`story.py` owns optional, revision-checked explanation declarations, append-only corrections, participant roles, evidence validation and replacement links. It prepares the What/Why/Who/When response from records and explicitly associated events, including archived work. Recorded dates and declared historical dates remain separate. Storage reserves IDs referenced by explanation history against unrelated reuse; undo can restore removed plans. Existing workspaces need no migration, and absent rationale or attribution remains absent. A replacement link does not change an execution status or perform workflow cancellation.
+
+`ui/story.js` presents that Engine response. `details.js` retains supporting How/Where content; `app.js` coordinates fetching, explanation forms and archive navigation. CLI and HTTP explanation writes share the same service. Skills guide evidence interpretation and do not authorize execution through a story entry. See [result and decision history](result-history.md) for commands and compatibility behavior.
