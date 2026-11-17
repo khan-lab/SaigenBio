@@ -47,6 +47,7 @@ node tests/test_node_geometry.cjs
 node tests/test_reports_ui.cjs
 node tests/test_workflows_ui.cjs
 node tests/test_story_ui.cjs
+node tests/test_detail_controller.cjs
 node tests/test_reconstruction_ui.cjs
 node tests/test_plan_removal_ui.cjs
 git diff --check

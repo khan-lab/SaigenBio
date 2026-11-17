@@ -189,7 +189,7 @@ def main():
 
                 mime, page = get("/")
                 require(mime == "text/html" and b"SaigenBio" in page, "Packaged HTML could not be served.")
-                require(all(len(get(asset)[1]) > 100 for asset in ("/geometry.js", "/paths.js", "/api.js", "/reports.js", "/workflows.js", "/details.js")), "Installed UI modules are missing")
+                require(all(len(get(asset)[1]) > 100 for asset in ("/geometry.js", "/paths.js", "/api.js", "/reports.js", "/workflows.js", "/details.js", "/detail-controller.js", "/explanation-editor.js")), "Installed UI modules are missing")
                 require(len(get("/app.js")[1]) > 1000 and len(get("/style.css")[1]) > 100,
                         "Packaged browser assets are missing.")
                 require(b'<img class="brand-logo" src="/assets/favicon.svg"' in page,
