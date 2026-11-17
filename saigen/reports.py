@@ -85,10 +85,13 @@ class Reports:
         with self.lock:
             if ident not in self.jobs:
                 raise RecordError("Unknown report (report links last for this server session)")
-            return {key:value for key,value in self.jobs[ident].items() if not key.startswith("_")}
+            return {**{key:value for key,value in self.jobs[ident].items() if not key.startswith("_")},
+                    "logAvailable": (self.store.home / "reports" / ident / "render.log").is_file()}
 
     def file(self, ident, kind):
         job = self.status(ident)
+        if kind == "log" and job["status"] in {"ready", "failed"}:
+            return self.store.home / "reports" / ident / "render.log"
         if job["status"] != "ready" or kind not in {"pdf", "zip"}:
             raise RecordError("Report download is not ready")
         return self.store.home / "reports" / ident / ("report.pdf" if kind == "pdf" else "source.zip")
@@ -97,7 +100,7 @@ class Reports:
         folder = self.store.home / "reports" / ident
         try:
             with self.lock:
-                self.jobs[ident]["status"] = "rendering"
+                self.jobs[ident]["status"] = "preparing"
             if not prepared:
                 folder.mkdir(parents=True)
                 (folder / "figures").mkdir()
@@ -113,6 +116,8 @@ class Reports:
             if not executable:
                 raise RecordError("Quarto is unavailable. Install Quarto with its bundled Typst engine and retry.")
             version = subprocess.run([executable, "--version"], cwd=folder, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=15)
+            with self.lock:
+                self.jobs[ident]["status"] = "rendering"
             result = subprocess.run([executable, *RENDER[1:]], cwd=folder, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=180)
             (folder / "render.log").write_bytes(result.stdout)
             if result.returncode or not (folder / "report.pdf").is_file():
@@ -129,6 +134,13 @@ class Reports:
                 self.jobs[ident].update(status="ready", warnings=manifest["warnings"])
         except Exception as exc:
             message = str(exc) if isinstance(exc, RecordError) else "Report generation failed; check the local Quarto installation and available disk space."
+            try:
+                folder.mkdir(parents=True, exist_ok=True)
+                log = folder / "render.log"
+                if not log.exists():
+                    log.write_text(message + "\n" + (exc.stdout.decode("utf-8", errors="replace") if isinstance(exc, subprocess.TimeoutExpired) and exc.stdout else ""))
+            except OSError:
+                message += " The render log could not be saved; check available disk space and folder permissions."
             with self.lock:
                 self.jobs[ident].update(status="failed", error=message)
 
@@ -326,11 +338,13 @@ class Reports:
             for command in (n.get('terminal') or {}).get('commands', []):
                 body += code_cell(clean(command.get('command', '')), 'bash')
                 body += ['Shell activity · ' + txt(command.get('status')) + ' · association with saved outputs does not establish file dependencies.', '']
+            inclusion_issues = []
             figures = []
             for aid in n.get("artifactIds", []):
                 ar = flow["artifacts"].get(aid)
                 if not ar:
                     manifest["warnings"].append("Missing artifact record: " + aid)
+                    inclusion_issues.append("Missing artifact record: " + aid)
                     continue
                 manifest["artifacts"][aid] = clean({k: ar.get(k) for k in ["name", "sha256", "size", "storage", "sourcePath"]})
                 if ar.get("mime") not in FORMATS:
@@ -360,7 +374,9 @@ class Reports:
                 except (RecordError, OSError, ElementTree.ParseError) as exc:
                     warning = clean(ar["name"]) + ": " + str(exc)
                     manifest["warnings"].append(warning)
+                    inclusion_issues.append("Figure unavailable: " + warning)
                     figures += ['Figure unavailable: ' + literal(warning), '']
+            state["inclusionIssues"] = inclusion_issues
             body = state["previews"]
             body += figures
             tables = [flow['artifacts'][aid] for aid in n.get('artifactIds', []) if aid in flow['artifacts'] and flow['artifacts'][aid].get('tablePreview')]
@@ -420,6 +436,8 @@ class Reports:
                 manifest['warnings'].append('Evidence '+aid+': '+str(exc))
         manifest["artifacts"] = {aid: clean({k:ar.get(k) for k in ("name", "sha256", "size", "role", "storage", "sourcePath")}) for aid,ar in records.items()}
         source, outline = compose(model, template)
+        for item, state in zip(outline, model["states"]):
+            item["inclusionIssues"] = state.get("inclusionIssues", [])
         manifest["outline"] = outline
         for name, data in {'_quarto.yml': 'project:\n  type: default\nexecute:\n  enabled: false\n', 'report.qmd': source, 'report-template.json': json.dumps(template, indent=2) + '\n', 'snapshot.json': json.dumps(snapshot, indent=2) + '\n'}.items():
             (folder / name).write_text(data, encoding='utf-8')

@@ -226,7 +226,7 @@ def main():
                     with urllib.request.urlopen(request, timeout=10) as response:
                         job = json.load(response)
                     deadline = time.monotonic() + 210
-                    while job["status"] in {"queued", "rendering"}:
+                    while job["status"] in {"queued", "preparing", "rendering"}:
                         require(time.monotonic() < deadline, "Installed PDF report timed out.")
                         time.sleep(.25)
                         request = urllib.request.Request(url + "/api/reports/" + job["id"], headers=headers)

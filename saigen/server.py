@@ -64,9 +64,9 @@ class Handler(BaseHTTPRequestHandler):
                     return self.reply(403,{"error":"Invalid report session"})
                 parts=path.split("/")
                 if len(parts)==4: return self.reply(200,self.server.reports.status(parts[3]))
-                if len(parts)==5 and parts[4] in {"pdf","zip"}:
+                if len(parts)==5 and parts[4] in {"pdf","zip","log"}:
                     source=self.server.reports.file(parts[3],parts[4])
-                    return self.reply(200,source.read_bytes(),"application/pdf" if parts[4]=="pdf" else "application/zip",{"Content-Disposition":f'attachment; filename="saigen-report.{parts[4]}"',"Content-Security-Policy":"sandbox; default-src 'none'"})
+                    return self.reply(200,source.read_bytes(),"application/pdf" if parts[4]=="pdf" else "text/plain; charset=utf-8" if parts[4]=="log" else "application/zip",{"Content-Disposition":f'attachment; filename="saigen-report.{parts[4]}"',"Content-Security-Policy":"sandbox; default-src 'none'"})
                 return self.reply(404,{"error":"Not found"})
             if path=="/api/flow":
                 return self.reply(200,self.server.canvas.flow())
