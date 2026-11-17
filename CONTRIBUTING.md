@@ -47,6 +47,7 @@ node tests/test_node_geometry.cjs
 node tests/test_reports_ui.cjs
 node tests/test_workflows_ui.cjs
 node tests/test_story_ui.cjs
+node tests/test_reconstruction_ui.cjs
 node tests/test_plan_removal_ui.cjs
 git diff --check
 ```
@@ -64,6 +65,8 @@ Add --with-quarto to verify PDF/source-bundle downloads. Change --agent to claud
 The checker creates an external directory under ../SaigenBio-lab/installations/ by default; --destination /outside/path/new-trial selects another new location. Build sources, wheel, environment, logs, cache, and trial outputs stay there. Existing destinations are rejected. Inspect installation-check.json and workspace/START.md.
 
 A successful package check does not prove an AI agent will follow the skill. Use the [agent acceptance procedure](docs/agent-testing.md) for that.
+
+For reconstruction changes, run the [installed mixed-source journey](docs/agent-testing.md#installed-reconstruction-journey). It exercises selective review, later evidence, explicit verification outcomes and frozen reports using synthetic data outside the source checkout. Keep live-agent acceptance evidence separate from deterministic integration results.
 
 Real Nextflow checks are opt-in: see [local workflow integration](docs/nextflow.md#reproduce-the-real-test). Supply a new external destination under SaigenBio-lab and keep downloaded data, pipeline work directories and engine installs there.
 

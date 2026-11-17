@@ -72,5 +72,5 @@ def compose(model, template):
         body += ['# Evidence warnings', '']
         body += ['- '+literal(w) for w in model['warnings']]
         body += ['']
-    body += ['The source bundle contains the selected snapshot, artifact references and hashes. Nonfigure source files are referenced rather than bundled. An omitted script is not missing evidence. This document is not a full backup or an environment replay package.', '']
+    body += ['The source bundle contains the selected snapshot, artifact references and hashes. Selected explanatory and verification sources are bundled within the stated copy limits; warnings identify unavailable evidence. Other nonfigure analysis files are referenced rather than bundled. An omitted script is not missing evidence. This document is not a full backup or an environment replay package.', '']
     return '\n'.join(body), outline

@@ -65,6 +65,26 @@ class ReportTests(unittest.TestCase):
         self.assertIn('enabled: false', text)
         self.assertEqual(literal('# heading'), '\\# heading')
 
+    def test_explanations_and_sources_are_frozen_and_inert(self):
+        from saigen.story import append
+        notes=self.root/'chat.md';notes.write_text('A selected conversation excerpt.\n')
+        source=self.store.snapshot('Source',[notes],ident='notes')
+        aid=source['artifactIds'][0]
+        append(self.store,{'kind':'decision','states':['first'],'summary':'```{python}\nraise SystemExit()\n```',
+                          'rationale':'Keep original evidence','agreementBasis':'Not established',
+                          'evidence':[{'type':'artifact','id':aid,'location':'line 1'}]},self.store.flow()['revision'],'Agent')
+        self.flow=self.store.flow();before=json.dumps(self.flow,sort_keys=True)
+        notes.write_text('Changed working copy')
+        folder,manifest=self.prepare(['first'])
+        snapshot=json.loads((folder/'snapshot.json').read_text())
+        self.assertEqual(snapshot['explanations'][0]['recordedBy'],'Agent')
+        self.assertIn(aid,snapshot['evidenceFiles'])
+        self.assertEqual((folder/snapshot['evidenceFiles'][aid]).read_text(),'A selected conversation excerpt.\n')
+        self.assertNotIn('```{python}',(folder/'report.qmd').read_text())
+        self.assertEqual(json.dumps(self.store.flow(),sort_keys=True),before)
+        for name,expected in manifest['files'].items():
+            self.assertEqual(hashlib.sha256((folder/name).read_bytes()).hexdigest(),expected)
+
     def test_planned_result_explanation_is_exported(self):
         self.store.plan('QC summary',['first'],'QC plots.',ident='qc',
                         details='Inspect counts.',requires='Review inputs.')

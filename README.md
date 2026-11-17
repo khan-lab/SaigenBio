@@ -53,6 +53,7 @@ For a guided scientific example, follow the [E. coli tutorial](docs/tutorials/ec
 | Explore real data and compare thresholds | [E. coli tutorial](docs/tutorials/ecoli-exploration.md) |
 | Configure an AI agent | [Agent integrations](docs/agent-integrations.md) |
 | Record commands, import files, or capture a shell session | [Recording reference](docs/recording.md) |
+| Reconstruct, review and verify existing work | [Existing analysis setup](docs/getting-started.md#bring-in-an-existing-analysis) and [verification](docs/verification.md) |
 | Understand results, rationale, participants and chronology | [Result and decision history](docs/result-history.md) |
 | Export selected results | [PDF reports](docs/reports.md) |
 | Understand provenance and storage | [Architecture](docs/architecture.md) |

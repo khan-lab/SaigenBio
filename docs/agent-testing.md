@@ -23,3 +23,16 @@ Use the same sample/count fixture and scientific prompts in every agent:
 Record agent version, permission mode, project path, observed outcome, and failures. Installation checks do not establish fresh-agent compliance. Other agents can use the common configuration and skill through their own supported instruction mechanism.
 
 Generate an isolated trial with scripts/check_installation.py --agent AGENT, then follow its workspace/START.md. Record results in the relevant issue or pull request. Personal transcripts and investigations belong in ignored docs/local/ or the external trial directory.
+
+## Installed reconstruction journey
+
+Reproduce the deterministic mixed-source journey using an isolated installed runtime:
+
+```sh
+python3 -B scripts/check_installation.py --agent codex --destination /outside/new-install
+python3 -B scripts/check_reconstruction.py \
+  --python /outside/new-install/runtime/bin/python \
+  --destination /outside/new-reconstruction-trial --with-quarto
+```
+
+The fixture contains contradictory chat/log thresholds, missing historical code identity, selective review, later evidence, matching numeric data with different bytes, a differing result, a failed attempt and all three report templates. All source hashes are checked. This deterministic test complements a separate fresh-agent acceptance trial; it does not establish behavior for every AI agent.

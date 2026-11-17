@@ -225,7 +225,23 @@ def read(store, ident):
         for operation in event['payload'].get('operations', []):
             if operation.get('id') == ident and 'note' in operation.get('changes', {}):
                 annotation = {'recordedBy': event['actor'], 'recordedAt': event['at']}
+    verification_data=flow.get('verifications',{})
+    verification_attempts=[a for a in verification_data.get('attempts',{}).values()
+                           if ident in {a['stateId'],a.get('comparisonStateId')}]
+    verification_ids={a['proposalId'] for a in verification_attempts}
+    verification_proposals=[p for p in verification_data.get('proposals',{}).values()
+                            if p['spec']['originalStateId']==ident or p['id'] in verification_ids]
+    verification_ids.update(p['id'] for p in verification_proposals)
+    verification_attempts=[{**a,'stateAvailable':any(n['id']==a['stateId'] for n in flow['states'])}
+                           for a in verification_data.get('attempts',{}).values() if a['proposalId'] in verification_ids]
+    for event in events:
+        payload=event['payload']
+        related_id=payload.get('verification',{}).get('id') or payload.get('verificationAttempt',{}).get('proposalId')
+        if related_id in verification_ids and not any(e['revision']==event['revision'] for e in timeline):
+            timeline.append({'revision':event['revision'],'at':event['at'],'actor':event['actor'],'kind':event['kind'],'payload':payload})
+    timeline.sort(key=lambda e:e['revision'])
     return {'revision': flow['revision'], 'state': state, 'archive': archive, 'actions': actions,
             'originalPlan': original, 'entries': entries, 'participants': participants,
             'timeline': timeline, 'replacements': replacements, 'workflowProposal': proposal or None,
-            'annotationAttribution': annotation}
+            'annotationAttribution': annotation,
+            'verification':{'proposals':verification_proposals,'attempts':verification_attempts,'comparison':state.get('verificationComparison')}}

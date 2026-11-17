@@ -28,6 +28,30 @@ For a corrected proposal, reject the earlier draft, use new IDs, and add this to
 
 For an intentional alternative interpretation, use `"kind": "alternative"` and explain why both should remain. The related proposal must exist; a revision must refer to a rejected proposal. Changing IDs alone is not a revision.
 
+## Selective review and later evidence
+
+Use `reconstruct accept/reject --id PROPOSAL --state STATE --revision REV` or `--connection ACTION` for individual review, with optional `--reason`. Omit selectors to review remaining draft items. Accept endpoints before accepting a relationship. Accepting a state does not accept its uncertain incoming relationships. Rejecting a draft state archives its pending incident relationships; accepted items remain protected. Status `partial` means some items still need review; `reviewed` means a mixture of accepted/rejected items has no pending review. Rejected items remain archived.
+
+To reconcile overlaps, use an explicit extension rather than copying accepted nodes with new IDs. Example additional-evidence proposal:
+
+```json
+{
+  "id": "later_log",
+  "relation": {"proposal": "history1", "kind": "extension", "reason": "A later log contradicts the original chat."},
+  "sources": {"log": "execution.log"},
+  "existingStates": ["old_result"],
+  "states": [],
+  "connections": [],
+  "addEvidence": [{"targetType": "state", "targetId": "old_result", "evidence": [{"source": "log", "location": "line 1", "kind": "reported", "note": "The log reports a different threshold; historical identity remains unknown."}]}]
+}
+```
+
+Extensions may also contain new states and connections referencing explicit accepted `existingStates`. Evidence targets may be accepted states or actions. New citations are reviewable additions, not edits to the original evidence. Review an addition with `--evidence ID`; acceptance attaches attributed evidence, rejection leaves the target unchanged. Inspect `reconstruct show` for item IDs and current records. Structural corrections reject unused draft relationships and propose new ones; accepted history is not rewritten. Whole-graph and strong preserved-state identity checks detect repeat imports; semantic overlap across different excerpts still requires explicit agent/user reconciliation.
+
+When resolving a conflict, preserve the competing sources and use an attributed `explain` decision to record the chosen interpretation, rationale and supporting references. Do not turn a preferred interpretation into an observed historical execution fact.
+
+For authorized reruns, use the [verification reference](verification.md). Original and rerun artifacts remain separate, with recorded comparison criteria and outcomes.
+
 `saigen reconstruct show --id history1` returns the original `spec` alongside `graph.states` and `graph.actions`, which reflect current edits. Resume from `graph`; do not overwrite user corrections with `spec`. `graph.source` is `current` or, after rejection, `archive`. The entry also includes `projectRevision`, review status/attribution and lists of any missing state or action IDs.
 
 ## Reading selected Codex JSONL sessions

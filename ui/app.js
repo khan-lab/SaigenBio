@@ -230,7 +230,7 @@ function renderEdges(){
  html+='</g>';});}
  $("#edges").innerHTML=html;
 }
-function render(){$("#reconstruction-notice").hidden=!flow.states.some(n=>n.reconstruction?.review==="draft");reports.render();renderNodes();renderEdges();$("#undo").disabled=!history.length;positionSelection();}
+function render(){$("#reconstruction-notice").hidden=!Object.values(flow.reconstructions||{}).some(p=>["draft","partial"].includes(p.status));reports.render();renderNodes();renderEdges();$("#undo").disabled=!history.length;positionSelection();}
 function applyCamera(){ $("#scene").style.transform="translate("+camera.x+"px,"+camera.y+"px) scale("+camera.scale+")";$("#zoom-label").textContent=Math.round(camera.scale*100)+"%";positionSelection();}
 function bounds(){const ns=flow.states;if(!ns.length)return {x:0,y:0,w:1000,h:600};const x=Math.min(...ns.map(n=>n.x)),y=Math.min(...ns.map(n=>n.y));return {x,y,w:Math.max(...ns.map(n=>n.x+W))-x,h:Math.max(...ns.map(n=>n.y+H))-y};}
 function fit(initial=false){const v=$("#viewport"),b=bounds(),w=v.clientWidth,h=v.clientHeight;let scale=Math.min(1,(w-100)/b.w,(h-170)/b.h);if(initial)scale=Math.max(scale,w<800?.67:.62);scale=Math.max(.22,scale);camera={scale,x:w>b.w*scale?(w-b.w*scale)/2-b.x*scale:65-b.x*scale,y:Math.max(90,(h-b.h*scale)/2)-b.y*scale};applyCamera();}
@@ -334,6 +334,7 @@ function renderDetail(n){
  const origin=n.status==="planned"?(n.origin==="manual"?"This is a human-supplied plan. No execution has been recorded.":"This is an agent-proposed plan. No execution has been recorded."):n.origin==="terminal"?"Selected files were preserved at this checkpoint. Command order records session activity; it does not establish file dependencies.":n.status==="imported"?"Existing files were recorded. Their earlier execution is not established by this import.":"Execution status was observed by the recorder. A successful command does not establish scientific correctness.";
  $("#detail-content").innerHTML='<nav class="detail-nav"><button class="back" id="back-flow">← Back to flow</button><div class="detail-tools"><button class="quiet" id="add-explanation">Add explanation</button>'+(story?.archive?'':'<button class="quiet" id="edit-detail">Edit state</button>')+'</div></nav><div class="detail-kicker">'+esc(story?.archive?.label||n.status)+'</div><h1 class="detail-title">'+esc(n.title)+'</h1><nav class="story-jumps" aria-label="Result detail sections">'+['What','Why','Who','When'].map(label=>'<button data-story-jump="'+label+'">'+label+'</button>').join('')+'</nav>'+
  SaigenStory.create({escape:esc,shortDate,fileRows}).render(story,visual,flow.artifacts)+
+ (story?SaigenVerification.create({escape:esc,shortDate,displayText,artifactName:id=>flow.artifacts[id]?.name||id}).render(story.verification):'')+
  (story?.entries.length?'<button class="quiet" id="correct-explanation">Correct a recorded explanation</button>':'')+
  SaigenDetails.create({getFlow:()=>story?.archive?{...flow,actions:story.actions}:flow,escape:esc,fileRows,displayCommand,displayRecord,displayText,shortDate,workflows}).render(n)+
  (n.plan?'<details class="detail-section detail-card"><summary>Plan at execution start</summary>'+planMarkup(n)+'</details>':"")+
@@ -348,8 +349,12 @@ function renderDetail(n){
 
  $("#detail-content").querySelectorAll("[data-reconstruction]").forEach(button=>button.onclick=async()=>{
   button.disabled=true;
-  try{const next=await request('/api/reconstructions/'+button.dataset.reconstruction+'/'+button.dataset.decision,{revision:flow.revision});location.hash='';await accept(next);}
+  try{const next=await request('/api/reconstructions/'+button.dataset.reconstruction+'/'+button.dataset.decision,{revision:flow.revision,stateId:button.dataset.stateId,connectionId:button.dataset.connectionId,evidenceId:button.dataset.evidenceId,reason:$('[data-review-reason="'+button.dataset.reconstruction+'"]')?.value||''});await accept(next);}
   catch(error){toast(error.message);button.disabled=false;}
+ });
+ $("#detail-content").querySelectorAll('[data-verify-approve]').forEach(button=>button.onclick=async()=>{
+  button.disabled=true;
+  try{await accept(await request('/api/verifications/'+button.dataset.verifyApprove+'/approve',{revision:flow.revision,digest:button.dataset.digest}));toast('Verification approval recorded. No command has started.');}catch(error){toast(error.message);button.disabled=false;}
  });
  bindOriginalCommands($("#detail-content"));
  $("#back-flow").onclick=()=>location.hash="";
