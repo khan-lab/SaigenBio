@@ -126,7 +126,13 @@ class Handler(BaseHTTPRequestHandler):
             body=json.loads(self.rfile.read(length))
             if not isinstance(body,dict) or type(body.get("revision")) is not int: raise RecordError("A project revision is required")
             path=urlsplit(self.path).path
-            if path=="/api/reports": return self.reply(202,self.server.reports.start(body.get("selected"),body["revision"]))
+            if path=="/api/reports":
+                options={"template":body["template"]} if "template" in body else {}
+                return self.reply(202,self.server.reports.start(body.get("selected"),body["revision"],**options))
+            if path=="/api/reports/preview":
+                return self.reply(200,self.server.reports.preview(body.get("selected"),body["revision"],body.get("template","analysis-notebook")))
+            if path.startswith("/api/reports/") and path.endswith("/render") and len(path.split("/"))==5:
+                return self.reply(202,self.server.reports.render_preview(path.split("/")[3],body["revision"]))
             if path=="/api/edit": flow=self.store.edit(body.get("operations"),body["revision"])
             elif path.startswith("/api/workflows/") and path.endswith("/cancel") and len(path.split("/")) == 5:
                 WorkflowService(self.store).cancel(path.split("/")[3], revision=body["revision"], reason=body.get("reason"), actor="Human")

@@ -9,6 +9,7 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 from saigen.store import Store, RecordError, Conflict
 from saigen.reports import Reports, literal
+from saigen.report_templates import TEMPLATES, DEFAULT_TEMPLATE, template_definition
 from saigen.server import Server
 
 
@@ -175,6 +176,102 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(self.reports.status('test')['status'], 'failed')
         self.assertEqual(self.store.flow()['revision'], self.flow['revision'])
 
+    def test_template_variants_share_evidence_and_bundle_identity(self):
+        script = self.root / 'method.py'; script.write_text('print("full source marker")\nprint("selected line")\n')
+        ar = self.store.capture(script, role='code')
+        self.flow['artifacts'][ar['id']] = ar
+        self.flow['actions'] = [{'id':'a','to':'second','from':['first'],'status':'completed',
+            'argv':['python','method.py'], 'environment':{'declaredToolVersions':['Python 3']},
+            'code':{'scriptArtifacts':[ar['id']], 'explanation':{'summary':'Explain a method', 'recordedBy':'Agent',
+                'excerpts':[{'artifactId':ar['id'],'start':2,'end':2,'text':'print("selected line")'}]}}}]
+        snapshots=[]; inventories=[]
+        for template in TEMPLATES:
+            folder=self.root/template;folder.mkdir();(folder/'figures').mkdir()
+            manifest=self.reports.prepare(folder,self.flow,['second','first'],template)
+            source=(folder/'report.qmd').read_text()
+            snapshots.append((folder/'snapshot.json').read_bytes());inventories.append(manifest['artifacts'])
+            self.assertEqual(manifest['template'],template_definition(template))
+            self.assertEqual(json.loads((folder/'report-template.json').read_text()),manifest['template'])
+            self.assertIn('enabled: false',source)
+            self.assertIn('Explain a method',source)
+            if template=='results-summary':
+                self.assertNotIn('python method.py',source)
+                self.assertNotIn('selected line',source)
+            elif template=='analysis-notebook':
+                self.assertIn('selected line',source)
+                self.assertNotIn('full source marker',source)
+                self.assertIn('Excerpt selected by Agent',source)
+            else:
+                self.assertIn('full source marker',source)
+                self.assertIn('Python 3',source)
+                self.assertIn('SHA',source)
+        self.assertEqual(snapshots[0],snapshots[1]);self.assertEqual(snapshots[1],snapshots[2])
+        self.assertEqual(inventories[0],inventories[2])
+        self.assertEqual(DEFAULT_TEMPLATE,'analysis-notebook')
+        with self.assertRaises(RecordError):self.reports.preview(['first'],self.flow['revision'],'../../evil')
+
+    def test_preview_does_not_render_and_export_keeps_reviewed_snapshot(self):
+        with patch('saigen.reports.subprocess.run') as command:
+            preview=self.reports.preview(['second','first'],self.flow['revision'],'results-summary')
+            command.assert_not_called()
+        folder=self.store.home/'reports'/preview['id']
+        source=(folder/'report.qmd').read_bytes()
+        snapshot=(folder/'snapshot.json').read_bytes()
+        self.store.edit([{'op':'edit_state','id':'second','changes':{'note':'Changed after preview'}}],self.flow['revision'])
+        with self.assertRaises(Conflict):self.reports.render_preview(preview['id'],-1)
+        def render(argv,**kw):
+            if 'render' in argv:(folder/'report.pdf').write_bytes(b'%PDF-test')
+            from subprocess import CompletedProcess
+            return CompletedProcess(argv,0,b'quarto version test')
+        with patch('saigen.reports.shutil.which',return_value='/tool/quarto'),patch('saigen.reports.subprocess.run',side_effect=render):
+            # Call the same prepared-build path synchronously for deterministic assertions.
+            self.reports.build(preview['id'],None,None,prepared=True)
+        self.assertEqual(self.reports.status(preview['id'])['status'],'ready')
+        self.assertEqual((folder/'report.qmd').read_bytes(),source)
+        self.assertEqual((folder/'snapshot.json').read_bytes(),snapshot)
+        import zipfile
+        with zipfile.ZipFile(folder/'source.zip') as bundle:
+            self.assertIn('report-template.json',bundle.namelist())
+            self.assertEqual(bundle.read('snapshot.json'),snapshot)
+        with self.assertRaises(RecordError):self.reports.render_preview(preview['id'],preview['revision'])
+
+    def test_notebook_does_not_reference_full_source_that_only_had_an_excerpt(self):
+        script=self.root/'method.py';script.write_text('print("full marker")\nprint("excerpt marker")\n')
+        ar=self.store.capture(script,role='code');self.flow['artifacts'][ar['id']]=ar
+        self.flow['actions']=[{'id':target,'to':target,'from':[],'status':'completed',
+            'code':{'scriptArtifacts':[ar['id']], **({'explanation':{'recordedBy':'Agent','excerpts':[{'artifactId':ar['id'],'start':2,'end':2,'text':'print("excerpt marker")'}]}} if target=='first' else {})}}
+            for target in ('first','second')]
+        folder,_=self.prepare(['first','second'])
+        source=(folder/'report.qmd').read_text()
+        second=source.split('# 2. Second')[1]
+        self.assertIn('full marker',second)
+        self.assertNotIn('shown in section 1',second)
+
+    def test_changed_preview_source_is_not_rendered(self):
+        preview=self.reports.preview(['first'],self.flow['revision'])
+        folder=self.store.home/'reports'/preview['id']
+        (folder/'report.qmd').write_text('changed after preview')
+        with patch('saigen.reports.subprocess.run') as command:
+            self.reports.build(preview['id'],None,None,prepared=True)
+            command.assert_not_called()
+        self.assertEqual(self.reports.status(preview['id'])['status'],'failed')
+        self.assertIn('changed',self.reports.status(preview['id'])['error'])
+        self.assertNotIn('_preparedFiles',preview)
+
+    def test_all_templates_keep_status_warnings_and_inert_text(self):
+        self.flow['states'][0]['status']='failed'
+        ar=self.flow['artifacts'][self.a['artifactIds'][0]]
+        self.store.artifact_path(ar).unlink()
+        for template in TEMPLATES:
+            folder=self.root/template;folder.mkdir();(folder/'figures').mkdir()
+            manifest=self.reports.prepare(folder,self.flow,['first'],template)
+            source=(folder/'report.qmd').read_text()
+            self.assertIn('failed',source)
+            self.assertIn('Figure unavailable',source)
+            self.assertNotIn('```{python}',source)
+            self.assertNotIn('{{< include',source)
+            self.assertTrue(manifest['warnings'])
+
     def test_http_protection(self):
         server = Server(('127.0.0.1',0), self.store)
         thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
@@ -192,6 +289,22 @@ class ReportTests(unittest.TestCase):
                 with call('/api/reports', {'revision':self.flow['revision'],'selected':['second','first']}, headers) as response:
                     self.assertEqual(response.status,202)
                 start.assert_called_once_with(['second','first'], self.flow['revision'])
+            with self.assertRaises(HTTPError) as ctx:
+                call('/api/reports/preview', {'revision':self.flow['revision'],'selected':['first'],'template':'unknown'},headers)
+            self.assertEqual(ctx.exception.code,400)
+            with call('/api/reports/preview', {'revision':self.flow['revision'],'selected':['first'],'template':'results-summary'},headers) as response:
+                preview=json.load(response)
+            self.assertEqual(preview['status'],'preview')
+            with self.assertRaises(HTTPError) as ctx:
+                call('/api/reports/'+preview['id']+'/render',{'revision':-1},headers)
+            self.assertEqual(ctx.exception.code,409)
+            built=threading.Event()
+            with patch.object(server.reports,'build',side_effect=lambda *args:built.set()) as build:
+                with call('/api/reports/'+preview['id']+'/render',{'revision':preview['revision']},headers) as response:
+                    self.assertEqual(response.status,202)
+                # The build thread consumes the prepared snapshot, not a fresh graph read.
+                self.assertTrue(built.wait(2))
+                self.assertTrue(build.call_args.args[-1])
         finally:
             server.shutdown(); server.server_close(); thread.join()
 

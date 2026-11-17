@@ -12,6 +12,7 @@ import zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 from .store import RecordError, Conflict, now
+from .report_templates import DEFAULT_TEMPLATE, template_definition, compose, literal, code_cell, table_cell
 
 FORMATS = {"image/svg+xml": ".svg", "image/png": ".png", "image/jpeg": ".jpg"}
 RENDER = ["quarto", "render", "report.qmd", "--to", "typst", "--output", "report.pdf", "--no-execute"]
@@ -21,50 +22,69 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def literal(value):
-    # Escape all Markdown syntax, including executable fences, raw blocks and links.
-    return re.sub(r'([!"#$%&\'()*+,\-./:;<=>?@\[\\\]^_`{|}~])', r'\\\1', str(value or ""))
-
-
-def code_cell(value, language=""):
-    # Plain language fences are display-only; never use Quarto executable braces.
-    value = str(value)
-    fence = "`" * max(3, max((len(m.group()) + 1 for m in re.finditer(r"`+", value)), default=3))
-    return [fence + language, value, fence, ""]
-
-
-def table_cell(value):
-    return literal(value).replace("\n", " ").replace("\r", " ")
-
-
 class Reports:
     def __init__(self, store):
         self.store = store
         self.jobs = {}
         self.lock = threading.Lock()
 
-    def start(self, selection, revision):
+    def reserve(self, selection, revision, template, status):
+        template_definition(template)
         if not isinstance(selection, list) or not 1 <= len(selection) <= 50 or any(not isinstance(x, str) for x in selection) or len(set(selection)) != len(selection):
             raise RecordError("Select 1–50 distinct states in presentation order")
-        flow = self.store.flow()  # one SQLite row read: all records share this revision
+        flow = self.store.flow()
         if flow["revision"] != revision:
             raise Conflict("The project changed. Review the selection and create the report again.")
-        states = {n["id"]: n for n in flow["states"]}
-        if any(x not in states for x in selection):
+        if any(x not in {n["id"] for n in flow["states"]} for x in selection):
             raise RecordError("Unknown selected state")
         with self.lock:
-            if any(j["status"] in {"queued", "rendering"} for j in self.jobs.values()):
+            if any(j["status"] in {"queued", "rendering", "preparing"} for j in self.jobs.values()):
                 raise RecordError("A report is already rendering. Wait for it to finish.")
             ident = uuid.uuid4().hex
-            self.jobs[ident] = {"id": ident, "status": "queued", "revision": revision}
-        threading.Thread(target=self.build, args=(ident, flow, selection), daemon=True).start()
+            self.jobs[ident] = {"id": ident, "status": status, "revision": revision}
+        return ident, flow
+
+    def start(self, selection, revision, template=DEFAULT_TEMPLATE):
+        ident, flow = self.reserve(selection, revision, template, "queued")
+        threading.Thread(target=self.build, args=(ident, flow, selection, template), daemon=True).start()
+        return self.status(ident)
+
+    def preview(self, selection, revision, template=DEFAULT_TEMPLATE):
+        ident, flow = self.reserve(selection, revision, template, "preparing")
+        folder = self.store.home / "reports" / ident
+        try:
+            folder.mkdir(parents=True)
+            (folder / "figures").mkdir()
+            manifest = self.prepare(folder, flow, selection, template)
+            with self.lock:
+                self.jobs[ident].update(status="preview", template=manifest["template"], outline=manifest["outline"], warnings=manifest["warnings"],
+                    _preparedFiles={**manifest["files"], "manifest.json": sha((folder / "manifest.json").read_bytes())})
+            return self.status(ident)
+        except Exception as exc:
+            with self.lock:
+                self.jobs[ident]["status"] = "failed"
+            if isinstance(exc, RecordError):
+                raise
+            raise RecordError("Could not prepare this report; check preserved evidence and available disk space") from exc
+
+    def render_preview(self, ident, revision):
+        with self.lock:
+            job = self.jobs.get(ident)
+            if not job or job["status"] != "preview":
+                raise RecordError("Preview this report before exporting")
+            if job["revision"] != revision:
+                raise Conflict("The preview revision does not match")
+            if any(j["status"] in {"queued", "rendering", "preparing"} for j in self.jobs.values()):
+                raise RecordError("A report is already rendering. Wait for it to finish.")
+            job["status"] = "queued"
+        threading.Thread(target=self.build, args=(ident, None, None, DEFAULT_TEMPLATE, True), daemon=True).start()
         return self.status(ident)
 
     def status(self, ident):
         with self.lock:
             if ident not in self.jobs:
                 raise RecordError("Unknown report (report links last for this server session)")
-            return dict(self.jobs[ident])
+            return {key:value for key,value in self.jobs[ident].items() if not key.startswith("_")}
 
     def file(self, ident, kind):
         job = self.status(ident)
@@ -72,14 +92,22 @@ class Reports:
             raise RecordError("Report download is not ready")
         return self.store.home / "reports" / ident / ("report.pdf" if kind == "pdf" else "source.zip")
 
-    def build(self, ident, flow, selection):
+    def build(self, ident, flow, selection, template=DEFAULT_TEMPLATE, prepared=False):
         folder = self.store.home / "reports" / ident
         try:
             with self.lock:
                 self.jobs[ident]["status"] = "rendering"
-            folder.mkdir(parents=True)
-            (folder / "figures").mkdir()
-            self.prepare(folder, flow, selection)
+            if not prepared:
+                folder.mkdir(parents=True)
+                (folder / "figures").mkdir()
+                self.prepare(folder, flow, selection, template)
+            if prepared:
+                expected = self.jobs[ident].get("_preparedFiles")
+                if expected is None:
+                    raise RecordError("Preview evidence is unavailable; prepare a new preview")
+                for name, expected_hash in expected.items():
+                    if sha((folder / name).read_bytes()) != expected_hash:
+                        raise RecordError("Prepared report changed; prepare a new preview before exporting")
             executable = shutil.which("quarto")
             if not executable:
                 raise RecordError("Quarto is unavailable. Install Quarto with its bundled Typst engine and retry.")
@@ -94,7 +122,7 @@ class Reports:
             manifest["files"]["report.pdf"] = sha((folder / "report.pdf").read_bytes())
             (folder / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
             with zipfile.ZipFile(folder / "source.zip", "w", zipfile.ZIP_DEFLATED) as bundle:
-                for name in ["report.qmd", "_quarto.yml", "manifest.json", "snapshot.json", "report.pdf", *sorted(manifest["figures"])]:
+                for name in ["manifest.json", *sorted(manifest["files"])]:
                     bundle.write(folder / name, name)
             with self.lock:
                 self.jobs[ident].update(status="ready", warnings=manifest["warnings"])
@@ -103,7 +131,8 @@ class Reports:
             with self.lock:
                 self.jobs[ident].update(status="failed", error=message)
 
-    def prepare(self, folder, flow, selection):
+    def prepare(self, folder, flow, selection, template=DEFAULT_TEMPLATE):
+        template = template_definition(template)
         states = {n["id"]: n for n in flow["states"]}
         selected = [states[x] for x in selection]
         actions = [a for a in flow["actions"] if a["to"] in selection]
@@ -152,33 +181,75 @@ class Reports:
             ids.update(a.get("logs", []))
             ids.update(a.get("code", {}).get("scriptArtifacts", []))
             ids.update(a.get("environment", {}).get("capturedFiles", []))
+        workflow_context = {"proposals": {}, "runs": {}}
+        for node in selected:
+            for group, field in (("proposals", "workflowProposal"), ("runs", "workflowRun")):
+                key = node.get(field)
+                record = flow.get("workflows", {}).get(group, {}).get(key)
+                if record:
+                    workflow_context[group][key] = record
+                    if group == "proposals":
+                        ids.update(b["artifactId"] for b in record["spec"]["inputBindings"])
         records = {key: flow["artifacts"][key] for key in ids if key in flow["artifacts"]}
-        context = [{"id": key, "title": states[key]["title"]} for key in dict.fromkeys(p for a in actions for p in a.get("from", [])) if key not in selection and key in states]
-        snapshot = clean({"project": flow["project"], "revision": flow["revision"], "selectedOrder": selection, "states": selected, "actions": actions, "artifacts": records, "omittedParentContext": context})
+        parent_ids = dict.fromkeys([p for a in actions for p in a.get("from", [])] +
+                                   [p for n in selected for p in n.get("planParents", [])])
+        context = [{"id": key, "title": states[key]["title"]}
+                   for key in parent_ids if key not in selection and key in states]
+        snapshot = clean({"project": flow["project"], "revision": flow["revision"], "selectedOrder": selection, "states": selected, "actions": actions, "artifacts": records, "omittedParentContext": context, "workflows": workflow_context})
         manifest = {"schemaVersion": 1, "createdAt": now(), "projectRevision": flow["revision"], "selectedOrder": selection, "orderMeaning": "Presentation order only; no execution or dependency order inferred", "renderer": "Quarto with bundled Typst", "renderArgv": RENDER, "figures": [], "artifacts": {}, "warnings": [], "files": {}}
-        body = ['---', 'title: ' + json.dumps(clean(flow["project"])), 'format:', '  typst:', '    papersize: a4', '    fontsize: 10pt', '    code-overflow: wrap', '    margin:', '      x: 20mm', '      y: 18mm', 'execute:', '  enabled: false', '---', '', 'Selected analysis · Revision ' + str(flow["revision"]), '', 'Selected presentation order; saved outputs, without rerunning analysis.', '']
+        model = {"project": clean(flow["project"]), "revision": flow["revision"], "states": [], "warnings": manifest["warnings"]}
+        manifest["template"] = template
+        for aid in sorted(ids - records.keys()):
+            manifest["warnings"].append("Missing artifact record: " + aid)
         shown_scripts = {}
+        shown_notebook_scripts = {}
         total = 0
         for index, n in enumerate(selected, 1):
-            body += ["# " + str(index) + ". " + txt(n["title"]), '']
+            state = {"title": clean(n["title"]), "status": n.get("status", "unknown"),
+                     **{key: [] for key in ("overview", "method_summary", "scripts", "excerpts", "commands", "execution", "previews", "inventory", "environment")}}
+            model["states"].append(state)
+            body = state["overview"]
             status = n.get("status")
             if status != "completed":
                 body += [txt(status) + (' · not run' if status == 'planned' else ' · earlier execution not recorded' if status == 'imported' else ''), '']
             incoming = [a for a in actions if a["to"] == n["id"]]
             note = n.get("note") or ""
             if status == 'planned':
+                parents = [states[p]['title'] + (' (outside selection)' if p not in selection else '') for p in n.get('planParents', []) if p in states]
+                if parents:
+                    body += ['Planned inputs: ' + txt(', '.join(parents)), '']
                 expected = n.get('expectedSummary') or note
                 if expected:
                     body += ['Expected result: ' + txt(expected), '']
                 if n.get('planDetails'):
                     body += ['Proposed method: ' + txt(n['planDetails']), '']
+                if n.get('expectedFiles'):
+                    body += ['Expected files (not proof of production): ' + txt(', '.join(n['expectedFiles'])), '']
                 if n.get('planRequires'):
                     body += ['Prerequisite (descriptive, not enforced): ' + txt(n['planRequires']), '']
                 if note == expected:
                     note = ''
             if note:
                 body += [txt(note), '']
+            method = state["method_summary"]
+            proposal = flow.get("workflows", {}).get("proposals", {}).get(n.get("workflowProposal"))
+            if proposal:
+                spec = proposal["spec"]
+                stage = next((v for v in spec["stages"] if v["key"] == n.get("workflowStage")), {})
+                declared = stage.get("method", {})
+                method += ["Declared tool: " + txt(declared.get("tool", "Not recorded")) + " · Engine: " + txt(spec["engine"]["name"] + " " + spec["engine"]["version"]) + " (proposal)", "",
+                           txt(declared.get("summary", "Method explanation not recorded.")), "",
+                           "Supplied parameters (pipeline defaults remain in source): " + txt(json.dumps(spec["configuration"].get("parameters", {}), sort_keys=True)), "",
+                           "Stage connections follow the saved mapping; they do not establish observed file-level dependencies.", ""]
+            elif status != "planned":
+                explanations = [(a.get("code", {}).get("explanation") or {}) for a in incoming]
+                for explanation in explanations:
+                    if explanation.get("summary"):
+                        method += [txt(explanation["summary"]), "", "Explanation recorded by " + txt(explanation.get("recordedBy", "Not recorded")), ""]
+                if not any(v.get("summary") for v in explanations):
+                    method += ["Method explanation not recorded.", ""]
             for action in incoming:
+                body = state["overview"]
                 parents = [states[p]["title"] + (" (outside selection)" if p not in selection else "") for p in action.get("from", []) if p in states]
                 if parents:
                     body += ['Uses: ' + txt(', '.join(parents)), '']
@@ -187,8 +258,12 @@ class Reports:
                     body += [txt(reason), '']
                 if action.get("annotation"):
                     body += ['Note: ' + txt(action['annotation']), '']
+                body = state["scripts"]
                 scripts = action.get("code", {}).get("scriptArtifacts", [])
                 for aid in scripts:
+                    before = len(body)
+                    excerpts = []
+                    preferred = None
                     ar = flow['artifacts'].get(aid)
                     try:
                         if not ar or ar.get('storage') != 'preserved':
@@ -199,6 +274,15 @@ class Reports:
                         if sha(data) != ar['sha256']:
                             raise RecordError('script hash mismatch')
                         source = data.decode('utf-8')
+                        for excerpt in action.get("code", {}).get("explanation", {}).get("excerpts", []):
+                            if excerpt.get("artifactId") != aid:
+                                continue
+                            first, last = excerpt.get("start"), excerpt.get("end")
+                            lines = source.splitlines()
+                            if type(first) is not int or type(last) is not int or not 1 <= first <= last <= len(lines) or last-first >= 40 or excerpt.get("text") != "\n".join(lines[first-1:last]):
+                                manifest["warnings"].append(clean(ar["name"]) + ": selected excerpt does not match preserved source; full script retained")
+                                continue
+                            excerpts += [txt(ar["name"]) + " · Lines " + str(first) + "–" + str(last), "", "Excerpt selected by " + txt(action["code"]["explanation"].get("recordedBy", "Not recorded")), ""] + code_cell(clean(excerpt["text"]))
                         key = ar['sha256']
                         if key in shown_scripts:
                             body += [txt(ar['name']) + ' · shown in section ' + str(shown_scripts[key]), '']
@@ -206,20 +290,32 @@ class Reports:
                             shown_scripts[key] = index
                             language = {'.py': 'python', '.r': 'r', '.sh': 'bash', '.js': 'javascript'}.get(Path(ar['name']).suffix.lower(), '')
                             body += [txt(ar['name']), ''] + code_cell(clean(source), language)
+                        if excerpts:
+                            preferred = excerpts
+                        elif key in shown_notebook_scripts:
+                            preferred = [txt(ar['name']) + ' · shown in section ' + str(shown_notebook_scripts[key]), '']
+                        else:
+                            shown_notebook_scripts[key] = index
+                            language = {'.py':'python', '.r':'r', '.sh':'bash', '.js':'javascript'}.get(Path(ar['name']).suffix.lower(), '')
+                            preferred = [txt(ar['name']), ''] + code_cell(clean(source), language)
                     except (RecordError, OSError, UnicodeError) as exc:
                         warning = (ar['name'] if ar else aid) + ': ' + str(exc)
                         manifest['warnings'].append(clean(warning))
                         body += ['Script unavailable: ' + txt(warning), '']
+                    state["excerpts"] += preferred if preferred is not None else body[before:]
+                body = state["commands"]
                 argv = action.get('argv') or action.get('argvTemplate') or []
                 command = shlex.join(clean(argv)) if argv else clean(action.get('command') or '')
                 if command:
                     if not scripts:
                         body += ['Script contents not recorded.', '']
                     body += code_cell(command, 'bash')
+                body = state["execution"]
                 if action.get('status') != 'completed' or action.get('exitCode') not in (None, 0):
                     body += [txt(action.get('status')) + ' · Exit ' + txt(str(action.get('exitCode', 'unknown'))), '']
                 if action.get('error'):
                     body += ['Error: ' + txt(action['error']), '']
+            body = state["commands"]
             for command in (n.get('terminal') or {}).get('commands', []):
                 body += code_cell(clean(command.get('command', '')), 'bash')
                 body += ['Shell activity · ' + txt(command.get('status')) + ' · association with saved outputs does not establish file dependencies.', '']
@@ -258,6 +354,7 @@ class Reports:
                     warning = clean(ar["name"]) + ": " + str(exc)
                     manifest["warnings"].append(warning)
                     figures += ['Figure unavailable: ' + literal(warning), '']
+            body = state["previews"]
             body += figures
             tables = [flow['artifacts'][aid] for aid in n.get('artifactIds', []) if aid in flow['artifacts'] and flow['artifacts'][aid].get('tablePreview')]
             for ar in tables:
@@ -270,10 +367,33 @@ class Reports:
                     values = (row + [''] * len(columns))[:len(columns)]
                     body += ['| ' + ' | '.join(table_cell(c) for c in values) + ' |']
                 body += ['', 'Saved table preview · excerpt; rows, columns, or cell text may be truncated.', '']
-            if not figures and not tables and not note:
+            if not figures and not tables and not note and status != "planned":
                 body += ['No saved preview or summary is available.', '']
-        body += ['Full record references and hashes are included in the accompanying source bundle. Preserved scripts are displayed as recorded text; file contents may contain original paths.', '']
-        for name, data in {'_quarto.yml': 'project:\n  type: default\nexecute:\n  enabled: false\n', 'report.qmd': '\n'.join(body), 'snapshot.json': json.dumps(snapshot, indent=2) + '\n'}.items():
+            artifact_groups = {"Declared input files": [aid for a in incoming for aid in a.get("inputArtifacts", []) if flow["artifacts"].get(aid, {}).get("role") not in {"code", "environment", "log"}],
+                               "Preserved files" if n.get("origin") == "terminal" else "Imported inputs" if status == "imported" else "Produced files": n.get("artifactIds", [])}
+            if status == "planned":
+                artifact_groups.pop("Produced files", None)
+            for label, artifact_ids in artifact_groups.items():
+                state["inventory"] += ["### " + label, ""]
+                for aid in dict.fromkeys(artifact_ids):
+                    ar = flow["artifacts"].get(aid)
+                    state["inventory"] += [txt(ar["name"] + " · SHA-256 " + ar["sha256"] + " · " + ar["storage"]) if ar else "Missing artifact record: " + txt(aid), ""]
+                if not artifact_ids:
+                    state["inventory"] += ["No files recorded.", ""]
+            if proposal:
+                state["inventory"] += ["Workflow input bindings describe the whole workflow, not observed stage-level consumption.", ""]
+            if n.get("expectedFiles"):
+                state["inventory"] += ["Expected files (not proof of production): " + txt(", ".join(n["expectedFiles"])), ""]
+            if n.get("origin") == "terminal":
+                state["overview"] += ["Saved checkpoint: selected files do not establish production by individual shell commands.", ""]
+            for action in incoming:
+                state["environment"] += code_cell(json.dumps(clean({"status": action.get("status"), "exitCode": action.get("exitCode"), "recordedBy": action.get("writtenBy"), "performedBy": action.get("performedBy"), "startedAt": action.get("startedAt"), "finishedAt": action.get("finishedAt"), "code": {k:v for k,v in action.get("code", {}).items() if k != "explanation"}, "environment": action.get("environment", {})}), indent=2), "json")
+            if not incoming:
+                state["environment"] += ["No wrapped execution record; software environment not established.", ""]
+        manifest["artifacts"] = {aid: clean({k:ar.get(k) for k in ("name", "sha256", "size", "role", "storage", "sourcePath")}) for aid,ar in records.items()}
+        source, outline = compose(model, template)
+        manifest["outline"] = outline
+        for name, data in {'_quarto.yml': 'project:\n  type: default\nexecute:\n  enabled: false\n', 'report.qmd': source, 'report-template.json': json.dumps(template, indent=2) + '\n', 'snapshot.json': json.dumps(snapshot, indent=2) + '\n'}.items():
             (folder / name).write_text(data, encoding='utf-8')
             manifest['files'][name] = sha((folder / name).read_bytes())
         (folder / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')

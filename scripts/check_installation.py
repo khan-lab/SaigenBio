@@ -217,8 +217,12 @@ def main():
                     session = json.loads(get("/api/session")[1])
                     headers = {"Content-Type": "application/json", "X-Saigen-Token": session["token"]}
                     selection = ["input", result["state"]]
-                    payload = json.dumps({"revision": flow["revision"], "selected": selection}).encode()
-                    request = urllib.request.Request(url + "/api/reports", data=payload, headers=headers)
+                    payload = json.dumps({"revision": flow["revision"], "selected": selection, "template":"results-summary"}).encode()
+                    request = urllib.request.Request(url + "/api/reports/preview", data=payload, headers=headers)
+                    with urllib.request.urlopen(request, timeout=10) as response:
+                        job = json.load(response)
+                    require(job["status"] == "preview" and job["template"]["id"] == "results-summary", "Installed template preview failed.")
+                    request = urllib.request.Request(url + "/api/reports/" + job["id"] + "/render", data=json.dumps({"revision":job["revision"]}).encode(), headers=headers)
                     with urllib.request.urlopen(request, timeout=10) as response:
                         job = json.load(response)
                     deadline = time.monotonic() + 210
@@ -239,6 +243,8 @@ def main():
                     require((downloads / "report.pdf").read_bytes().startswith(b"%PDF-"), "Invalid downloaded PDF.")
                     with zipfile.ZipFile(io.BytesIO((downloads / "source.zip").read_bytes())) as bundle:
                         manifest = json.loads(bundle.read("manifest.json"))
+                        require(manifest["template"]["id"] == "results-summary", "Report template changed.")
+                        require("report-template.json" in bundle.namelist(), "Template definition missing from export.")
                         require(manifest["selectedOrder"] == selection, "Report selection order changed.")
                         require(manifest["projectRevision"] == flow["revision"], "Report revision changed.")
                         for name, expected in manifest["files"].items():
