@@ -40,6 +40,8 @@ def run(store, parents, title, command, *, inputs=(), outputs=(), actor="AI agen
         scripts=(), environment_files=(), tool_versions=(), planned=None, expected="", acquisition=False, source_urls=(), explanation="", script_excerpts=()):
     if not command or not all(isinstance(v,str) and v for v in command):
         raise RecordError("Supply a command after --")
+    if any(n['id'] in parents and n.get('reconstruction',{}).get('review')=='draft' for n in store.flow()['states']):
+        raise RecordError("Review and accept the reconstruction before using its states in a run")
     outputs=list(outputs)
     if stdout_name and stdout_name not in outputs: outputs.append(stdout_name)
     for output in outputs: local_output(Path("/placeholder"),output)

@@ -33,6 +33,8 @@ def main():
     p.add_argument("--permissions",choices=["ask","flexible"],default=None,help="Agent workflow preference; does not grant host access")
     p=command("annotate");p.add_argument("--state",required=True);p.add_argument("--note",required=True)
     p=command("init",help="Initialize a project; interview in a terminal, flags for automation")
+    p.add_argument("--existing-project",help="Directory of an existing analysis to reconstruct")
+    p.add_argument("--history-file",action="append",default=[],help="Conversation or notes file; repeat for several")
     p.add_argument("--name")
     p.add_argument("--agent",choices=["codex","claude","opencode","antigravity"],action="append",help="Set up an agent; repeat for several")
     p.add_argument("--port",type=int,help="Save the viewer port (default: 8767)")
@@ -42,6 +44,11 @@ def main():
     start=p.add_mutually_exclusive_group()
     start.add_argument("--start-viewer",dest="start_viewer",action="store_true",default=None)
     start.add_argument("--no-start-viewer",dest="start_viewer",action="store_false")
+    p=command("reconstruct",help="Propose and review an evidence-linked historical reconstruction")
+    p.add_argument("operation",choices=["propose","show","accept","reject"])
+    p.add_argument("--file",help="Proposal JSON file")
+    p.add_argument("--id")
+    p.add_argument("--revision",type=int)
     p=command("snapshot");p.add_argument("--title",required=True);p.add_argument("--id");p.add_argument("--note",default="");p.add_argument("--file",action="append",default=[]);p.add_argument("--reference",action="append",default=[]);p.add_argument("--source-repo")
     p=command("plan",help="Publish an expected result without an execution edge")
     p.add_argument("--title",required=True);p.add_argument("--id")
@@ -94,8 +101,16 @@ def main():
             result=setup(args.workspace,args.agent,args.analysis_project,args.input,args.viewer,args.permissions,args.ui_development)
         elif args.command=="init":
             from .onboarding import initialize
-            return initialize(store,name=args.name,agents=args.agent,port=args.port,
+            return initialize(store,existing_project=args.existing_project,history_files=args.history_file,name=args.name,agents=args.agent,port=args.port,
                               permission=args.permissions,ui_development=args.ui_development,non_interactive=args.non_interactive,start_viewer=args.start_viewer)
+        elif args.command=="reconstruct":
+            from .reconstruction import propose, review, show
+            if args.operation=="show":result=show(store,args.id)
+            elif args.revision is None:raise RecordError("Supply --revision after reviewing the current project")
+            elif args.operation=="propose":
+                if not args.file:raise RecordError("Supply --file")
+                result=propose(store,json.loads(Path(args.file).read_text()),args.revision,args.actor or "AI agent")
+            else:result=review(store,args.id,args.operation,args.revision,args.actor or "Human")
         elif args.command=="annotate":
             f=store.flow()
             sid=sessions.resolve_state(f,args.state)
@@ -151,7 +166,7 @@ def main():
             return 0
         print(json.dumps(result,indent=2))
         return 0
-    except (RecordError,OSError) as exc:
+    except (RecordError,OSError,ValueError) as exc:
         print(json.dumps({"error":str(exc)}),file=sys.stderr)
         return 2
 

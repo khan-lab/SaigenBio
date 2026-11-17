@@ -115,3 +115,7 @@ The optional workflow foundation uses existing recorder transactions for proposa
 ### Report presentation
 
 `reports.py` owns frozen record selection, artifact verification/copying, path aliasing, render jobs and source bundles. It prepares one content model shared by all report styles. `report_templates.py` owns the bundled presentation definitions and composition of inert Quarto text; it has no analysis-file access. Template identity and generated-source hashes are saved with each export. A contents preview prepares the fixed source once, and export renders that same source without consulting the live graph. `ui/reports.js` owns selection, template choice, preview invalidation and download controls.
+
+### Historical reconstruction
+
+`reconstruction.py` owns proposal validation, source/result preservation, evidence classifications, review transitions and rejection archives. Setup records source locations; the agent performs bounded interpretation and supplies a proposal. The CLI and token-protected HTTP review endpoint share the same service. Drafts are visible as existing evidence and are guarded from wrapped execution until accepted. Acceptance records a review decision and never changes historical commands into observed runs. Source locations are author-supplied citations; hashes identify preserved versions, not scientific correctness. Reconstruction fields remain separate from recorder execution facts.

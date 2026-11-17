@@ -41,6 +41,8 @@ SaigenBio requires Python 3.10+. Use your preferred Python environment or applic
 2. [Open an analysis project](docs/getting-started.md).
 3. Optionally [connect your AI agent](docs/agent-integrations.md).
 
+Already have an analysis? [Bring in existing work and saved conversations](docs/getting-started.md#bring-in-an-existing-analysis), including local Codex session files, for an agent-assisted reconstruction and review.
+
 For a guided scientific example, follow the [E. coli tutorial](docs/tutorials/ecoli-exploration.md).
 
 ## Documentation
@@ -58,7 +60,7 @@ For a guided scientific example, follow the [E. coli tutorial](docs/tutorials/ec
 
 ## Current scope
 
-SaigenBio runs locally. It preserves declared files and observed process facts; it does not automatically discover every dependency or establish scientific correctness. Existing files can be imported, but their prior execution is not reconstructed.
+SaigenBio runs locally. It preserves declared files and observed process facts; it does not automatically discover every dependency or establish scientific correctness. Agents can propose reconstructions from existing files and conversations for review, with evidence and gaps marked. These reconstructions do not become observed execution records.
 
 Workspace setup is available for Codex, Claude Code, OpenCode, and Antigravity. Setup validation and live-agent validation are different; see the integration guide for current evidence and limitations. Hosted collaboration, automatic notebook capture, and environment replay are not implemented.
 

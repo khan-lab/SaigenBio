@@ -140,3 +140,56 @@ Use another empty directory and repeat the interview. You do not need to delete 
 Do not copy the old .saigen/, saigen-workspace.json, agent instruction files, or workspace-local recording skills into the new directory. Let init generate the new configuration and instructions. Reacquire the public data or explicitly import the existing evidence with its provenance described honestly.
 
 If an older CLI already initialized your supposedly fresh folder, upgrading and rerunning init will retain that project rather than open an interview. Use another unused directory name. If you want to continue the existing project instead, [refresh its instructions](agent-integrations.md#refresh-existing-workspace-instructions) and use standalone setup deliberately.
+
+## Bring in an existing analysis
+
+In a directory that has not already been initialized with SaigenBio, run `saigen init` and choose **Bring in an existing analysis**. The relevant prompts look like this:
+
+```text
+Bring in an existing analysis? [y/N]: y
+Existing project directory [...]: /path/to/research
+Conversation or notes file (blank to finish): /path/to/conversation.md
+Conversation or notes file (blank to finish): /path/to/notes.txt
+Conversation or notes file (blank to finish):
+```
+
+Enter optional files one at a time, then press Enter on a blank line. Markdown, plain text, and raw Codex JSONL session files can be supplied as evidence for the agent to read. Relative paths resolve from the SaigenBio workspace, not from the existing project directory. Already initialized workspaces retain their settings and skip the interview.
+
+You can also use flags; repeat `--history-file` for multiple files:
+
+```sh
+saigen init --existing-project . --history-file notes.md --agent codex
+```
+
+### Select a local Codex conversation
+
+For local Codex sessions, look for files with this layout:
+
+```text
+~/.codex/sessions/YYYY/MM/DD/rollout-....jsonl
+```
+
+If you configured a different `CODEX_HOME`, look under its `sessions/` directory instead. To list candidate files without printing their contents:
+
+```sh
+rg --files --hidden "${CODEX_HOME:-$HOME/.codex}/sessions" -g 'rollout-*.jsonl'
+```
+
+Choose sessions relevant to the research project; ask your agent to check their session metadata, including working directory and date, if the filenames are unclear. Paste the selected file's actual path into **Conversation or notes file**. The interactive prompt accepts `~`, but does not expand shell variables such as `$HOME`. SaigenBio currently has no automatic Codex session discovery, selection list, or dedicated JSONL parser; the agent interprets the selected raw records. A Markdown export is not required.
+
+For the CLI equivalent, replace the example date and filename below with a real file:
+
+```sh
+saigen init --existing-project /path/to/research --agent codex \
+  --history-file "$HOME/.codex/sessions/YYYY/MM/DD/rollout-....jsonl"
+```
+
+### Review the reconstruction
+
+Setup saves source locations without reading the analysis or executing historical commands. When initializing an existing analysis in place, it preserves existing agent instructions and appends a marked SaigenBio block. Later setup can refresh that block while keeping surrounding user text; edited blocks and conflicting skill files require a manual merge. In a fresh agent session, the recording skill offers a quick overview before deeper reconstruction, explaining the possible time and token cost. You can supply scripts, outputs and local Git evidence even without conversation history. Selected source files in a proposal are preserved in full locally; choose relevant excerpts when retaining an entire conversation is inappropriate.
+
+The agent uses `saigen reconstruct propose --file proposal.json --revision REV` to publish evidence-linked draft cards. Inspect their details, source copies, classifications and unresolved gaps. Edit titles and notes in the normal editor. Accept or reject the whole reconstruction from its detail screen, or use `saigen reconstruct accept --id ID --revision REV`. To correct structure or evidence, reject the draft and publish a revised proposal with new IDs and an explicit `relation` to the rejected proposal, including a reason. Repeated evidence graphs are detected even with renamed IDs or paths; intentional alternatives also need a relation and reason. See the [proposal format](../skills/saigen-record/references/reconstruction.md). Rejected proposals remain archived.
+
+`saigen reconstruct show` lets another session resume the review; use `--id ID` to select one reconstruction. Each entry includes the current project revision, review status, original `spec`, and a `graph` with current titles, notes and connections. For rejected proposals, the graph comes from the archive. Agents should resume from `graph`, retaining `spec` as the original submission.
+
+Acceptance records your review and keeps historical execution unobserved. Accepted states can be inputs to new recorded runs. Drafts cannot be used in wrapped runs or as workflow input bindings. Existing results can be exported with reconstruction labels and evidence references. Large-folder discovery, automatic chat-provider ingestion, and per-item acceptance are outside this first version. Git history can support code identity but cannot alone prove historical execution.

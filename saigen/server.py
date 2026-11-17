@@ -133,7 +133,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(200,self.server.reports.preview(body.get("selected"),body["revision"],body.get("template","analysis-notebook")))
             if path.startswith("/api/reports/") and path.endswith("/render") and len(path.split("/"))==5:
                 return self.reply(202,self.server.reports.render_preview(path.split("/")[3],body["revision"]))
-            if path=="/api/edit": flow=self.store.edit(body.get("operations"),body["revision"])
+            if path.startswith("/api/reconstructions/") and len(path.split("/"))==5:
+                from .reconstruction import review
+                review(self.store,path.split("/")[3],path.split("/")[4],body["revision"],"Human")
+                flow=self.store.flow()
+            elif path=="/api/edit": flow=self.store.edit(body.get("operations"),body["revision"])
             elif path.startswith("/api/workflows/") and path.endswith("/cancel") and len(path.split("/")) == 5:
                 WorkflowService(self.store).cancel(path.split("/")[3], revision=body["revision"], reason=body.get("reason"), actor="Human")
                 flow=self.store.flow()

@@ -93,7 +93,7 @@ def choose_permission():
 
 
 def initialize(store, *, name=None, agents=None, port=None, permission=None,
-               non_interactive=False, start_viewer=None, ui_development=None):
+               non_interactive=False, start_viewer=None, ui_development=None, existing_project=None, history_files=()):
     interactive = not non_interactive and sys.stdin.isatty() and sys.stdout.isatty()
     if store.db.exists():
         result = store.flow()
@@ -109,6 +109,13 @@ def initialize(store, *, name=None, agents=None, port=None, permission=None,
             print("Set up SaigenBio in " + str(store.root))
             if name is None:
                 name = ask("Project name", store.root.name)
+            if existing_project is None and yes_no("Bring in an existing analysis?", default=False):
+                existing_project=ask("Existing project directory", str(store.root))
+                history_files=list(history_files)
+                while True:
+                    value=ask("Conversation or notes file (blank to finish)")
+                    if not value:break
+                    history_files.append(value)
             if agents is None:
                 agents = choose_agents()
             if agents and permission is None:
@@ -141,7 +148,15 @@ def initialize(store, *, name=None, agents=None, port=None, permission=None,
                 raise RecordError(f"Port {port} is in use. Choose another --port; no existing service was stopped.")
             raise RecordError(f"Port {port} became unavailable. Run init again and choose another port.")
         viewer = f"http://127.0.0.1:{port}/"
-        root, files, context = prepare(store.root, agents, ".", [], viewer, permission, ui_development)
+        root, files, context = prepare(store.root, agents, ".", [], viewer, permission, ui_development,
+                                       preserve_instructions=existing_project is not None)
+        if history_files and existing_project is None:
+            raise RecordError("History files require --existing-project")
+        if existing_project is not None:
+            from .reconstruction import setup_context
+            context["reconstruction"]=setup_context(store.root,existing_project,history_files)
+            files["saigen-workspace.json"]=json.dumps(context,indent=2)+"\n"
+            if interactive:print("The agent will ask before reconstructing. Large projects can take time and substantial tokens; start with a quick overview.")
         if (store.home / "viewer.json").exists():
             raise RecordError("Existing viewer settings found without an initialized project. Review .saigen/viewer.json before initializing.")
         if interactive:
