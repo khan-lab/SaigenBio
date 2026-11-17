@@ -57,6 +57,8 @@ def main():
     p.add_argument("--source-url",action="append",default=[])
     p.add_argument("--title",required=True);p.add_argument("--id");p.add_argument("--label");p.add_argument("--reason",default="")
     p.add_argument("--input",action="append",default=[]);p.add_argument("--output",action="append",default=[]);p.add_argument("--stdout");p.add_argument("--script",action="append",default=[]);p.add_argument("--environment",action="append",default=[]);p.add_argument("--tool-version",action="append",default=[]);p.add_argument("--source-repo")
+    p.add_argument("--explanation",default="",help="Brief author-stated method explanation; not observed execution evidence")
+    p.add_argument("--script-excerpt",action="append",default=[],metavar="PATH:START:END",help="Select 1–40 lines from a preserved script; repeat for several excerpts")
     p.add_argument("argv",nargs=argparse.REMAINDER)
     p=command("remove-plan", help="Remove an unused standalone plan");p.add_argument("state");p.add_argument("--revision",required=True,type=int)
     p=command("serve");p.add_argument("--port",type=int,default=None,help="Override the saved viewer port; 0 chooses a free port")
@@ -120,7 +122,7 @@ def main():
             argv=args.argv[1:] if args.argv[:1]==["--"] else args.argv
             actor=args.actor or (sessions.session(store.flow(),os.environ["SAIGEN_SESSION"])["actor"] if os.environ.get("SAIGEN_SESSION") and Path(os.environ.get("SAIGEN_PROJECT","")).resolve()==store.root else "AI agent")
             parents=[sessions.resolve_state(store.flow(),p) for p in args.parents]
-            result=run(store,parents,args.title,argv,inputs=args.input,outputs=args.output,actor=actor,reason=args.reason,label=args.label,ident=args.id,stdout_name=args.stdout,source_repo=args.source_repo,scripts=args.script,environment_files=args.environment,tool_versions=args.tool_version,planned=args.plan,expected=args.expect,acquisition=args.command=="acquire",source_urls=args.source_url)
+            result=run(store,parents,args.title,argv,inputs=args.input,outputs=args.output,actor=actor,reason=args.reason,label=args.label,ident=args.id,stdout_name=args.stdout,source_repo=args.source_repo,scripts=args.script,environment_files=args.environment,tool_versions=args.tool_version,planned=args.plan,expected=args.expect,acquisition=args.command=="acquire",source_urls=args.source_url,explanation=args.explanation,script_excerpts=args.script_excerpt)
             print(json.dumps(result,indent=2))
             return 0 if result["status"]=="completed" else 130 if result["status"]=="cancelled" else 1
         elif args.command=="serve":

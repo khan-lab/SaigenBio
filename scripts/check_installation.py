@@ -148,6 +148,8 @@ def main():
             cli, "run", "--project", project, "--plan", "summary_plan", "--approved", "--actor", "AI agent", "--from", "input",
             "--title", "Installed CLI output", "--label", "count_rows.py",
             "--reason", "Verify that an installed CLI preserves inputs, scripts, and an SVG outside its source checkout.",
+            "--explanation", "Count rows in the preserved input table and write an illustrative SVG.",
+            "--script-excerpt", "scripts/count_rows.py:1:3",
             "--input", "artifact:" + input_id, "--script", "scripts/count_rows.py", "--output", "counts.svg",
             "--", python, "{project}/scripts/count_rows.py", "{input:0}", "counts.svg"]))
         require(result["status"] == "completed" and result["state"] == "summary_plan", "The installed execution wrapper did not finalize the proposed state.")
@@ -157,6 +159,9 @@ def main():
         proposal = next(n for n in proposed["states"] if n["id"] == "summary_plan")
         for key in ("expectedSummary", "planDetails", "planRequires", "expectedFiles", "planParents"):
             require(state["plan"][key] == proposal[key], "Original plan lost " + key)
+        explanation = flow["actions"][0]["code"]["explanation"]
+        require(explanation["recordedBy"] == "AI agent" and explanation["excerpts"][0]["start"] == 1,
+                "Installed CLI lost method explanation or source excerpt provenance.")
         artifact = flow["artifacts"][state["artifactIds"][0]]
         report["checks"]["installed_cli_records_analysis"] = True
         report["checks"]["planned_state_finalized_without_duplicate"] = True
@@ -184,7 +189,7 @@ def main():
 
                 mime, page = get("/")
                 require(mime == "text/html" and b"SaigenBio" in page, "Packaged HTML could not be served.")
-                require(all(len(get(asset)[1]) > 100 for asset in ("/geometry.js", "/paths.js", "/api.js", "/reports.js", "/workflows.js")), "Installed UI modules are missing")
+                require(all(len(get(asset)[1]) > 100 for asset in ("/geometry.js", "/paths.js", "/api.js", "/reports.js", "/workflows.js", "/details.js")), "Installed UI modules are missing")
                 require(len(get("/app.js")[1]) > 1000 and len(get("/style.css")[1]) > 100,
                         "Packaged browser assets are missing.")
                 require(b'<img class="brand-logo" src="/assets/favicon.svg"' in page,

@@ -69,6 +69,12 @@ python3 -m saigen --project /path/to/analysis run \
   -- python3 "{project}/scripts/summarize.py" "{input:0}" summary.svg
 ```
 
+For a readable Method section, add `--explanation "…"` to `run` or `acquire`. Explain the actual operations and relevant parameter values; `--reason` remains the purpose of the analysis. Optionally select meaningful source lines with `--script-excerpt scripts/summarize.py:12:20` (repeatable, up to 40 lines per selection). These options go before `-- COMMAND`.
+
+The recorder preserves the selected script and reads the excerpt from that preserved copy before execution. Out-of-range selections fail before launch. Explanations and excerpt selection are attributed to the recording actor; they are declarations, not evidence that the method is scientifically correct. Full commands and scripts remain accessible. Older records show that an explanation was not recorded; the viewer does not generate one.
+
+State details show Inputs, Method, Outputs, then expandable execution evidence. A source-state link does not establish which of its files were consumed. Workflow input bindings are explicitly labeled as workflow-wide, rather than inferred as stage-level consumption. Planned inputs and expected outputs stay separate from observed files. Terminal checkpoints label selected files as preserved files because captured command order does not establish production or consumption.
+
 The example assumes your project contains that script and input file. The command runs in a fresh directory under .saigen/runs. Output paths are relative to that directory. The recorder supplies these substitutions in individual command arguments:
 
 | Placeholder | Meaning |

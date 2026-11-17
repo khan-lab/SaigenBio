@@ -55,5 +55,5 @@ globalThis.SaigenWorkflows=Object.freeze({create({getFlow,escape:esc,displayPath
    (declared?.version?'<p>Proposed tool version: '+esc(declared.version)+' (declared)</p>':"")+
    (p.spec.limitations?.length?'<h3>Limitations</h3><ul>'+p.spec.limitations.map(v=>'<li>'+esc(v)+'</li>').join("")+'</ul>':"")+'</section>';
  }
- return Object.freeze({card,preview,labels,details,execution});
+ return Object.freeze({card,preview,labels,details,execution,context});
 }});
