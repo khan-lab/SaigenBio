@@ -43,7 +43,7 @@ function redraw(){
  $(".project-name").textContent=flow.project;
 }
 async function accept(next){
- flow=next;await loadHistory();redraw();
+ cancelDrag();flow=next;await loadHistory();redraw();
 }
 async function mutate(operations,undo=null){
  return applyChange(undo?"/api/undo":"/api/edit",undo?{event:undo}:{operations},undo?"Change undone. History preserved.":"Saved to this project.");
@@ -231,8 +231,8 @@ function renderEdges(){
 function render(){$("#reconstruction-notice").hidden=!Object.values(flow.reconstructions||{}).some(p=>["draft","partial"].includes(p.status));reports.render();renderNodes();renderEdges();$("#undo").disabled=!history.length;positionSelection();}
 function applyCamera(){ $("#scene").style.transform="translate("+camera.x+"px,"+camera.y+"px) scale("+camera.scale+")";$("#zoom-label").textContent=Math.round(camera.scale*100)+"%";positionSelection();}
 function bounds(){const ns=flow.states;if(!ns.length)return {x:0,y:0,w:1000,h:600};const x=Math.min(...ns.map(n=>n.x)),y=Math.min(...ns.map(n=>n.y));return {x,y,w:Math.max(...ns.map(n=>n.x+W))-x,h:Math.max(...ns.map(n=>n.y+H))-y};}
-function fit(initial=false){const v=$("#viewport"),b=bounds(),w=v.clientWidth,h=v.clientHeight;let scale=Math.min(1,(w-100)/b.w,(h-170)/b.h);if(initial)scale=Math.max(scale,w<800?.67:.62);scale=Math.max(.22,scale);camera={scale,x:w>b.w*scale?(w-b.w*scale)/2-b.x*scale:65-b.x*scale,y:Math.max(90,(h-b.h*scale)/2)-b.y*scale};applyCamera();}
-function zoom(factor,cx,cy){const v=$("#viewport").getBoundingClientRect();cx=cx??v.width/2;cy=cy??v.height/2;const next=Math.max(.22,Math.min(1.8,camera.scale*factor)),ratio=next/camera.scale;camera.x=cx-(cx-camera.x)*ratio;camera.y=cy-(cy-camera.y)*ratio;camera.scale=next;hidePopups();applyCamera();}
+function fit(initial=false){cancelDrag();const v=$("#viewport"),b=bounds(),w=v.clientWidth,h=v.clientHeight;let scale=Math.min(1,(w-100)/b.w,(h-170)/b.h);if(initial)scale=Math.max(scale,w<800?.67:.62);scale=Math.max(.22,scale);camera={scale,x:w>b.w*scale?(w-b.w*scale)/2-b.x*scale:65-b.x*scale,y:Math.max(90,(h-b.h*scale)/2)-b.y*scale};applyCamera();}
+function zoom(factor,cx,cy){cancelDrag();const v=$("#viewport").getBoundingClientRect();cx=cx??v.width/2;cy=cy??v.height/2;const next=Math.max(.22,Math.min(1.8,camera.scale*factor)),ratio=next/camera.scale;camera.x=cx-(cx-camera.x)*ratio;camera.y=cy-(cy-camera.y)*ratio;camera.scale=next;hidePopups();applyCamera();}
 function positionSelection(){const el=$("#selection-tools"),n=getState(selected);if(reports.active||!n||!$("#detail-view").hidden||connecting){el.hidden=true;return;}const r=$("#viewport").getBoundingClientRect(),left=r.left+camera.x+(n.x+W/2)*camera.scale,top=r.top+camera.y+n.y*camera.scale;el.hidden=false;el.style.left=Math.max(10,Math.min(innerWidth-250,left-115))+"px";el.style.top=Math.max(r.top+10,Math.min(innerHeight-52,top-43))+"px";}
 function hidePopups(){clearTimeout(hoverTimer);clearTimeout(hideTimer);$("#preview").hidden=true;$("#action-preview").hidden=true;}
 function placePopup(el,rect){el.hidden=false;const pr=el.getBoundingClientRect();let x=rect.right+13;if(x+pr.width>innerWidth-12)x=rect.left-pr.width-13;if(x<12)x=Math.max(12,Math.min(innerWidth-pr.width-12,rect.left));let y=Math.max(85,Math.min(innerHeight-pr.height-15,rect.top));el.style.left=x+"px";el.style.top=y+"px";}
@@ -338,6 +338,7 @@ const detailController = SaigenDetailController.create({
  getElementById: id => document.getElementById(id)
 });
 function route(){
+ cancelDrag();
  hidePopups();const match=location.hash.match(/^#state\/(.+)$/);let n;
  try{const id=match?decodeURIComponent(match[1]):null;n=id?(getState(id)||detailController.state(id)):null;
  if(id&&!n){$("#flow-view").hidden=true;$("#detail-view").hidden=false;$("#detail-content").textContent="Loading recorded state…";detailController.load(id);return;}}catch{}
@@ -459,35 +460,105 @@ $("#preview").onpointerleave=()=>{hideTimer=setTimeout(()=>$("#preview").hidden=
 $("#preview").onclick=e=>{const b=e.target.closest("[data-open]");if(b)openState(b.dataset.open);};
 let suppressClick=false;
 $("#viewport").addEventListener("pointerdown",e=>{
- if(e.button!==0||busy||!ready)return;
+ if(e.button!==0||drag||busy||!ready)return;
  const card=e.target.closest("[data-state]");
  if(e.target.closest(".port")&&!reports.active){e.preventDefault();startConnecting(card.dataset.state);return;}
  if(e.target.closest(".edge-group,.workflow-label"))return;
  if(connecting&&card)return;
  if(card&&reports.active)return;
  hidePopups();e.preventDefault();$("#viewport").setPointerCapture(e.pointerId);
- drag={id:card?.dataset.state||null,startX:e.clientX,startY:e.clientY,x:card?getState(card.dataset.state).x:camera.x,y:card?getState(card.dataset.state).y:camera.y,moved:false,before:card?copy(flow):null};
+ drag={id:card?.dataset.state||null,startX:e.clientX,startY:e.clientY,x:card?getState(card.dataset.state).x:camera.x,y:card?getState(card.dataset.state).y:camera.y,moved:false,pointerId:e.pointerId,guides:{}};
  if(!card){$("#viewport").classList.add("panning");selected=null;positionSelection();}
 });
-$("#viewport").addEventListener("pointermove",e=>{
- if(!drag)return;const dx=e.clientX-drag.startX,dy=e.clientY-drag.startY;if(Math.abs(dx)+Math.abs(dy)>5)drag.moved=true;
- if(!drag.moved)return;
- if(drag.id){const n=getState(drag.id);n.x=Math.round(drag.x+dx/camera.scale);n.y=Math.round(drag.y+dy/camera.scale);const el=$("#nodes").querySelector('[data-state="'+CSS.escape(drag.id)+'"]');el.style.left=n.x+"px";el.style.top=n.y+"px";renderEdges();renderWorkflowLabels();positionSelection();}
- else{camera.x=drag.x+dx;camera.y=drag.y+dy;applyCamera();}
-});
-
-async function endDrag(e){
- if(!drag)return;
- const d=drag;drag=null;$("#viewport").classList.remove("panning");
- if($("#viewport").hasPointerCapture(e.pointerId))$("#viewport").releasePointerCapture(e.pointerId);
- if(d.moved){
-   suppressClick=true;setTimeout(()=>suppressClick=false,50);
-   if(d.id){selected=d.id;const n=getState(d.id);try{await mutate([{op:"edit_state",id:d.id,changes:{x:n.x,y:n.y}}]);}catch(error){toast(error.message);await accept(await request("/api/flow"));}}
- }else if(d.id){selected=d.id;render();}
+function showAlignmentGuides(guides = {}) {
+ const vertical = guides.x, horizontal = guides.y;
+ $("#alignment-guides").innerHTML =
+   (vertical ? `<line x1="${vertical.at}" x2="${vertical.at}" y1="${vertical.start}" y2="${vertical.end}"/>` : "") +
+   (horizontal ? `<line x1="${horizontal.start}" x2="${horizontal.end}" y1="${horizontal.at}" y2="${horizontal.at}"/>` : "");
 }
 
-$("#viewport").addEventListener("pointerup",endDrag);
-$("#viewport").addEventListener("pointercancel",endDrag);
+function positionDraggedNode(id, x, y) {
+ const node = getState(id);
+ node.x = x;
+ node.y = y;
+ const card = $("#nodes").querySelector('[data-state="'+CSS.escape(id)+'"]');
+ card.style.left = x+"px";
+ card.style.top = y+"px";
+ renderEdges();
+ renderWorkflowLabels();
+ positionSelection();
+}
+
+function moveDrag(clientX, clientY, bypass) {
+ const dx = clientX - drag.startX, dy = clientY - drag.startY;
+ if (Math.abs(dx) + Math.abs(dy) > 5) drag.moved = true;
+ if (!drag.moved) return;
+ drag.last = {clientX, clientY};
+ if (drag.id) {
+   const position = {id: drag.id, x: drag.x + dx/camera.scale, y: drag.y + dy/camera.scale};
+   const next = SaigenGeometry.alignment(position, flow.states, camera.scale, drag.guides, bypass);
+   drag.guides = next.guides;
+   const x = next.guides.x ? next.x : Math.round(next.x);
+   const y = next.guides.y ? next.y : Math.round(next.y);
+   positionDraggedNode(drag.id, x, y);
+   showAlignmentGuides(next.guides);
+ } else {
+   camera.x = drag.x + dx;
+   camera.y = drag.y + dy;
+   applyCamera();
+ }
+}
+
+function clearDrag() {
+ const current = drag;
+ drag = null;
+ const viewport = $("#viewport");
+ viewport.classList.remove("panning");
+ showAlignmentGuides();
+ if (viewport.hasPointerCapture(current.pointerId)) viewport.releasePointerCapture(current.pointerId);
+ if (current.moved) {
+   suppressClick = true;
+   setTimeout(() => suppressClick = false, 50);
+ }
+ return current;
+}
+
+function cancelDrag(event) {
+ if (!drag || (event?.pointerId !== undefined && event.pointerId !== drag.pointerId)) return;
+ const current = clearDrag();
+ if (current.id && current.moved) positionDraggedNode(current.id, current.x, current.y);
+}
+
+$("#viewport").addEventListener("pointermove", e => {
+ if (drag?.pointerId === e.pointerId) moveDrag(e.clientX, e.clientY, e.altKey);
+});
+$("#viewport").addEventListener("pointerup", async e => {
+ if (drag?.pointerId !== e.pointerId) return;
+ if (drag.moved) moveDrag(e.clientX, e.clientY, e.altKey);
+ const current = clearDrag();
+ if (!current.id) return;
+ selected = current.id;
+ const node = getState(current.id);
+ if (node.x === current.x && node.y === current.y) {
+   render();
+   return;
+ }
+ try {
+   await mutate([{op:"edit_state", id:node.id, changes:{x:node.x, y:node.y}}]);
+ } catch (error) {
+   toast(error.message);
+   if (getState(node.id) === node) positionDraggedNode(node.id, current.x, current.y);
+ }
+});
+$("#viewport").addEventListener("pointercancel", cancelDrag);
+$("#viewport").addEventListener("lostpointercapture", cancelDrag);
+window.addEventListener("blur", cancelDrag);
+function updateAlignmentModifier(event) {
+ if (event.key === "Alt" && drag?.id && drag.last) {
+   moveDrag(drag.last.clientX, drag.last.clientY, event.altKey);
+ }
+}
+document.addEventListener("keyup", updateAlignmentModifier);
 $("#nodes").addEventListener("click",e=>{
  if(suppressClick||e.target.closest(".port"))return;const n=e.target.closest("[data-state]");if(!n)return;
  if(reports.active){reports.toggleState(n.dataset.state);return;}
@@ -498,13 +569,15 @@ $("#edges").addEventListener("click",e=>{const g=e.target.closest("[data-action]
 $("#edges").addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){const g=e.target.closest("[data-action]");if(g){e.preventDefault();showAction(g.dataset.action,g);}}});
 document.addEventListener("pointerdown",e=>{if(!e.target.closest("#action-preview")&&!e.target.closest(".edge-group"))$("#action-preview").hidden=true;});
 document.addEventListener("keydown",e=>{
+ updateAlignmentModifier(e);
+ if(e.key==="Escape"&&drag){cancelDrag();return;}
  if(e.key==="Escape"){if(reports.active)reports.setMode(false);hidePopups();if(connecting){connecting=null;$("#viewport").classList.remove("connecting");}else selected=null;positionSelection();}
  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="z"&&!reports.active&&!e.target.closest("input,textarea")&&!$("#editor").open){e.preventDefault();$("#undo").click();}
 });
 window.addEventListener("hashchange",route);
 window.addEventListener("resize",()=>{hidePopups();applyCamera();});
 reports=SaigenReports.create({query:$,getFlow:()=>flow,getToken:()=>token,request,render,hidePopups,
- clearSelection:()=>{selected=null;connecting=null;},toast});
+ clearSelection:()=>{cancelDrag();selected=null;connecting=null;},toast});
 render();start();setInterval(poll,1000);
 $("#close-artifact").onclick=()=>{artifactRequest++;$("#artifact-dialog").close();};
 document.addEventListener("error",handleImageError,true);

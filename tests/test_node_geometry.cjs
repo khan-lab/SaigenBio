@@ -28,3 +28,27 @@ for(const status of ["planned","running"]){
     assert.equal(JSON.stringify(context.node),before);
 }
 console.log("Node geometry checks passed: stable anchors across statuses, straight aligned edges, and concise pending cards.");
+
+const align = evaluate("SaigenGeometry.alignment");
+const above = {id:"above", x:100, y:0, status:"planned"};
+const beside = {id:"beside", x:400, y:200, status:"completed"};
+const moving = {id:"moving", x:104, y:196};
+const both = align(moving, [moving, above, beside], 1);
+assert.equal(both.x, 100);
+assert.equal(both.y, 200);
+assert.equal(both.guides.x.at, 196);
+assert.equal(both.guides.y.at, 266);
+assert.equal(both.guides.x.end, 340);
+assert.equal(both.guides.y.start, 92);
+assert.equal(align(moving, [above, beside], 2).x, moving.x);
+assert.equal(align({...moving,x:110}, [above], .5).x, 100);
+assert.equal(align(moving, [{...above,y:-800}], 1).x, moving.x);
+assert.equal(align(moving, [above], 1, both.guides, true).x, moving.x);
+
+const competitor = {...above,id:"closer",x:108};
+const nearCompetitor = {...moving,x:107};
+assert.equal(align(nearCompetitor, [above, competitor], 1).x, 108);
+assert.equal(align(nearCompetitor, [competitor, above], 1, both.guides).x, 100);
+assert.equal(align({...moving,x:110}, [above, competitor], 1, both.guides).x, 108);
+assert.equal(align(moving, [competitor, above], 1).guides.x.id, "above");
+console.log("Alignment checks passed: matching axes, zoom, range, tie-breaking, retention and bypass.");
