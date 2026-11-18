@@ -7,7 +7,7 @@
 <main id="flow-view">
   <p id="reconstruction-notice" hidden>Reconstruction review pending · inspect states, relationships and evidence in details.</p><div id="intro"><div class="eyebrow">Your analysis starts here</div><p>Record a starting state with the agent or the SaigenBio CLI.</p></div>
   <div id="viewport" class="editing" aria-label="Analysis flow. Drag the background to pan; scroll to zoom.">
-    <div id="scene"><svg id="edges" aria-label="Analysis actions"></svg><div id="workflow-labels"></div><div id="nodes"></div></div>
+    <div id="scene"><svg id="edges" aria-label="Analysis actions"></svg><div id="workflow-labels"></div><svg id="alignment-guides" aria-hidden="true"></svg><div id="nodes"></div></div>
   </div>
   <div id="report-tools" hidden><span id="report-count">Select states in report order</span><select id="report-template" aria-label="Report format"><option value="results-summary">Results summary</option><option value="analysis-notebook" selected>Analysis notebook</option><option value="reproducibility-appendix">Reproducibility appendix</option></select><button id="report-create" disabled>Preview contents</button><button id="report-cancel">Cancel</button></div>
   <div id="edit-tools"><button id="open-archive" class="outline">Archive</button><button id="undo" class="outline" disabled>Undo</button><button id="add-state" class="outline">+ State</button></div>

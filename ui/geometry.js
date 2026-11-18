@@ -42,5 +42,43 @@ function actionJunction(a,states){
  return {inputs,junction,output:'M '+junction.x+' '+junction.y+' L '+end.x+' '+end.y,
    label:{x:(edgeAnchor(nearest,true).x+junction.x)/2,y:Math.min(nearest.y,target.y)-14}};
 }
-return Object.freeze({W,H,edgeAnchor,edgePath,roundedRoute,actionJunction});
+// Cards share one size across statuses, so matching a corresponding edge or
+// center yields the same position. Use a center guide between the cards.
+function alignment(position, states, scale, previous = {}, bypass = false) {
+ const result = {x: position.x, y: position.y, guides: {}};
+ if (bypass) return result;
+
+ const snap = 6 / scale, release = 9 / scale, nearby = 240 / scale;
+ for (const [axis, cross, size, crossSize] of [["x", "y", W, H], ["y", "x", H, W]]) {
+   let best;
+   for (const state of states) {
+     if (state.id === position.id) continue;
+     const delta = Math.abs(state[axis] - position[axis]);
+     const separation = Math.abs(state[cross] - position[cross]);
+     const gap = Math.max(0, separation - crossSize);
+     const retained = previous[axis]?.id === state.id;
+     // Only align with a neighbor in the perpendicular direction.
+     if (separation < crossSize / 2 || gap > nearby || delta > (retained ? release : snap)) continue;
+     if (!best || retained || (!best.retained && (
+       delta < best.delta || (delta === best.delta && (
+         separation < best.separation || (separation === best.separation && state.id < best.state.id)
+       ))
+     ))) best = {state, delta, separation, retained};
+   }
+   if (best) {
+     result[axis] = best.state[axis];
+     result.guides[axis] = {id: best.state.id, at: best.state[axis] + size / 2};
+   }
+ }
+ for (const [axis, cross, crossSize] of [["x", "y", H], ["y", "x", W]]) {
+   const guide = result.guides[axis];
+   if (!guide) continue;
+   const neighbor = states.find(state => state.id === guide.id);
+   const padding = 8 / scale;
+   guide.start = Math.min(neighbor[cross], result[cross]) - padding;
+   guide.end = Math.max(neighbor[cross], result[cross]) + crossSize + padding;
+ }
+ return result;
+}
+return Object.freeze({W,H,edgeAnchor,edgePath,roundedRoute,actionJunction,alignment});
 })();
