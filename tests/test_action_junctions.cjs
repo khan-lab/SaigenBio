@@ -19,16 +19,42 @@ assert.deepEqual(Array.from(geometry.inputs,i=>i.id),["qc","input"]);
 assert.equal(geometry.junction.x,596);
 assert.equal(geometry.junction.y,66);
 assert.equal(geometry.output,"M 596 66 L 640 66");
-// The ancestor route must clear the QC card, rather than passing behind it.
-const route=geometry.inputs.find(i=>i.id==="input").points;
-assert.ok(route.some(p=>p.y<0));
-for(let i=1;i<route.length;i++){
-    const a=route[i-1],b=route[i];
-    if(a.y===b.y&&a.y>=0&&a.y<=132)
-        assert.ok(Math.max(a.x,b.x)<=320||Math.min(a.x,b.x)>=512);
-    if(a.x===b.x&&a.x>=320&&a.x<=512)
-        assert.ok(Math.max(a.y,b.y)<=0||Math.min(a.y,b.y)>=132);
+function samplePath(path) {
+    assert.match(path, /^M .+ C /);
+    assert.doesNotMatch(path, / [LQ] /);
+    const values = path.match(/-?\d+(?:\.\d+)?/g).map(Number);
+    let [x, y] = values;
+    const samples = [{x, y}];
+    for (let i = 2; i < values.length; i += 6) {
+        const [ax, ay, bx, by, endX, endY] = values.slice(i, i + 6);
+        for (let step = 1; step <= 100; step++) {
+            const t = step / 100, u = 1 - t;
+            samples.push({
+                x: u**3*x + 3*u*u*t*ax + 3*u*t*t*bx + t**3*endX,
+                y: u**3*y + 3*u*u*t*ay + 3*u*t*t*by + t**3*endY,
+            });
+        }
+        [x, y] = [endX, endY];
+    }
+    return samples;
 }
+const inside = (p, card) => p.x > card.x && p.x < card.x + 192 && p.y > card.y && p.y < card.y + 132;
+const route = samplePath(geometry.inputs.find(i=>i.id==="input").d);
+assert.ok(route.some(p=>p.y<0));
+assert.ok(route.every(p=>!inside(p,fixture.states[1])));
+assert.deepEqual(route.at(-1), {x:596,y:66});
+
+// The old bounding-area test would detour around this card even though the
+// curve is still well above it while passing its horizontal span.
+context.offPath = [state("s", 0, 0), state("target", 900, 400), state("other", 280, 260)];
+const clearDirect = evaluate('SaigenGeometry.actionJunction({from:["s","other"],to:"target"}, offPath).inputs[0].d');
+assert.equal((clearDirect.match(/ C /g)||[]).length,1);
+
+// The lower side is nearer when both endpoints are below the blocker center.
+context.below = [state("s", 0, 55), state("target", 640, 55), state("blocker", 320, 0)];
+const lower = samplePath(evaluate('SaigenGeometry.actionJunction({from:["s","blocker"],to:"target"}, below).inputs[0].d'));
+assert.ok(lower.some(p=>p.y>132));
+assert.ok(lower.every(p=>!inside(p,context.below[2])));
 evaluate("renderEdges()");
 assert.equal((edges.innerHTML.match(/data-action=/g)||[]).length,1);
 assert.equal((edges.innerHTML.match(/class="edge-label"/g)||[]).length,1);
@@ -54,7 +80,14 @@ assert.equal(evaluate("actionJunction(flow.actions[0]).inputs.length"),2);
 assert.equal(evaluate("actionJunction(flow.actions[0]).junction.y"),186);
 // A target dragged to the left must route above its source cards too.
 evaluate('flow.states[2].x=-320;flow.states[2].y=0');
-assert.ok(evaluate('actionJunction(flow.actions[0]).inputs.every(i=>i.points&&i.points.some(p=>p.y<0))'));
+const backward = evaluate('actionJunction(flow.actions[0])');
+const backwardCards = evaluate('flow.states');
+for (const input of backward.inputs) {
+    const samples = samplePath(input.d);
+    assert.ok(samples.some(p=>p.y<0));
+    assert.ok(samples.every(p=>backwardCards.every(card=>!inside(p,card))));
+    assert.deepEqual(samples.at(-1), {x:backward.junction.x,y:backward.junction.y});
+}
 // A single input continues using the existing curve, without a junction.
 evaluate('flow.actions[0].from=["qc"];renderEdges()');
 assert.equal((edges.innerHTML.match(/data-action=/g)||[]).length,1);

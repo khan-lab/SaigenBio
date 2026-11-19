@@ -10,33 +10,95 @@ function edgePath(from,to){
    'M '+start.x+' '+start.y+' C '+(start.x+dx)+' '+start.y+', '+(end.x-dx)+' '+end.y+', '+end.x+' '+end.y;
  return {d,x:(start.x+end.x)/2,y:(start.y+end.y)/2};
 }
-function roundedRoute(points){
- let d='M '+points[0].x+' '+points[0].y;
- for(let i=1;i<points.length-1;i++){
-   const p=points[i],prev=points[i-1],next=points[i+1],before=Math.hypot(p.x-prev.x,p.y-prev.y),after=Math.hypot(next.x-p.x,next.y-p.y),r=Math.min(10,before/2,after/2);
-   if(!r){d+=' L '+p.x+' '+p.y;continue;}
-   const a={x:p.x+(prev.x-p.x)*r/before,y:p.y+(prev.y-p.y)*r/before},b={x:p.x+(next.x-p.x)*r/after,y:p.y+(next.y-p.y)*r/after};
-   d+=' L '+a.x+' '+a.y+' Q '+p.x+' '+p.y+' '+b.x+' '+b.y;
+const point = (x, y) => ({x, y});
+const midpoint = (a, b) => point((a.x + b.x) / 2, (a.y + b.y) / 2);
+
+function forwardCurve(start, end) {
+ const handle = (end.x - start.x) / 2;
+ return [start, point(start.x + handle, start.y), point(end.x - handle, end.y), end];
+}
+
+// A cubic lies inside its control-point bounds. Subdivide overlapping bounds
+// until they clear the box or are small enough to count as a collision.
+function touchesBox(curve, box, depth = 0) {
+ const left = Math.min(...curve.map(p => p.x)), right = Math.max(...curve.map(p => p.x));
+ const top = Math.min(...curve.map(p => p.y)), bottom = Math.max(...curve.map(p => p.y));
+ if (right < box.left || left > box.right || bottom < box.top || top > box.bottom) return false;
+ if (depth === 9 || (left >= box.left && right <= box.right && top >= box.top && bottom <= box.bottom)) return true;
+ const [a, b, c, d] = curve;
+ const ab = midpoint(a, b), bc = midpoint(b, c), cd = midpoint(c, d);
+ const abc = midpoint(ab, bc), bcd = midpoint(bc, cd), center = midpoint(abc, bcd);
+ return touchesBox([a, ab, abc, center], box, depth + 1)
+   || touchesBox([center, bcd, cd, d], box, depth + 1);
+}
+
+function smoothDetour(start, end, left, right, lane) {
+ const entry = point(left, lane), exit = point(right, lane);
+ return [forwardCurve(start, entry), forwardCurve(entry, exit), forwardCurve(exit, end)];
+}
+
+function backwardDetour(start, end, lane) {
+ const entry = point(start.x, lane), exit = point(end.x, lane);
+ const turn = 40;
+ return [
+   [start, point(start.x + turn, start.y), point(entry.x + turn, lane), entry],
+   forwardCurve(entry, exit),
+   [exit, point(exit.x - turn, lane), point(end.x - turn, end.y), end],
+ ];
+}
+
+function junctionRoute(start, end, boxes, source, target, index) {
+ const forward = end.x > start.x;
+ const direct = forwardCurve(start, end);
+ const blocking = forward ? boxes.filter(box => touchesBox(direct, box)) : [];
+ if (forward && !blocking.length) return [direct];
+
+ const candidates = [];
+ function add(curves, lane) {
+   const cost = Math.abs(lane - start.y) + Math.abs(lane - end.y);
+   candidates.push({curves, cost});
  }
- const end=points.at(-1);return d+' L '+end.x+' '+end.y;
+ const clearance = 12 + (index % 4) * 5;
+ if (forward) {
+   // Try passing only the cards the direct curve hits. Also try wider lanes
+   // when other cards would obstruct the entry, exit, or the detour itself.
+   const nearby = boxes.filter(box => box.left < end.x && box.right > start.x);
+   for (const obstacles of [blocking, nearby]) {
+     const left = Math.max(start.x, Math.min(...obstacles.map(box => box.left)));
+     const right = Math.min(end.x, Math.max(...obstacles.map(box => box.right)));
+     for (const lane of [
+       Math.min(...obstacles.map(box => box.top)) - clearance,
+       Math.max(...obstacles.map(box => box.bottom)) + clearance,
+     ]) add(smoothDetour(start, end, left, right, lane), lane);
+   }
+ } else {
+   const nearby = boxes.filter(box => box.left <= start.x + 40 && box.right >= end.x - 40);
+   const top = Math.min(source.y, target.y, ...nearby.map(box => box.top));
+   const bottom = Math.max(source.y + H, target.y + H, ...nearby.map(box => box.bottom));
+   for (const lane of [top - clearance, bottom + clearance]) add(backwardDetour(start, end, lane), lane);
+ }
+ candidates.sort((a, b) => a.cost - b.cost);
+ const clear = candidates.find(({curves}) =>
+   curves.every(curve => boxes.every(box => !touchesBox(curve, box))));
+ // Manual card overlaps can leave no visible exit or entrance.
+ return (clear || candidates[0]).curves;
+}
+
+function cubicPath(curves) {
+ const [start] = curves[0];
+ const points = curve => curve.slice(1).map(p => p.x + " " + p.y).join(", ");
+ return "M " + start.x + " " + start.y + curves.map(curve => " C " + points(curve)).join("");
 }
 function actionJunction(a,states){
  const getState=id=>states.find(n=>n.id===id);
  const target=getState(a.to),end=edgeAnchor(target),junction={x:end.x-44,y:end.y};
  const sources=a.from.map(id=>getState(id));
  const inputs=sources.map((s,index)=>{
-   const start=edgeAnchor(s,true),left=Math.min(start.x,junction.x),right=Math.max(start.x,junction.x);
-   const candidates=states.filter(n=>n.id!==s.id&&n.id!==target.id&&n.x<right&&n.x+W>left);
-   const blocked=candidates.some(n=>n.y-12<Math.max(start.y,junction.y)&&n.y+H+12>Math.min(start.y,junction.y));
-   if(!blocked&&junction.x>start.x){
-     const dx=Math.max(20,(junction.x-start.x)*.5);
-     return {id:s.id,d:'M '+start.x+' '+start.y+' C '+(start.x+dx)+' '+start.y+', '+(junction.x-dx)+' '+junction.y+', '+junction.x+' '+junction.y};
-   }
-   // An ancestor input can span intermediate result cards. Route above them,
-   // retaining the recorded dependency rather than concealing it behind a card.
-   const lane=Math.min(s.y,target.y,...candidates.map(n=>n.y))-28-index*16;
-   const points=[start,{x:start.x+20,y:start.y},{x:start.x+20,y:lane},{x:junction.x-20,y:lane},{x:junction.x-20,y:junction.y},junction];
-   return {id:s.id,d:roundedRoute(points),points};
+   const start = edgeAnchor(s, true);
+   const boxes = states.filter(n => n.id !== s.id && n.id !== target.id).map(n => ({
+     left: n.x - 8, right: n.x + W + 8, top: n.y - 8, bottom: n.y + H + 8,
+   }));
+   return {id: s.id, d: cubicPath(junctionRoute(start, junction, boxes, s, target, index))};
  });
  const nearest=sources.reduce((best,n)=>Math.abs(edgeAnchor(n,true).x-junction.x)<Math.abs(edgeAnchor(best,true).x-junction.x)?n:best);
  return {inputs,junction,output:'M '+junction.x+' '+junction.y+' L '+end.x+' '+end.y,
@@ -168,5 +230,5 @@ function autoArrange(states, actions) {
  }));
  return ids.map(id => ({id, ...positions.get(id)}));
 }
-return Object.freeze({W,H,edgeAnchor,edgePath,roundedRoute,actionJunction,alignment,autoArrange});
+return Object.freeze({W,H,edgeAnchor,edgePath,actionJunction,alignment,autoArrange});
 })();
