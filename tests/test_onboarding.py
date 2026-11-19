@@ -25,8 +25,10 @@ class OnboardingTests(unittest.TestCase):
 
     def initialize(self, answers=(), **kwargs):
         self.output = io.StringIO()
+        self.prompts = []
         replies=iter(answers)
         def reply(prompt):
+            self.prompts.append(prompt)
             if "Bring in an existing analysis?" in prompt:return "n"
             answer=next(replies)
             if isinstance(answer,BaseException):raise answer
@@ -41,16 +43,19 @@ class OnboardingTests(unittest.TestCase):
                 return initialize(self.store, **kwargs)
 
     def test_interview_creates_multiple_agents_and_flexible_policy(self):
-        self.assertEqual(self.initialize(["Spatial study", "y", "y", "y", "y", "2", "y", "", "n", "y"]), 0)
+        self.assertEqual(self.initialize(["Spatial study", "y", "y", "y", "y", "2", "", "n", "y"]), 0)
         self.assertEqual(self.store.flow()["project"], "Spatial study")
         config = json.loads((self.root / "saigen-workspace.json").read_text())
         self.assertEqual(config["agents"], ["codex", "claude", "opencode", "antigravity"])
         self.assertEqual(config["permissionMode"], "flexible")
+        self.assertEqual(config["uiDevelopment"], "ask")
+        self.assertTrue(any("Create this workspace?" in prompt for prompt in self.prompts))
+        self.assertFalse(any("UI source" in prompt for prompt in self.prompts))
+        self.assertNotIn("SaigenBio UI development:", self.output.getvalue())
         self.assertEqual(config["viewer"], f"http://127.0.0.1:{saved_port(self.store)}/")
         for filename in ("AGENTS.md", "CLAUDE.md", "GEMINI.md"):
             instructions = (self.root / filename).read_text()
-            self.assertIn("SaigenBio's own UI implementation", instructions)
-            self.assertIn("without separate approval for each edit", instructions)
+            self.assertIn("Ask before changing SaigenBio's application source code.", instructions)
             self.assertIn("does not grant filesystem or network access", instructions)
         for folder in (".agents", ".claude", ".opencode"):
             self.assertTrue((self.root / folder / "skills/saigen-record/SKILL.md").is_file())
@@ -67,8 +72,15 @@ class OnboardingTests(unittest.TestCase):
         port = suggested_port()
         with patch("saigen.server.serve") as serve:
             self.assertEqual(self.initialize(["y"], name="Flag project", agents=["codex"],
-                port=port, permission="flexible", ui_development="ask", start_viewer=True), 0)
+                port=port, permission="flexible", ui_development="allow", start_viewer=True), 0)
             serve.assert_called_once_with(self.store, port)
+        self.assertEqual(len(self.prompts), 2)
+        self.assertIn("Bring in an existing analysis?", self.prompts[0])
+        self.assertIn("Create this workspace?", self.prompts[1])
+        config = json.loads((self.root / "saigen-workspace.json").read_text())
+        self.assertEqual(config["uiDevelopment"], "allow")
+        self.assertIn("SaigenBio UI development: allow", self.output.getvalue())
+        self.assertIn("without separate approval for each edit", (self.root / "AGENTS.md").read_text())
         self.assertNotIn("AI agents:", self.output.getvalue())
         self.assertNotIn("Agent workflow permissions:", self.output.getvalue())
 
@@ -130,7 +142,7 @@ class OnboardingTests(unittest.TestCase):
         self.assertEqual((self.root / "CLAUDE.md").read_text(), "My custom rules\n")
 
     def test_add_agent_retains_existing_settings_and_customizations(self):
-        self.initialize(["", "y", "n", "n", "n", "2", "n", "", "n", "y"])
+        self.initialize(["", "y", "n", "n", "n", "2", "", "n", "y"])
         config = json.loads((self.root / "saigen-workspace.json").read_text())
         # User-maintained configuration keys and CLI paths survive additive setup.
         config["custom"] = "keep me"
@@ -176,6 +188,7 @@ class OnboardingTests(unittest.TestCase):
             "--permissions", "flexible", "--non-interactive"], cwd=REPO, capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
         data = json.loads(result.stdout)
+        self.assertEqual(data["workspaceSetup"]["uiDevelopment"], "ask")
         self.assertEqual(data["workspaceSetup"]["agents"], ["codex", "claude"])
         self.assertEqual(saved_port(self.store), port)
 

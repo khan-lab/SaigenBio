@@ -47,14 +47,14 @@ For concise planned nodes, the shared skill now separates short result titles, o
 
 ### Workflow permissions
 
-The init interview asks independently about analysis permissions and SaigenBio UI development. Both choices are saved in saigen-workspace.json and described in agent instructions. Analysis uses permissionMode:
+The init interview asks about analysis permissions. The choice is saved as `permissionMode` in `saigen-workspace.json` and described in the agent instructions.
 
 | Choice | Authorized behavior |
 | --- | --- |
 | ask | Requested workspace edits may proceed; ask before proposed downloads and analysis runs. |
 | flexible | Proceed with requested edits, public-data downloads, and analysis runs without asking for each step. |
 
-UI source changes use `uiDevelopment`: `ask` (default) requires approval; `allow` authorizes routine local UI fixes and improvements. Use `--ui-development ask` or `--ui-development allow` with init or setup. This choice concerns SaigenBio application source, while canvas plans, notes, and layout remain workspace edits. Locate the source checkout before editing application code.
+UI source changes use `uiDevelopment`: `ask` (default) requires approval; `allow` authorizes routine local UI fixes and improvements. Developers can explicitly opt in with `--ui-development allow` when creating a workspace with `init` or `setup`. This choice concerns SaigenBio application source, while canvas plans, notes, and layout remain workspace edits. Locate the source checkout before editing application code.
 
 Older configurations without `uiDevelopment` retain their original meaning: Flexible also grants the routine local UI development permission previously selected. Setup preserves this legacy behavior rather than silently changing authorization. To change permissions in an existing workspace, deliberately update its configuration and corresponding agent instructions together; customized files are never overwritten automatically.
 
