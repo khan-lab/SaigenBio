@@ -181,6 +181,26 @@ class RecorderTests(unittest.TestCase):
         result=self.execute("print('content')",stdout_name="data/result.txt")
         n=entity(self.store.flow(),"states",result["state"])
         self.assertEqual(n["files"],["data/result.txt"])
+    def test_group_layout_edit_and_undo_preserve_execution_evidence(self):
+        result=self.execute("print('synthetic layout fixture')")
+        before=self.store.flow()
+        ids=["input",result["state"]]
+        positions={n["id"]:(n["x"],n["y"]) for n in before["states"]}
+        ops=[{"op":"edit_state","id":sid,"changes":{
+            "x":positions[sid][0]+70,"y":positions[sid][1]+45}} for sid in ids]
+        moved=self.store.edit(ops,before["revision"])
+        self.assertEqual(moved["revision"],before["revision"]+1)
+        self.assertEqual(moved["actions"],before["actions"])
+        self.assertEqual(moved["artifacts"],before["artifacts"])
+        for old,new in zip(before["states"],moved["states"]):
+            for key in ("status","origin","artifactIds","manifest","writtenBy","performedBy"):
+                self.assertEqual(new.get(key),old.get(key))
+        self.store.undo(moved["revision"],moved["revision"])
+        restored=self.store.flow()
+        self.assertEqual({n["id"]:(n["x"],n["y"]) for n in restored["states"]},positions)
+        self.assertEqual(restored["actions"],before["actions"])
+        self.assertEqual(restored["artifacts"],before["artifacts"])
+
     def test_stale_edit_rejected_and_execution_identity_preserved(self):
         rev=self.store.flow()["revision"]
         flow=self.store.edit([{"op":"edit_state","id":"input","changes":{"note":"Human note"}}],rev)
