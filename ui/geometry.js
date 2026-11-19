@@ -80,5 +80,93 @@ function alignment(position, states, scale, previous = {}, bypass = false) {
  }
  return result;
 }
-return Object.freeze({W,H,edgeAnchor,edgePath,roundedRoute,actionJunction,alignment});
+// Layer each connected group, then order its rows using neighboring layers.
+function autoArrange(states, actions) {
+ const ids = states.map(state => state.id).sort();
+ const parents = new Map(ids.map(id => [id, new Set()]));
+ const children = new Map(ids.map(id => [id, new Set()]));
+ for (const action of actions) {
+   for (const parent of action.from) {
+     parents.get(action.to).add(parent);
+     children.get(parent).add(action.to);
+   }
+ }
+
+ const depths = new Map(ids.map(id => [id, 0]));
+ const remaining = new Map(ids.map(id => [id, parents.get(id).size]));
+ const queue = ids.filter(id => remaining.get(id) === 0);
+ for (let index = 0; index < queue.length; index++) {
+   const id = queue[index];
+   for (const child of children.get(id)) {
+     depths.set(child, Math.max(depths.get(child), depths.get(id) + 1));
+     remaining.set(child, remaining.get(child) - 1);
+     if (remaining.get(child) === 0) queue.push(child);
+   }
+ }
+ if (queue.length !== ids.length) throw new Error("Auto-arrange requires a graph without cycles.");
+
+ const positions = new Map(), visited = new Set(), isolated = [];
+ const columnGap = W + 120, rowGap = H + 72, margin = 64;
+ let top = margin;
+ for (const start of ids) {
+   if (visited.has(start)) continue;
+   if (!parents.get(start).size && !children.get(start).size) {
+     isolated.push(start);
+     continue;
+   }
+   const group = [start], layers = [];
+   visited.add(start);
+   for (let index = 0; index < group.length; index++) {
+     const id = group[index], depth = depths.get(id);
+     (layers[depth] ??= []).push(id);
+     for (const neighbor of [...parents.get(id), ...children.get(id)]) {
+       if (visited.has(neighbor)) continue;
+       visited.add(neighbor);
+       group.push(neighbor);
+     }
+   }
+
+   const rows = new Map();
+   function placeRows(layer) {
+     layer.forEach((id, index) => rows.set(id, index - (layer.length - 1) / 2));
+   }
+   for (const layer of layers) {
+     layer.sort();
+     placeRows(layer);
+   }
+   function orderLayer(layer, neighbors) {
+     const centers = new Map(layer.map(id => {
+       const adjacent = [...neighbors.get(id)].sort();
+       const center = adjacent.length
+         ? adjacent.reduce((sum, neighbor) => sum + rows.get(neighbor), 0) / adjacent.length
+         : rows.get(id);
+       return [id, center];
+     }));
+     // Stable sorting preserves the previous order when two branches tie.
+     layer.sort((a, b) => centers.get(a) - centers.get(b));
+     placeRows(layer);
+   }
+   for (let pass = 0; pass < 4; pass++) {
+     for (let i = 1; i < layers.length; i++) orderLayer(layers[i], parents);
+     for (let i = layers.length - 2; i >= 0; i--) orderLayer(layers[i], children);
+   }
+   // Finish left to right so downstream order reflects the final parent order.
+   for (let i = 1; i < layers.length; i++) orderLayer(layers[i], parents);
+
+   const height = layers.reduce((max, layer) => Math.max(max, layer.length), 0);
+   for (const id of group) {
+     positions.set(id, {
+       x: margin + depths.get(id) * columnGap,
+       y: top + (rows.get(id) + (height - 1) / 2) * rowGap,
+     });
+   }
+   top += height * rowGap + 48;
+ }
+ isolated.forEach((id, index) => positions.set(id, {
+   x: margin + (index % 4) * columnGap,
+   y: top + Math.floor(index / 4) * rowGap,
+ }));
+ return ids.map(id => ({id, ...positions.get(id)}));
+}
+return Object.freeze({W,H,edgeAnchor,edgePath,roundedRoute,actionJunction,alignment,autoArrange});
 })();

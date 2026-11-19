@@ -204,6 +204,27 @@ class RecorderTests(unittest.TestCase):
         with self.assertRaises(RecordError): self.store.edit(ops,rev)
         self.assertEqual(self.store.flow()["revision"],rev)
         self.assertEqual(len(self.store.flow()["states"]),1)
+    def test_large_position_batch_saves_and_undoes_atomically(self):
+        ids = [f"node{i}" for i in range(100)]
+        before = self.store.edit(
+            [{"op":"add_state","id":ident,"value":{"title":ident}} for ident in ids],
+            self.store.flow()["revision"],
+        )
+        positions = {n["id"]: (n["x"], n["y"]) for n in before["states"]}
+        moves = [{"op":"edit_state","id":ident,"changes":{"x":64,"y":index*204}}
+                 for index, ident in enumerate(positions)]
+        with self.assertRaises(RecordError):
+            self.store.edit(moves[:-1] + [moves[0]], before["revision"])
+        with self.assertRaises(RecordError):
+            self.store.edit(moves[:-1] + [{**moves[-1], "changes":{"note":"not a move"}}],
+                            before["revision"])
+        self.assertEqual(self.store.flow()["revision"], before["revision"])
+        after = self.store.edit(moves, before["revision"])
+        self.assertEqual(after["revision"], before["revision"] + 1)
+        self.assertTrue(all(n["x"] == 64 for n in after["states"]))
+        restored = self.store.undo(after["revision"], after["revision"])
+        self.assertEqual({n["id"]: (n["x"], n["y"]) for n in restored["states"]}, positions)
+
     def test_multiple_undo_preserves_history(self):
         f=self.store.edit([{"op":"add_state","id":"plan","value":{"title":"Plan"}}],self.store.flow()["revision"])
         creation=f["revision"]

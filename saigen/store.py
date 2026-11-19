@@ -344,8 +344,19 @@ class Store:
             return {"op":"delete_action" if group=="actions" else "delete_state","id":ident}
         raise RecordError("Unsupported edit")
     def edit(self, ops, expected, actor="Human"):
-        if not isinstance(ops,list) or not 1<=len(ops)<=100: raise RecordError("Expected 1 to 100 operations")
+        if not isinstance(ops,list) or not ops: raise RecordError("Expected at least one operation")
         def change(f):
+            # A canvas arrangement can move every state in one undoable revision.
+            # Keep the ordinary batch limit for all other kinds of edit.
+            if len(ops) > 100:
+                ids = set()
+                for op in ops:
+                    if (not isinstance(op, dict) or op.get("op") != "edit_state"
+                            or not isinstance(op.get("id"), str) or op["id"] in ids
+                            or not isinstance(op.get("changes"), dict)
+                            or set(op["changes"]) != {"x", "y"}):
+                        raise RecordError("Expected 1 to 100 operations or one position edit per state")
+                    ids.add(op["id"])
             inverse=[]
             for op in ops:
                 if not isinstance(op,dict): raise RecordError("Invalid operation")
