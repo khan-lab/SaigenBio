@@ -23,6 +23,12 @@ Customized or conflicting instructions cause a refusal before any files are chan
 
 Sources: [Claude Code](https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more), [OpenCode skills](https://opencode.ai/docs/skills), [OpenCode rules](https://opencode.ai/docs/rules), [Antigravity skills](https://antigravity.google/docs/skills), [Antigravity customization](https://antigravity.google/docs/commands/learn), [Codex instructions](https://developers.openai.com/codex/guides/agents-md).
 
+## Git workspaces
+
+With an agent selected, `saigen init` and `saigen setup` add rules to the workspace’s `.gitignore` for the generated `saigen-record` directories listed above. The rules are relative to that workspace, including when it sits in a subdirectory of a repository.
+
+After cloning a workspace with ignored skills, run `saigen setup` with the workspace’s agent, analysis path, and saved input paths to recreate them. If a team wants to pin a generated copy, review it and use `git add -f` on that agent’s `saigen-record` directory to include `SKILL.md` and its references. Git continues tracking files already in the index.
+
 ## Start a session
 
 Open a fresh agent session in the workspace so it can load the project instructions. Describe your scientific task normally. The instructions point to the recording skill and the exact CLI path in saigen-workspace.json.

@@ -1,6 +1,7 @@
 """Prepare portable recording instructions without replacing user files."""
 import json
 from pathlib import Path
+import subprocess
 import sysconfig
 import sys
 from .records import RecordError
@@ -74,6 +75,32 @@ def merge_instructions(existing, content, previous=None):
     if end < start or existing[start + len(BLOCK_START):end] not in ("\n" + content, "\n" + (previous or content)):
         raise RecordError("SaigenBio instruction block was edited; merge instructions manually")
     return existing[:start] + block + existing[end + len(BLOCK_END):]
+
+
+def in_git_worktree(root):
+    # Setup can target a directory that will only be created after confirmation.
+    directory = next(path for path in (root, *root.parents) if path.is_dir())
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(directory), "rev-parse", "--is-inside-work-tree"],
+            capture_output=True, check=False,
+        )
+    except FileNotFoundError:
+        return False
+    return result.returncode == 0 and result.stdout.strip() == b"true"
+
+
+def missing_ignore_rules(path, rules):
+    if path.is_symlink() or (path.exists() and not path.is_file()):
+        raise RecordError("Expected a regular Git ignore file: " + str(path))
+    content = path.read_bytes() if path.exists() else b""
+    existing = set(content.removeprefix(b"\xef\xbb\xbf").splitlines())
+    missing = [rule for rule in rules.encode("ascii").splitlines() if rule not in existing]
+    if not missing:
+        return b""
+    newline = b"\r\n" if b"\r\n" in content else b"\n"
+    separator = newline if content and not content.endswith(b"\n") else b""
+    return separator + newline.join(missing) + newline
 
 
 def prepare(workspace, agent, project, inputs, viewer=None, permission=None, ui_development=None, *, preserve_instructions=False):
@@ -166,6 +193,11 @@ def prepare(workspace, agent, project, inputs, viewer=None, permission=None, ui_
     if managed:
         context["managedInstructions"] = managed
         files["saigen-workspace.json"] = json.dumps(context, indent=2) + "\n"
+    if agents and in_git_worktree(root):
+        folders = sorted({ADAPTERS[agent][0] for agent in agents})
+        rules = "".join(f"/{folder}/saigen-record/\n" for folder in folders)
+        if missing_ignore_rules(root / ".gitignore", rules):
+            files[".gitignore"] = rules
     return root, files, context
 
 def write_files(root, files):
@@ -173,7 +205,15 @@ def write_files(root, files):
     for name, content in files.items():
         dest = root / name
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(content)
+        if name == ".gitignore":
+            # Re-read after the interview so unrelated edits made during
+            # confirmation are preserved as well.
+            extra = missing_ignore_rules(dest, content)
+            if extra:
+                with dest.open("ab") as handle:
+                    handle.write(extra)
+        else:
+            dest.write_text(content)
 
 def setup(workspace, agent, project, inputs, viewer=None, permission=None, ui_development=None):
     root, files, context = prepare(workspace, agent, project, inputs, viewer, permission, ui_development)
