@@ -107,6 +107,8 @@ Open the viewer address shown by serve.
 - When a command uses several input states, their paths meet at a small junction with one outgoing arrow and one command label. Longer ancestor-input paths route above intermediate cards. The execution details retain every recorded input.
 - Failed attempts stay available in gray. A successful retry is a separate attempt.
 
+Choose **Auto-arrange** to lay out the whole canvas by its recorded dependencies. Inputs sit to the left of downstream results, and connected groups stay together. The layout runs locally and saves as one edit. Choose **Undo** to restore the previous positions.
+
 Drag a card to arrange the canvas. Temporary alignment guides appear as it snaps into a row or column with nearby cards. Hold **Option** on Mac or **Alt** on other keyboards to position it freely. Press **Esc** to cancel the drag, or choose **Undo** after dropping the card.
 
 Edits save to the project. Notes and layout can change; recorded execution facts are retained. Unused standalone plans can be deleted, including agent-created plans; remove dependent plans first. For an unused workflow, open a stage editor and choose **Cancel workflow** to retire the entire proposal while retaining its history. Recorded attempts remain protected. Undo checks for conflicting changes and can restore deleted standalone plans when their inputs are still available; workflow cancellation cannot be undone.

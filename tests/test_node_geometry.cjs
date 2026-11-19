@@ -52,3 +52,35 @@ assert.equal(align(nearCompetitor, [competitor, above], 1, both.guides).x, 100);
 assert.equal(align({...moving,x:110}, [above, competitor], 1, both.guides).x, 108);
 assert.equal(align(moving, [competitor, above], 1).guides.x.id, "above");
 console.log("Alignment checks passed: matching axes, zoom, range, tie-breaking, retention and bypass.");
+
+const arrange = evaluate("SaigenGeometry.autoArrange");
+const cards = ["a", "b", "c", "d", "result", "source", "child", "isolated"]
+    .map(id => ({id, x: 12, y: 12}));
+const links = [
+    {from: ["a"], to: "d"},
+    {from: ["b"], to: "c"},
+    {from: ["c", "d", "a"], to: "result"},
+    {from: ["source"], to: "child"},
+];
+const original = JSON.stringify({cards, links});
+const arranged = arrange(cards, links);
+const positions = new Map(arranged.map(node => [node.id, node]));
+assert.equal(JSON.stringify({cards, links}), original, "layout leaves evidence and inputs intact");
+assert.deepEqual(arrange([...cards].reverse(), [...links].reverse()), arranged);
+assert.deepEqual(arrange(arranged, links), arranged);
+for (const {from, to} of links) {
+    for (const id of from) assert.ok(positions.get(id).x < positions.get(to).x);
+}
+assert.equal(
+    Math.sign(positions.get("a").y - positions.get("b").y),
+    Math.sign(positions.get("d").y - positions.get("c").y),
+    "opposite alphabetical child order should not make the branches cross",
+);
+assert.ok(positions.get("source").y > Math.max(...["a", "b", "c", "d", "result"].map(id => positions.get(id).y)));
+assert.ok(positions.get("isolated").y > positions.get("child").y);
+for (const [index, node] of arranged.entries()) {
+    for (const other of arranged.slice(index + 1)) {
+        assert.ok(Math.abs(node.x - other.x) >= 192 || Math.abs(node.y - other.y) >= 132);
+    }
+}
+console.log("Auto-arrange checks passed: stable order, branch crossings, joins, disconnected groups and spacing.");

@@ -228,7 +228,7 @@ function renderEdges(){
  html+='</g>';});}
  $("#edges").innerHTML=html;
 }
-function render(){$("#reconstruction-notice").hidden=!Object.values(flow.reconstructions||{}).some(p=>["draft","partial"].includes(p.status));reports.render();renderNodes();renderEdges();$("#undo").disabled=!history.length;positionSelection();}
+function render(){$("#reconstruction-notice").hidden=!Object.values(flow.reconstructions||{}).some(p=>["draft","partial"].includes(p.status));reports.render();renderNodes();renderEdges();$("#undo").disabled=!history.length;$("#auto-arrange").disabled=flow.states.length<2;positionSelection();}
 function applyCamera(){ $("#scene").style.transform="translate("+camera.x+"px,"+camera.y+"px) scale("+camera.scale+")";$("#zoom-label").textContent=Math.round(camera.scale*100)+"%";positionSelection();}
 function bounds(){const ns=flow.states;if(!ns.length)return {x:0,y:0,w:1000,h:600};const x=Math.min(...ns.map(n=>n.x)),y=Math.min(...ns.map(n=>n.y));return {x,y,w:Math.max(...ns.map(n=>n.x+W))-x,h:Math.max(...ns.map(n=>n.y+H))-y};}
 function fit(initial=false){cancelDrag();const v=$("#viewport"),b=bounds(),w=v.clientWidth,h=v.clientHeight;let scale=Math.min(1,(w-100)/b.w,(h-170)/b.h);if(initial)scale=Math.max(scale,w<800?.67:.62);scale=Math.max(.22,scale);camera={scale,x:w>b.w*scale?(w-b.w*scale)/2-b.x*scale:65-b.x*scale,y:Math.max(90,(h-b.h*scale)/2)-b.y*scale};applyCamera();}
@@ -443,6 +443,24 @@ $("#delete-item").onclick=async()=>{
 $("#close-editor").onclick=$("#cancel-editor").onclick=()=>$("#editor").close();
 $("#editor").addEventListener("click",e=>{if(e.target===$("#editor")){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();}});
 $("#undo").onclick=async()=>{if(!history.length||busy)return;try{await mutate(null,history.at(-1));}catch(error){toast(error.message);}};
+$("#auto-arrange").onclick=async()=>{
+ if(!ready||busy||drag||reports.active||flow.states.length<2)return;
+ const button=$("#auto-arrange");
+ button.disabled=true;
+ try{
+   const current=new Map(flow.states.map(state=>[state.id,state]));
+   const operations=SaigenGeometry.autoArrange(flow.states,flow.actions)
+     .filter(({id,x,y})=>current.get(id).x!==x||current.get(id).y!==y)
+     .map(({id,x,y})=>({op:"edit_state",id,changes:{x,y}}));
+   if(operations.length)await mutate(operations);
+   else toast("The canvas is already arranged.");
+   fit();
+ }catch(error){
+   toast(error.message);
+ }finally{
+   button.disabled=flow.states.length<2;
+ }
+};
 $("#add-state").onclick=()=>addState();
 $("#selection-tools").onclick=e=>{const mode=e.target.closest("[data-edit-action]")?.dataset.editAction,n=getState(selected);if(!n)return;if(mode==="edit")openStateEditor(n);if(mode==="branch")addState(n);if(mode==="connect")startConnecting(n.id);};
 $("#fit").onclick=()=>{hidePopups();fit();};
