@@ -120,8 +120,6 @@ def initialize(store, *, name=None, agents=None, port=None, permission=None,
                 agents = choose_agents()
             if agents and permission is None:
                 permission = choose_permission()
-            if agents and ui_development is None:
-                ui_development = "allow" if yes_no("Allow routine local SaigenBio UI source fixes and improvements?", default=False) else "ask"
             if port is None:
                 proposal = suggested_port()
                 while True:
@@ -163,7 +161,8 @@ def initialize(store, *, name=None, agents=None, port=None, permission=None,
             print(f"\nProject: {name}\nAgents: {', '.join(agents) or 'none'}\nViewer: {viewer}")
             if agents:
                 print("Workflow permissions: " + permission)
-                print("SaigenBio UI development: " + ui_development)
+                if ui_development == "allow":
+                    print("SaigenBio UI development: allow")
             print("Start viewer: " + ("yes" if start_viewer else "no"))
             if not yes_no("Create this workspace?"):
                 print("Cancelled. No files were changed.")
