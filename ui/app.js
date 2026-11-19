@@ -7,7 +7,7 @@ const copy = value => JSON.parse(JSON.stringify(value));
 
 const {W,H}=SaigenGeometry;
 let flow={schemaVersion:1,project:"Project",revision:0,states:[],actions:[],artifacts:{},revisions:[]};
-let history=[],selected=null,connecting=null,editorContext=null;
+let history=[],selection=new Set(),connecting=null,editorContext=null;
 let reports;
 let camera={x:70,y:90,scale:.72},savedCamera=null,drag=null,hoverTimer=null,hideTimer=null,toastTimer=null;
 let ready=false,busy=false,token="",allEvents=[],artifactRequest=0;
@@ -165,6 +165,23 @@ function nodeContent(n){
 }
 
 function reportBadge(id){const i=reports.position(id);return reports.active&&i>=0?'<span class="report-badge" aria-label="Report position '+(i+1)+'">'+(i+1)+'</span>':"";}
+function selectedStates(){return flow.states.filter(n=>selection.has(n.id));}
+function selectNode(id,additive=false){
+ if(additive){if(selection.has(id))selection.delete(id);else selection.add(id);}
+ else selection=new Set([id]);
+ hidePopups();syncSelection();
+}
+function syncSelection(){
+ selection=new Set([...selection].filter(id=>getState(id)));
+ $("#viewport").classList.toggle("multi-select",selection.size>1);
+ $("#nodes").querySelectorAll("[data-state]").forEach(card=>{
+   const selected=selection.has(card.dataset.state);
+   card.classList.toggle("selected",selected);card.setAttribute("aria-pressed",String(selected));
+ });
+ const message=selection.size?selection.size+(selection.size===1?" node selected":" nodes selected"):"Selection cleared";
+ if($("#selection-status").textContent!==message)$("#selection-status").textContent=message;
+ positionSelection();
+}
 function renderWorkflowLabels(){
  $("#workflow-labels").innerHTML=workflows.labels();
  $("#workflow-labels").querySelectorAll("[data-workflow-state]").forEach(b=>b.onclick=()=>openState(b.dataset.workflowState));
@@ -172,7 +189,8 @@ function renderWorkflowLabels(){
 function renderNodes(){
  renderWorkflowLabels();
  $("#planned-help").hidden=!flow.states.some(n=>n.status==="planned");
- $("#nodes").innerHTML=flow.states.map(n=>'<button class="state '+esc(n.status)+(firstPlot(n)?" has-plot":"")+(selected===n.id?" selected":"")+'" data-state="'+esc(n.id)+'" style="left:'+n.x+'px;top:'+n.y+'px" aria-label="'+esc(n.title)+'">'+reportBadge(n.id)+nodeContent(n)+'<span class="port" title="Connect to another state" aria-hidden="true"></span></button>').join("");
+ $("#nodes").innerHTML=flow.states.map(n=>'<button class="state '+esc(n.status)+(firstPlot(n)?" has-plot":"")+(selection.has(n.id)?" selected":"")+'" data-state="'+esc(n.id)+'" style="left:'+n.x+'px;top:'+n.y+'px" aria-pressed="'+selection.has(n.id)+'" aria-describedby="selection-help" aria-label="'+esc(n.title)+'">'+reportBadge(n.id)+nodeContent(n)+'<span class="port" title="Connect to another state" aria-hidden="true"></span></button>').join("");
+ syncSelection();
 }
 const {edgeAnchor,edgePath}=SaigenGeometry;
 const actionJunction=a=>SaigenGeometry.actionJunction(a,flow.states);
@@ -233,7 +251,19 @@ function applyCamera(){ $("#scene").style.transform="translate("+camera.x+"px,"+
 function bounds(){const ns=flow.states;if(!ns.length)return {x:0,y:0,w:1000,h:600};const x=Math.min(...ns.map(n=>n.x)),y=Math.min(...ns.map(n=>n.y));return {x,y,w:Math.max(...ns.map(n=>n.x+W))-x,h:Math.max(...ns.map(n=>n.y+H))-y};}
 function fit(initial=false){cancelDrag();const v=$("#viewport"),b=bounds(),w=v.clientWidth,h=v.clientHeight;let scale=Math.min(1,(w-100)/b.w,(h-170)/b.h);if(initial)scale=Math.max(scale,w<800?.67:.62);scale=Math.max(.22,scale);camera={scale,x:w>b.w*scale?(w-b.w*scale)/2-b.x*scale:65-b.x*scale,y:Math.max(90,(h-b.h*scale)/2)-b.y*scale};applyCamera();}
 function zoom(factor,cx,cy){cancelDrag();const v=$("#viewport").getBoundingClientRect();cx=cx??v.width/2;cy=cy??v.height/2;const next=Math.max(.22,Math.min(1.8,camera.scale*factor)),ratio=next/camera.scale;camera.x=cx-(cx-camera.x)*ratio;camera.y=cy-(cy-camera.y)*ratio;camera.scale=next;hidePopups();applyCamera();}
-function positionSelection(){const el=$("#selection-tools"),n=getState(selected);if(reports.active||!n||!$("#detail-view").hidden||connecting){el.hidden=true;return;}const r=$("#viewport").getBoundingClientRect(),left=r.left+camera.x+(n.x+W/2)*camera.scale,top=r.top+camera.y+n.y*camera.scale;el.hidden=false;el.style.left=Math.max(10,Math.min(innerWidth-250,left-115))+"px";el.style.top=Math.max(r.top+10,Math.min(innerHeight-52,top-43))+"px";}
+function positionSelection(){
+ const el=$("#selection-tools"),nodes=selectedStates();
+ if(reports.active||!nodes.length||!$("#detail-view").hidden||connecting){el.hidden=true;return;}
+ const multiple=nodes.length>1;
+ $("#single-selection-actions").hidden=multiple;
+ $("#selection-count").hidden=!multiple;$("#group-selection-hint").hidden=!multiple;
+ $("#selection-count").textContent=nodes.length+" nodes selected";
+ const r=$("#viewport").getBoundingClientRect(),x=(Math.min(...nodes.map(n=>n.x))+Math.max(...nodes.map(n=>n.x+W)))/2,y=Math.min(...nodes.map(n=>n.y));
+ el.hidden=false;
+ const width=el.offsetWidth||230,left=r.left+camera.x+x*camera.scale,top=r.top+camera.y+y*camera.scale;
+ el.style.left=Math.max(10,Math.min(innerWidth-width-10,left-width/2))+"px";
+ el.style.top=Math.max(r.top+10,Math.min(innerHeight-52,top-43))+"px";
+}
 function hidePopups(){clearTimeout(hoverTimer);clearTimeout(hideTimer);$("#preview").hidden=true;$("#action-preview").hidden=true;}
 function placePopup(el,rect){el.hidden=false;const pr=el.getBoundingClientRect();let x=rect.right+13;if(x+pr.width>innerWidth-12)x=rect.left-pr.width-13;if(x<12)x=Math.max(12,Math.min(innerWidth-pr.width-12,rect.left));let y=Math.max(85,Math.min(innerHeight-pr.height-15,rect.top));el.style.left=x+"px";el.style.top=y+"px";}
 
@@ -378,7 +408,7 @@ function openActionEditor(a){
  showEditor({type:"action",id:a.id},"Edit action",field("label","Label on the arrow",a.label)+(planned?field("command","Proposed command",a.command,"textarea")+field("reason","Reason",a.reason,"textarea"):field("annotation","Your note",a.annotation||"","textarea")+'<p class="field-hint">The observed command, reason, status, and executor remain in the original record.</p>'),planned);
 }
 
-function startConnecting(id){selected=id;connecting=id;hidePopups();$("#viewport").classList.add("connecting");render();}
+function startConnecting(id){selection=new Set([id]);connecting=id;hidePopups();$("#viewport").classList.add("connecting");render();}
 function connectTo(id){
  const source=getState(connecting),target=getState(id);
  if(!source||!target)return;
@@ -414,7 +444,7 @@ $("#editor-form").onsubmit=async e=>{
    const parent=getState(ctx.parent),r=$("#viewport").getBoundingClientRect(),pos=freePosition(parent?parent.x+320:(r.width/2-camera.x)/camera.scale,parent?parent.y+190:(r.height/2-camera.y)/camera.scale),id=newId("st");
    ops.push({op:"add_state",id,value:{title:v("title"),note:v("note"),expectedSummary:v("expectedSummary"),planDetails:v("planDetails"),planRequires:v("planRequires"),x:pos.x,y:pos.y,expectedFiles:refs}});
    if(parent)ops.push({op:"add_action",id:newId("plan"),value:{from:[parent.id],to:id,label:v("label"),command:v("command"),reason:v("reason")}});
-   selected=id;
+   selection=new Set([id]);
  }else if(ctx.type==="connect"){
    ops.push({op:"add_action",id:newId("plan"),value:{from:[ctx.from],to:ctx.to,label:v("label"),command:v("command"),reason:v("reason")}});
  }
@@ -462,7 +492,7 @@ $("#auto-arrange").onclick=async()=>{
  }
 };
 $("#add-state").onclick=()=>addState();
-$("#selection-tools").onclick=e=>{const mode=e.target.closest("[data-edit-action]")?.dataset.editAction,n=getState(selected);if(!n)return;if(mode==="edit")openStateEditor(n);if(mode==="branch")addState(n);if(mode==="connect")startConnecting(n.id);};
+$("#selection-tools").onclick=e=>{if(selection.size!==1)return;const mode=e.target.closest("[data-edit-action]")?.dataset.editAction,n=selectedStates()[0];if(!n)return;if(mode==="edit")openStateEditor(n);if(mode==="branch")addState(n);if(mode==="connect")startConnecting(n.id);};
 $("#fit").onclick=()=>{hidePopups();fit();};
 $("#zoom-in").onclick=()=>zoom(1.2);$("#zoom-out").onclick=()=>zoom(1/1.2);
 $("#viewport").addEventListener("wheel",e=>{e.preventDefault();const r=e.currentTarget.getBoundingClientRect();zoom(Math.exp(-e.deltaY*.0015),e.clientX-r.left,e.clientY-r.top);},{passive:false});
@@ -470,6 +500,7 @@ $("#nodes").addEventListener("pointerover",e=>{const n=e.target.closest("[data-s
 $("#nodes").addEventListener("keydown",e=>{
  if(reports.active||connecting||!["Enter"," "].includes(e.key))return;
  const n=e.target.closest("[data-state]");if(!n)return;
+ if(e.shiftKey&&e.key===" "){e.preventDefault();selectNode(n.dataset.state,true);return;}
  e.preventDefault();showPreview(n.dataset.state,n);$("#preview [data-open]")?.focus();
 });
 $("#nodes").addEventListener("pointerout",e=>{const n=e.target.closest("[data-state]");if(!n||n.contains(e.relatedTarget))return;clearTimeout(hoverTimer);hideTimer=setTimeout(()=>$("#preview").hidden=true,150);});
@@ -484,9 +515,13 @@ $("#viewport").addEventListener("pointerdown",e=>{
  if(e.target.closest(".edge-group,.workflow-label"))return;
  if(connecting&&card)return;
  if(card&&reports.active)return;
+ // Shift gestures toggle selection on click; they never begin a layout drag.
+ if(card&&e.shiftKey){hidePopups();return;}
  hidePopups();e.preventDefault();$("#viewport").setPointerCapture(e.pointerId);
- drag={id:card?.dataset.state||null,startX:e.clientX,startY:e.clientY,x:card?getState(card.dataset.state).x:camera.x,y:card?getState(card.dataset.state).y:camera.y,moved:false,pointerId:e.pointerId,guides:{}};
- if(!card){$("#viewport").classList.add("panning");selected=null;positionSelection();}
+ const id=card?.dataset.state||null,ids=id?(selection.has(id)?[...selection]:[id]):[];
+ const originals=ids.map(id=>getState(id)).filter(Boolean).map(n=>({id:n.id,x:n.x,y:n.y}));
+ drag={id,originals,startX:e.clientX,startY:e.clientY,x:card?getState(id).x:camera.x,y:card?getState(id).y:camera.y,moved:false,pointerId:e.pointerId,guides:{}};
+ if(!card){$("#viewport").classList.add("panning");selection.clear();syncSelection();}
 });
 function showAlignmentGuides(guides = {}) {
  const vertical = guides.x, horizontal = guides.y;
@@ -495,13 +530,13 @@ function showAlignmentGuides(guides = {}) {
    (horizontal ? `<line x1="${horizontal.start}" x2="${horizontal.end}" y1="${horizontal.at}" y2="${horizontal.at}"/>` : "");
 }
 
-function positionDraggedNode(id, x, y) {
- const node = getState(id);
- node.x = x;
- node.y = y;
- const card = $("#nodes").querySelector('[data-state="'+CSS.escape(id)+'"]');
- card.style.left = x+"px";
- card.style.top = y+"px";
+function positionDraggedNodes(positions) {
+ for(const {id,x,y} of positions){
+   const node=getState(id);if(!node)continue;
+   node.x=x;node.y=y;
+   const card=$("#nodes").querySelector('[data-state="'+CSS.escape(id)+'"]');
+   if(card){card.style.left=x+"px";card.style.top=y+"px";}
+ }
  renderEdges();
  renderWorkflowLabels();
  positionSelection();
@@ -513,12 +548,13 @@ function moveDrag(clientX, clientY, bypass) {
  if (!drag.moved) return;
  drag.last = {clientX, clientY};
  if (drag.id) {
+   selection=new Set(drag.originals.map(n=>n.id));syncSelection();
    const position = {id: drag.id, x: drag.x + dx/camera.scale, y: drag.y + dy/camera.scale};
-   const next = SaigenGeometry.alignment(position, flow.states, camera.scale, drag.guides, bypass);
+   const next = SaigenGeometry.alignment(position, flow.states.filter(n=>!selection.has(n.id)), camera.scale, drag.guides, bypass);
    drag.guides = next.guides;
    const x = next.guides.x ? next.x : Math.round(next.x);
    const y = next.guides.y ? next.y : Math.round(next.y);
-   positionDraggedNode(drag.id, x, y);
+   positionDraggedNodes(drag.originals.map(n=>({id:n.id,x:n.x+x-drag.x,y:n.y+y-drag.y})));
    showAlignmentGuides(next.guides);
  } else {
    camera.x = drag.x + dx;
@@ -544,7 +580,7 @@ function clearDrag() {
 function cancelDrag(event) {
  if (!drag || (event?.pointerId !== undefined && event.pointerId !== drag.pointerId)) return;
  const current = clearDrag();
- if (current.id && current.moved) positionDraggedNode(current.id, current.x, current.y);
+ if (current.id && current.moved) positionDraggedNodes(current.originals);
 }
 
 $("#viewport").addEventListener("pointermove", e => {
@@ -555,17 +591,15 @@ $("#viewport").addEventListener("pointerup", async e => {
  if (drag.moved) moveDrag(e.clientX, e.clientY, e.altKey);
  const current = clearDrag();
  if (!current.id) return;
- selected = current.id;
- const node = getState(current.id);
- if (node.x === current.x && node.y === current.y) {
-   render();
-   return;
- }
+ // Viewport pointer capture can retarget the eventual click away from the card.
+ if (!current.moved) {selectNode(current.id);return;}
+ const moved=current.originals.map(original=>({original,node:getState(original.id)})).filter(({original,node})=>node&&(node.x!==original.x||node.y!==original.y));
+ if(!moved.length)return;
  try {
-   await mutate([{op:"edit_state", id:node.id, changes:{x:node.x, y:node.y}}]);
+   await mutate(moved.map(({node})=>({op:"edit_state",id:node.id,changes:{x:node.x,y:node.y}})));
  } catch (error) {
    toast(error.message);
-   if (getState(node.id) === node) positionDraggedNode(node.id, current.x, current.y);
+   positionDraggedNodes(moved.filter(({node})=>getState(node.id)===node).map(({original})=>original));
  }
 });
 $("#viewport").addEventListener("pointercancel", cancelDrag);
@@ -581,21 +615,22 @@ $("#nodes").addEventListener("click",e=>{
  if(suppressClick||e.target.closest(".port"))return;const n=e.target.closest("[data-state]");if(!n)return;
  if(reports.active){reports.toggleState(n.dataset.state);return;}
  if(connecting){connectTo(n.dataset.state);return;}
- selected=n.dataset.state;render();
+ selectNode(n.dataset.state,e.shiftKey);
 });
 $("#edges").addEventListener("click",e=>{const g=e.target.closest("[data-action]");if(g){if(e.target.closest(".edge-label,.edge-sub"))showActionFiles(g.dataset.action,e.target);else showAction(g.dataset.action,g);}});
 $("#edges").addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){const g=e.target.closest("[data-action]");if(g){e.preventDefault();showAction(g.dataset.action,g);}}});
 document.addEventListener("pointerdown",e=>{if(!e.target.closest("#action-preview")&&!e.target.closest(".edge-group"))$("#action-preview").hidden=true;});
 document.addEventListener("keydown",e=>{
  updateAlignmentModifier(e);
- if(e.key==="Escape"&&drag){cancelDrag();return;}
- if(e.key==="Escape"){if(reports.active)reports.setMode(false);hidePopups();if(connecting){connecting=null;$("#viewport").classList.remove("connecting");}else selected=null;positionSelection();}
+ if(e.key==="Escape"&&document.querySelector('dialog[open]'))return;
+ if(e.key==="Escape"&&drag){cancelDrag();selection.clear();syncSelection();return;}
+ if(e.key==="Escape"){if(reports.active)reports.setMode(false);hidePopups();connecting=null;$("#viewport").classList.remove("connecting");selection.clear();syncSelection();}
  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="z"&&!reports.active&&!e.target.closest("input,textarea")&&!$("#editor").open){e.preventDefault();$("#undo").click();}
 });
 window.addEventListener("hashchange",route);
 window.addEventListener("resize",()=>{hidePopups();applyCamera();});
 reports=SaigenReports.create({query:$,getFlow:()=>flow,getToken:()=>token,request,render,hidePopups,
- clearSelection:()=>{cancelDrag();selected=null;connecting=null;},toast});
+ clearSelection:()=>{cancelDrag();selection.clear();connecting=null;},toast});
 render();start();setInterval(poll,1000);
 $("#close-artifact").onclick=()=>{artifactRequest++;$("#artifact-dialog").close();};
 document.addEventListener("error",handleImageError,true);

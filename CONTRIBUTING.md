@@ -50,6 +50,7 @@ node tests/test_story_ui.cjs
 node tests/test_detail_controller.cjs
 node tests/test_reconstruction_ui.cjs
 node tests/test_plan_removal_ui.cjs
+node tests/test_canvas_selection.cjs
 git diff --check
 ```
 
