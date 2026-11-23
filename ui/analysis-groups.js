@@ -195,13 +195,13 @@ globalThis.SaigenAnalysisGroups = (() => {
     return {states, groups, summaries, actions, connections: [...connections.values()], endpoint, placed, layout, byId};
   }
 
-  function status(group) {
-    return [group.running && countLabel(group.running, "running result"),
-      group.failed && countLabel(group.failed, "failed result")].filter(Boolean).join(" · ");
-  }
-
   function card(group, esc, imagePreview) {
-    const detail = status(group);
+    const counts = [
+      ["running", group.running, "running result"],
+      ["failed", group.failed, "failed result"],
+    ].filter(([, count]) => count > 0).map(([kind, count, noun]) => [kind, countLabel(count, noun)]);
+    const detail = counts.map(([, label]) => label).join(" · ");
+    const status = counts.map(([kind, label]) => '<span class="group-card-'+kind+'">'+esc(label)+'</span>').join(" · ");
     const source = group.figure?.node;
     const preview = source && imagePreview ? '<span class="group-card-figure">'+
       imagePreview(source, "group-card-thumbnail")+'<span class="group-card-source" title="'+esc(source.title)+'">'+
@@ -215,7 +215,7 @@ globalThis.SaigenAnalysisGroups = (() => {
       (group.parentTitle?'<span class="group-card-parent">'+esc(group.parentTitle)+'</span>':"")+
       '<span class="group-card-title">'+esc(group.title)+
       '</span><span class="group-card-meta">'+countLabel(group.count,"result")+
-      '</span>'+(detail?'<span class="group-card-status">'+esc(detail)+'</span>':"")+'</span>'+preview+'</button>';
+      '</span>'+(status?'<span class="group-card-status">'+status+'</span>':"")+'</span>'+preview+'</button>';
   }
 
   function connectionPath(from, to) {
