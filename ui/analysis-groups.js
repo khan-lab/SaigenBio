@@ -24,17 +24,20 @@ globalThis.SaigenAnalysisGroups = (() => {
     const anchor = group.anchor;
     const width = Math.max(W, 112 / scale) + (group.figure ? Math.max(W * .7, 76 / scale) : 0);
     const height = Math.max(H, 65 / scale);
+    const fontScale = Math.max(1, .56 / scale);
+    // Include the offset outline in the clearance around each summary.
+    const clearance = Math.max(10, 8 * fontScale + 2);
     const x = anchor.x;
     let y = anchor.y;
     while (true) {
       const blockers = occupied.filter(box =>
-        x < box.x + (box.width ?? W) + 10 && x + width + 10 > box.x &&
-        y < box.y + (box.height ?? H) + 10 && y + height + 10 > box.y);
+        x < box.x + (box.width ?? W) + clearance && x + width + clearance > box.x &&
+        y < box.y + (box.height ?? H) + clearance && y + height + clearance > box.y);
       if (!blockers.length) break;
-      y = Math.max(...blockers.map(box => box.y + (box.height ?? H) + 10));
+      y = Math.max(...blockers.map(box => box.y + (box.height ?? H) + clearance));
     }
     return {...group, id: groupKey(group.id), groupId: group.id, x, y, width, height,
-      fontScale: Math.max(1, .56 / scale), anchorId: anchor.id};
+      fontScale, anchorId: anchor.id};
   }
 
   function hierarchy(groups, byId, {overrides, automatic, full, scale, figureFor}) {
