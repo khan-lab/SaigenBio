@@ -34,11 +34,12 @@ class PipelineExportTests(unittest.TestCase):
 
     def test_selection_review_boundary_and_generation(self):
         original = self.store.flow()
-        selection = export.select(self.store, ["target"], self.revision(), "Researcher")
-        full = export.propose(self.store, selection["id"], None, [], "nextflow", self.revision(), "Agent")
+        request = export.request_selection(self.store, "agent-1", self.revision(), "Agent")
+        selection = export.select(self.store, request["id"], ["target"], self.revision(), "Researcher")
+        full = export.propose(self.store, selection["id"], None, [], "nextflow", self.revision(), "Agent", session="agent-1")
         self.assertEqual([s["stateId"] for s in full["plan"]["steps"]], ["intermediate", "target"])
         self.assertFalse(full["plan"]["gaps"])
-        limited = export.propose(self.store, selection["id"], None, ["intermediate"], "snakemake", self.revision(), "Agent")
+        limited = export.propose(self.store, selection["id"], None, ["intermediate"], "snakemake", self.revision(), "Agent", session="agent-1")
         self.assertEqual([s["stateId"] for s in limited["plan"]["steps"]], ["target"])
         input_entry, = limited["plan"]["inputs"]
         self.assertEqual(input_entry["stateId"], "intermediate")
@@ -85,3 +86,27 @@ class PipelineExportTests(unittest.TestCase):
         self.assertFalse(proposal["plan"]["gaps"])
         self.assertEqual(step["scripts"][-1]["source"], "newly supplied")
         self.assertEqual(step["argv"][1], "{script:1}")
+
+    def test_canvas_request_is_scoped_to_session_and_single_use(self):
+        before = self.revision()
+        request = export.request_selection(self.store, "agent-1", before, "Agent")
+        ident = request["id"]
+        self.assertEqual(export.requests(self.store, "agent-2")["requests"], [])
+        self.assertEqual(export.show(self.store, ident)["status"], "pending")
+        with self.assertRaises(Conflict):
+            export.select(self.store, ident, ["target"], before, "Researcher")
+        with self.assertRaises(RecordError):
+            export.propose(self.store, ident, None, [], "nextflow", self.revision(), "Agent", session="agent-1")
+        with self.assertRaises(RecordError):
+            export.cancel_request(self.store, ident, "agent-2", self.revision(), "Agent")
+        with self.assertRaises(RecordError):
+            export.request_selection(self.store, "agent-1", self.revision(), "Agent")
+        export.select(self.store, ident, ["target"], self.revision(), "Researcher")
+        self.assertEqual(export.show(self.store, ident)["targetDetails"], [{"stateId": "target", "title": "target"}])
+        with self.assertRaises(RecordError):
+            export.select(self.store, ident, ["intermediate"], self.revision(), "Researcher")
+        with self.assertRaises(RecordError):
+            export.propose(self.store, ident, None, [], "nextflow", self.revision(), "Agent", session="agent-2")
+        result = export.propose(self.store, ident, None, [], "nextflow", self.revision(), "Agent", session="agent-1")
+        with self.assertRaises(RecordError):
+            export.approve(self.store, result["id"], result["digest"], "agent-2", "Researcher", False, self.revision(), "Agent")

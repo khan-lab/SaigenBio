@@ -120,7 +120,7 @@ class Handler(BaseHTTPRequestHandler):
             path=urlsplit(self.path).path
             if path=="/api/pipelines/selections":
                 from .workflows.export import select
-                return self.reply(201,select(self.store,body.get("targets"),body["revision"],"Human"))
+                return self.reply(201,select(self.store,body.get("request"),body.get("targets"),body["revision"],"Human"))
             if path=="/api/explanations":
                 from .story import append
                 flow=append(self.store,body.get("entry"),body["revision"],"Human")

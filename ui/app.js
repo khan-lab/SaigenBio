@@ -286,7 +286,7 @@ function renderGraph(recompute=true){
  if($("#groups-dialog").open)renderGroupDialog();
  focusProjectedState(stateId??groupView?.groups.find(group=>group.id===groupId)?.anchor.id);
 }
-function render(){$("#reconstruction-notice").hidden=!Object.values(flow.reconstructions||{}).some(p=>["draft","partial"].includes(p.status));reports.render();renderGraph();$("#undo").disabled=!history.length;$("#auto-arrange").disabled=flow.states.length<2;positionSelection();}
+function render(){$("#reconstruction-notice").hidden=!Object.values(flow.reconstructions||{}).some(p=>["draft","partial"].includes(p.status));reports.render();renderGraph();renderPipelineRequests();$("#undo").disabled=!history.length;$("#auto-arrange").disabled=flow.states.length<2;positionSelection();}
 function applyCamera(scaleChanged=false){
  $("#scene").style.transform="translate("+camera.x+"px,"+camera.y+"px) scale("+camera.scale+")";
  $("#zoom-label").textContent=Math.round(camera.scale*100)+"%";
@@ -572,19 +572,35 @@ function toggleAnalysisGroup(id){
  }
  renderGraph();
 }
+function pendingPipelineRequests(){
+ return Object.values(flow.pipelineExports?.selections??{}).filter(request=>request.status==="pending");
+}
+function renderPipelineRequests(){
+ const requests=pendingPipelineRequests(), control=$("#pipeline-session"), previous=control.value;
+ $("#pipeline-banner").hidden=reports.active||!requests.length;
+ const placeholder=requests.length>1?'<option value="">Choose an agent request</option>':"";
+ control.innerHTML=placeholder+requests.map(item=>'<option value="'+esc(item.id)+'">'+
+   esc(item.agent+" · "+shortDate(item.requestedAt)+" · "+item.id.slice(-6))+'</option>').join("");
+ if(requests.some(item=>item.id===previous))control.value=previous;
+}
 function openPipeline(nodes, chooseMembers=false){
- if(!nodes.length||busy||reports.active)return;
+ if(busy||reports.active)return;
+ if(!pendingPipelineRequests().length){
+   toast("Start with $saigen-pipeline in Codex or /saigen-pipeline in your agent.");
+   return;
+ }
+ const control=$("#pipeline-session");
+ if(!control.value){toast("Choose an agent request on the Canvas.");control.focus();return;}
+ if(!nodes.length){toast("Select the results you want the pipeline to produce.");return;}
  hidePopups();
  const form=$("#pipeline-form");
- $("#pipeline-targets").hidden=false;
  form.dataset.revision=flow.revision;
+ form.dataset.request=control.value;
  $("#pipeline-targets").innerHTML=nodes.map(node=>'<label><input type="checkbox" name="pipeline-target" value="'+esc(node.id)+'"'+(chooseMembers?"":" checked")+'>'+esc(node.title)+'</label>').join("");
  $("#pipeline-error").textContent="";
- $("#pipeline-request").hidden=true;
- $("#copy-pipeline").hidden=true;
- $("#prepare-pipeline").hidden=false;
  $("#pipeline-dialog").showModal();
 }
+$("#use-pipeline-targets").onclick=()=>openPipeline(selectedStates());
 $("#close-pipeline").onclick=()=>$("#pipeline-dialog").close();
 $("#pipeline-form").onsubmit=async event=>{
  event.preventDefault();
@@ -593,22 +609,16 @@ $("#pipeline-form").onsubmit=async event=>{
  const error=$("#pipeline-error");
  const targets=[...$("#pipeline-targets").querySelectorAll("input:checked")].map(input=>input.value);
  if(!targets.length){error.textContent="Choose at least one target result.";return;}
+ const {request: requestId, revision}=event.currentTarget.dataset;
  button.disabled=true;error.textContent="";
  try{
-   const selection=await request("/api/pipelines/selections",{targets,revision:Number(event.currentTarget.dataset.revision)});
-   $("#pipeline-prompt").value="Use the SaigenBio skill to propose a pipeline for Canvas selection "+selection.id+
-     ". Review the engine, inputs, steps, parameters, and targets with me before generating files.";
-   $("#pipeline-request").hidden=false;$("#copy-pipeline").hidden=false;button.hidden=true;
-   $("#pipeline-targets").hidden=true;
-   $("#pipeline-prompt").focus();$("#pipeline-prompt").select();
+   await request("/api/pipelines/selections",{request:requestId,targets,revision:Number(revision)});
+   $("#pipeline-dialog").close();
+   await poll();
+   toast("Results saved for your agent. Return to the same chat to review the pipeline.");
  }catch(failure){
-   error.textContent=failure.status===409?"The Canvas changed. Close this window and select the results again.":failure.message;
+   error.textContent=failure.status===409?"The Canvas changed. Reopen this window to confirm the results.":failure.message;
  }finally{button.disabled=false;}
-};
-$("#copy-pipeline").onclick=async()=>{
- const prompt=$("#pipeline-prompt");
- try{await navigator.clipboard.writeText(prompt.value);toast("Request copied.");}
- catch{prompt.focus();prompt.select();}
 };
 $("#groups-control").onclick=()=>openGroups();
 $("#close-groups").onclick=()=>$("#groups-dialog").close();

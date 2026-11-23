@@ -92,10 +92,12 @@ Tests and installations belong outside the source repository. Select the particu
 
 ## Export selected Canvas results as a pipeline
 
-Select the results you want to reproduce and choose **Create pipeline…** from the Canvas selection toolbar. In **Groups**, the same action lists the results in a group and its subgroups. Choose individual targets, prepare the request, then paste it into your active research agent with the SaigenBio skill loaded. You can also ask that agent directly.
+Start with `$saigen-pipeline` in Codex or `/saigen-pipeline` in Claude Code or OpenCode. You can also ask your agent with the SaigenBio skill loaded to create a pipeline from your Canvas selection. If the shortcut is missing in an existing workspace, [refresh its agent instructions](agent-integrations.md#refresh-existing-workspace-instructions).
+
+When the agent opens a request, the Canvas displays **Select pipeline results**. Select individual results and click **Use selected results**. To browse a group, choose **Create pipeline…** from **Groups** and select the results from that group and its subgroups. If more than one agent request is pending, choose the one identified in your chat. The confirmed targets are saved for that session. If the agent's wait finishes before you select them, return to the same chat and say **Done**.
 
 The agent traces recorded file inputs and proposes a workflow in Nextflow or Snakemake. You can choose an intermediate result as the starting point and use its artifact as an input. Review the concrete steps, parameters, inputs, outputs, and gaps in chat. The agent records your explicit agreement to the reviewed proposal before generating the bundle. The agreement records the declared agent session and researcher.
 
 The bundle is saved under `.saigen/pipelines/` in the project. It includes the workflow, captured scripts, recorded command settings, required input paths, and a manifest linking the export to source state/action IDs and the reviewed project revision. Materialize the inputs at the paths in the README and install the recorded tools before running. The first exporter supports replay of explicit file-based commands with structured arguments and preserved or supplied scripts. Steps with unresolved inputs, unsupported command evidence, or missing scripts can be exported as an agreed incomplete draft. Execution and any comparison with the original artifacts are separate work.
 
-The agent-facing `saigen pipeline` commands are `show`, `propose`, `approve`, and `generate`. They are distinct from `saigen workflow`, which handles importing and executing existing workflows.
+The agent-facing `saigen pipeline` commands include `request` and `wait` for the Canvas handoff, followed by `propose`, `approve`, and `generate`. They are distinct from `saigen workflow`, which handles importing and executing existing workflows.
