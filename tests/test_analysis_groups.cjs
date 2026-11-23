@@ -100,3 +100,35 @@ delete figures.a;
 summary=figureView().summaries[0];
 assert.equal(summary.figure,null,"groups without available member figures stay text-only");
 assert.doesNotMatch(card(summary,escape,()=>{throw Error("no figure expected");}), /group-card-thumbnail/);
+
+const cycleFlow={...nested,actions:[...actions,
+  {id:"other_to_inner",from:["other"],to:"b"},
+  {id:"middle_to_other",from:["a"],to:"other"},
+]};
+const cycleOptions={automatic:new Map(),overrides:new Map(),full:false,scale:.48,
+  figureFor:node=>node.id==="b"?{id:"wide"}:null};
+const cycleView=project(cycleFlow,cycleOptions);
+const {arrange}=globalThis.SaigenAnalysisGroups;
+const overviewLayout=arrange(cycleView,.48);
+assert.deepEqual(arrange(cycleView,.48),overviewLayout);
+assert.equal(cycleView.connections.filter(edge=>edge.links.some(link=>
+  ["other_to_inner","middle_to_other"].includes(link.action.id))).length,2);
+const overviewKey=overviewLayout.cards.map(card=>card.id).sort().join("|");
+const savedFlow={...cycleFlow,overviewLayouts:{[overviewKey]:overviewLayout}};
+const savedView=project(savedFlow,cycleOptions);
+assert.deepEqual(savedView.placed.map(({id,x,y})=>({id,x,y})).sort((a,b)=>a.id.localeCompare(b.id)),
+  overviewLayout.cards.slice().sort((a,b)=>a.id.localeCompare(b.id)));
+const smaller=project(savedFlow,{...cycleOptions,scale:.22});
+for(const [i,a] of smaller.placed.entries())for(const b of smaller.placed.slice(i+1)){
+  assert.ok(a.x+(a.width??192)<=b.x||b.x+(b.width??192)<=a.x||
+            a.y+(a.height??132)<=b.y||b.y+(b.height??132)<=a.y,"zoomed-out cards must clear one another");
+}
+assert.deepEqual(project(savedFlow,{...cycleOptions,full:true}).states,states);
+
+const {closeInspections}=globalThis.SaigenAnalysisGroups;
+const inspections=new Map([["large",false],["middle",false],["inner",false]]);
+assert.equal(closeInspections(low.groups,inspections,.9),false);
+assert.equal(closeInspections(low.groups,inspections,.7),true);
+assert.deepEqual([...inspections.keys()],["large"],"deeper inspections expire at higher zoom levels");
+assert.equal(closeInspections(low.groups,inspections,.55),true);
+assert.equal(inspections.size,0);

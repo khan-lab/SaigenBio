@@ -10,6 +10,14 @@ globalThis.SaigenAnalysisGroups = (() => {
     return wasCompact ? scale < .65 + offset : scale <= .55 + offset;
   }
 
+  function closeInspections(groups, overrides, scale) {
+    let changed = false;
+    for (const group of groups) {
+      if (compactAt(scale, false, group.depth) && overrides.delete(group.id)) changed = true;
+    }
+    return changed;
+  }
+
   const leftmost = (a, b) => !a || b.x < a.x || (b.x === a.x && b.y < a.y) ? b : a;
 
   function newerFigure(current, candidate) {
@@ -94,17 +102,80 @@ globalThis.SaigenAnalysisGroups = (() => {
     return {groups: ordered.map(({entry}) => entry).filter(group => group.count), endpoint};
   }
 
+  const layoutKey = cards => cards.map(card => card.id).sort().join("|");
+
+  function groupSize(scale) {
+    return {width:Math.max(W, 112 / scale) + Math.max(W * .7, 76 / scale),
+      height:Math.max(H, 65 / scale)};
+  }
+
+  function arrange(view, scale) {
+    const ids = view.placed.map(card => card.id).sort();
+    const children = new Map(ids.map(id => [id, new Set()]));
+    const parentCounts = new Map(ids.map(id => [id, 0]));
+    for (const {from, to} of [...view.actions, ...view.connections.map(edge =>
+      ({from:[edge.from.id], to:edge.to.id}))]) {
+      for (const source of from) {
+        if (children.get(source).has(to)) continue;
+        children.get(source).add(to);
+        parentCounts.set(to, parentCounts.get(to) + 1);
+      }
+    }
+    // A collapsed group can create a cycle in the projection. Ignore DFS
+    // back edges for ranking only. The edge renderer still uses every link.
+    const active = new Set(), done = new Set(), ordered = [];
+    ids.sort((a, b) => parentCounts.get(a) - parentCounts.get(b));
+    for (const root of ids) {
+      if (done.has(root)) continue;
+      active.add(root);
+      const stack = [{id:root, links:[...children.get(root)].sort().values()}];
+      while (stack.length) {
+        const top = stack.at(-1), next = top.links.next();
+        if (next.done) {
+          active.delete(top.id);
+          done.add(top.id);
+          stack.pop();
+        } else if (!active.has(next.value)) {
+          ordered.push({from:[top.id], to:next.value});
+          if (!done.has(next.value)) {
+            active.add(next.value);
+            stack.push({id:next.value, links:[...children.get(next.value)].sort().values()});
+          }
+        }
+      }
+    }
+    const {width, height} = groupSize(scale);
+    return {scale, cards:SaigenGeometry.autoArrange(view.placed, ordered, {
+      boxWidth:Math.ceil(width), boxHeight:Math.ceil(height)
+    })};
+  }
+
   function project(flow, options) {
     const byId = new Map(flow.states.map(node => [node.id, node]));
     const {groups, endpoint} = hierarchy(flow.analysisGroups || [], byId, options);
-    const states = endpoint.size ? flow.states.filter(node => !endpoint.has(node.id)) : flow.states;
-    const placed = [...states];
-    const summaries = groups.filter(group => group.collapsed && !group.hiddenBy).map(group => {
+    let states = endpoint.size ? flow.states.filter(node => !endpoint.has(node.id)) : flow.states;
+    let placed = [...states];
+    let summaries = groups.filter(group => group.collapsed && !group.hiddenBy).map(group => {
       const summary = groupAt(group, placed, options.scale);
       placed.push(summary);
       byId.set(summary.id, summary);
       return summary;
     });
+    const layout = summaries.length ? flow.overviewLayouts?.[layoutKey(placed)] : null;
+    if (layout) {
+      const positions = new Map(layout.cards.map(card => [card.id, card]));
+      // At low zoom, scale spacing with the minimum readable card size.
+      const stretch = Math.max(1, layout.scale / options.scale);
+      const relocate = card => {
+        const {x,y} = positions.get(card.id);
+        const next = {...card, x:x*stretch, y:y*stretch};
+        byId.set(next.id,next);
+        return next;
+      };
+      states = states.map(relocate);
+      summaries = summaries.map(relocate);
+      placed = [...states, ...summaries];
+    }
     const actions = [];
     const connections = new Map();
     for (const action of flow.actions) {
@@ -121,7 +192,7 @@ globalThis.SaigenAnalysisGroups = (() => {
         connections.get(key).links.push({action, source: byId.get(sourceId), target: byId.get(action.to)});
       }
     }
-    return {states, groups, summaries, actions, connections: [...connections.values()], endpoint, placed};
+    return {states, groups, summaries, actions, connections: [...connections.values()], endpoint, placed, layout, byId};
   }
 
   function status(group) {
@@ -175,20 +246,6 @@ globalThis.SaigenAnalysisGroups = (() => {
       '</title><path class="edge-line" d="'+path+'" marker-end="url(#arrow)"/><path class="edge-hit" d="'+path+'"/></g>';
   }
 
-  function groupList(groups, hasOverrides, esc) {
-    if (!groups.length) return "<p>No analysis groups are saved.</p>";
-    return '<p class="group-dialog-help">Level of detail follows zoom. Use a manual choice for this tab, or return to automatic.</p>'+
-      '<ul class="group-dialog-list">'+groups.map(group => {
-        const label = group.hiddenBy ? "Reveal" : group.collapsed ? "Expand" : "Collapse";
-        return '<li style="padding-inline-start:'+Math.min(group.depth,5)*13+'px"><div><strong>'+esc(group.title)+'</strong><small>'+countLabel(group.count,"result")+
-        (status(group)?" · "+esc(status(group)):"")+'</small>'+
-        (group.reason?'<p>'+esc(group.reason)+'</p>':"")+'</div><button class="outline" data-toggle-analysis-group="'+
-        esc(group.id)+'" aria-expanded="'+(!group.collapsed&&!group.hiddenBy)+'" aria-label="'+
-        esc(label+" "+group.title)+'">'+label+'</button><button class="outline" data-group-pipeline="'+esc(group.id)+'" aria-label="'+esc("Create pipeline from "+group.title)+'">Create pipeline…</button></li>';
-      }).join("")+
-      '</ul><button class="outline" data-reset-analysis-groups'+(hasOverrides?"":" disabled")+'>Use zoom</button>';
-  }
-
   function dependencyList(connection, esc) {
     const entries = new Map();
     for (const link of connection.links) {
@@ -206,5 +263,5 @@ globalThis.SaigenAnalysisGroups = (() => {
       }).join("")+'</ul>';
   }
 
-  return {compactAt, project, card, edge, groupList, dependencyList};
+  return {compactAt, closeInspections, project, arrange, card, edge, dependencyList};
 })();

@@ -109,7 +109,7 @@ Open the viewer address shown by serve.
 - When a command uses several input states, their paths meet at a small junction with one outgoing arrow and one command label. Longer ancestor-input paths route above intermediate cards. The execution details retain every recorded input.
 - Failed attempts stay available in gray. A successful retry is a separate attempt.
 
-Choose **Auto-arrange** to lay out the whole canvas by its recorded dependencies. Inputs sit to the left of downstream results, and connected groups stay together. The layout runs locally and saves as one edit. Choose **Undo** to restore the previous positions.
+Choose **Auto-arrange** to lay out the visible Canvas by its dependencies. With collapsed groups, it arranges the group cards and visible results together. SaigenBio saves those positions for that overview. Expand the groups to return to the detailed result positions. Each arrangement saves as one edit, and **Undo** restores the previous layout.
 
 Drag a card to arrange the canvas. Temporary alignment guides appear as it snaps into a row or column with nearby cards. Hold **Option** on Mac or **Alt** on other keyboards to position it freely. Press **Esc** to cancel the drag, or choose **Undo** after dropping the card.
 
@@ -121,7 +121,7 @@ Edits save to the project. Notes and layout can change; recorded execution facts
 
 Ask your agent “Organize this canvas by cell type,” or invoke `$saigen-organize` in Codex or `/saigen-organize` in Claude Code or OpenCode. Choose how broadly or finely to group the work. For example, use **HeLa cell analysis** as a top-level group with **Quality control** and **Modeling** inside it, and leave shared preprocessing outside. Review the proposed hierarchy, members, and rationale in chat. The agent saves it after you agree. Ask it to revise the arrangement as the analysis changes.
 
-The Canvas collapses top-level groups at 55% zoom or lower and expands them at 65% or higher. It keeps the previous view in between. Deeper groups expand at higher zoom levels. Click a summary card to reveal its next layer, or use **Groups** to expand, collapse, or reveal a specific subgroup. Manual choices take precedence in the current tab. **Use zoom** returns to automatic level of detail. Click a summary connection to inspect the original dependencies. Report selection shows individual results.
+The Canvas collapses top-level groups at 55% zoom or lower and expands them at 65% or higher. It keeps the previous view in between. Deeper groups expand at higher zoom levels. Click a summary card to inspect its next layer. Zoom out to its collapse threshold to return to the overview. If you open a group while already below its threshold, the next zoom-out action collapses it. Click a summary connection to inspect the original dependencies. Report selection shows individual results.
 
 Each state can be assigned directly to one group or remain ungrouped. A group can hold results, subgroups, or both. Its summary counts results across all descendants and shows running and failed counts when applicable. Archiving or deleting a state removes its membership, and groups with no results anywhere under them disappear. Grouping leaves the original positions, states, actions, and artifacts intact.
 
