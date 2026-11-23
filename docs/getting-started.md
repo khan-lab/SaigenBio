@@ -169,7 +169,15 @@ You can also use flags; repeat `--history-file` for multiple files:
 saigen init --existing-project . --history-file notes.md --agent codex
 ```
 
-### Select a local Codex conversation
+### Start reconstruction in your agent
+
+Open your agent in the SaigenBio workspace. In Codex, invoke the `$saigen-reconstruct` skill. In Claude Code or OpenCode, enter `/saigen-reconstruct`. In any configured agent, you can ask “Reconstruct this project on the SaigenBio canvas.” See [how to refresh an older workspace](agent-integrations.md#refresh-existing-workspace-instructions) if the shortcut is missing.
+
+If you supplied history files during setup, the agent offers those paths first. Otherwise, Codex can suggest local sessions by matching their original working directories to the workspace, existing analysis directory, or their Git roots. The agent shows dates and paths before opening transcripts. Choose one, several, or none, and confirm what project files or Git history to review. You can also give the agent a path manually or continue with project files alone. For a broad review, the agent can offer a smaller starting scope and explain the possible time and token cost.
+
+You can list the same candidates directly with `saigen reconstruct sources --agent codex` from the workspace. This checks metadata headers in recent local Codex session files. With a large history, older sessions may need to be selected manually. The other agents use configured or manually supplied paths.
+
+### Supply a local Codex conversation manually
 
 For local Codex sessions, look for files with this layout:
 
@@ -183,7 +191,7 @@ If you configured a different `CODEX_HOME`, look under its `sessions/` directory
 rg --files --hidden "${CODEX_HOME:-$HOME/.codex}/sessions" -g 'rollout-*.jsonl'
 ```
 
-Choose sessions relevant to the research project; ask your agent to check their session metadata, including working directory and date, if the filenames are unclear. Paste the selected file's actual path into **Conversation or notes file**. The interactive prompt accepts `~`, but does not expand shell variables such as `$HOME`. SaigenBio currently has no automatic Codex session discovery, selection list, or dedicated JSONL parser; the agent interprets the selected raw records. A Markdown export is not required.
+Choose sessions relevant to the research project. Give the selected file's path to your agent, or paste it into **Conversation or notes file** during setup. The interactive setup prompt accepts `~`. Use a literal path in the prompt, since it does not expand shell variables such as `$HOME`. The agent can interpret the selected raw JSONL after you confirm it.
 
 For the CLI equivalent, replace the example date and filename below with a real file:
 

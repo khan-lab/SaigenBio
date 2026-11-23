@@ -1,10 +1,12 @@
 """Prepare portable recording instructions without replacing user files."""
 import json
+import os
 from pathlib import Path
 import subprocess
 import sysconfig
 import sys
 from .records import RecordError
+from .reconstruction_shortcuts import shortcut_files
 
 ADAPTERS = {
     "codex": (".agents/skills", "AGENTS.md"),
@@ -77,17 +79,19 @@ def merge_instructions(existing, content, previous=None):
     return existing[:start] + block + existing[end + len(BLOCK_END):]
 
 
-def in_git_worktree(root):
+def git_worktree_root(root):
     # Setup can target a directory that will only be created after confirmation.
     directory = next(path for path in (root, *root.parents) if path.is_dir())
     try:
         result = subprocess.run(
-            ["git", "-C", str(directory), "rev-parse", "--is-inside-work-tree"],
+            ["git", "-C", str(directory), "rev-parse", "--show-toplevel"],
             capture_output=True, check=False,
         )
-    except FileNotFoundError:
-        return False
-    return result.returncode == 0 and result.stdout.strip() == b"true"
+    except OSError:
+        return None
+    if result.returncode == 0:
+        return Path(os.fsdecode(result.stdout.rstrip(b"\r\n"))).resolve()
+    return None
 
 
 def missing_ignore_rules(path, rules):
@@ -161,6 +165,8 @@ def prepare(workspace, agent, project, inputs, viewer=None, permission=None, ui_
         context["uiDevelopment"] = ui_development
     skill_text = source.read_text()
     files = instruction_files(agents, skill_text, permission, ui_development)
+    shortcuts = shortcut_files(agents, {agent: ADAPTERS[agent][0] for agent in agents})
+    files.update(shortcuts)
     for reference in sorted((source.parent/"references").glob("*.md")):
         for selected_agent in agents:
             files[ADAPTERS[selected_agent][0]+"/saigen-record/references/"+reference.name]=reference.read_text()
@@ -193,9 +199,13 @@ def prepare(workspace, agent, project, inputs, viewer=None, permission=None, ui_
     if managed:
         context["managedInstructions"] = managed
         files["saigen-workspace.json"] = json.dumps(context, indent=2) + "\n"
-    if agents and in_git_worktree(root):
+    if agents and git_worktree_root(root):
         folders = sorted({ADAPTERS[agent][0] for agent in agents})
         rules = "".join(f"/{folder}/saigen-record/\n" for folder in folders)
+        rules += "".join(
+            f"/{name.removesuffix('SKILL.md') if name.endswith('/SKILL.md') else name}\n"
+            for name in sorted(shortcuts)
+        )
         if missing_ignore_rules(root / ".gitignore", rules):
             files[".gitignore"] = rules
     return root, files, context

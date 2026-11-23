@@ -48,7 +48,9 @@ def main():
     start.add_argument("--start-viewer",dest="start_viewer",action="store_true",default=None)
     start.add_argument("--no-start-viewer",dest="start_viewer",action="store_false")
     p=command("reconstruct",help="Propose and review an evidence-linked historical reconstruction")
-    p.add_argument("operation",choices=["propose","show","accept","reject"])
+    p.add_argument("operation",choices=["sources","propose","show","accept","reject"])
+    p.add_argument("--agent",choices=["codex","claude","opencode","antigravity"],
+                   help="Agent whose local session metadata to check with reconstruct sources")
     p.add_argument("--file",help="Proposal JSON file")
     p.add_argument("--id")
     p.add_argument("--revision",type=int)
@@ -126,7 +128,11 @@ def main():
             result=read(store,args.state)
         elif args.command=="reconstruct":
             from .reconstruction import propose, review, show
-            if args.operation=="show":result=show(store,args.id)
+            if args.agent and args.operation!="sources":raise RecordError("--agent is only for reconstruct sources")
+            if args.operation=="sources":
+                from .reconstruction_sources import sources
+                result=sources(store.root,args.agent)
+            elif args.operation=="show":result=show(store,args.id)
             elif args.revision is None:raise RecordError("Supply --revision after reviewing the current project")
             elif args.operation=="propose":
                 if not args.file:raise RecordError("Supply --file")

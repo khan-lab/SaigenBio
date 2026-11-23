@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from saigen.workspace import setup
+from saigen.reconstruction_shortcuts import PATHS
 
 REPO = Path(__file__).resolve().parent.parent
 RULES = [
@@ -48,6 +49,8 @@ class SkillIgnoreTests(unittest.TestCase):
             folder = "analysis" + rule.rstrip("/")
             for path in (f"{folder}/SKILL.md", f"{folder}/references/example.md"):
                 self.assertEqual(self.git("check-ignore", "-q", path).returncode, 0)
+        for path in PATHS.values():
+            self.assertEqual(self.git("check-ignore", "-q", f"analysis/{path}").returncode, 0)
         for path in (".agents/skills/saigen-record/SKILL.md",
                      "analysis/.agents/skills/another/SKILL.md",
                      "analysis/AGENTS.md", "analysis/saigen-workspace.json"):
@@ -65,5 +68,7 @@ class SkillIgnoreTests(unittest.TestCase):
         self.git("add", skill)
         setup(self.root, "opencode", ".", [])
         self.assertEqual(self.git("ls-files", skill).stdout.strip(), skill)
-        self.assertEqual(ignore.read_text().splitlines(), RULES[1:])
+        self.assertEqual(ignore.read_text().splitlines(), RULES[1:] + [
+            "/" + PATHS["claude"], "/" + PATHS["opencode"],
+        ])
         self.git("check-ignore", "-q", ".opencode/skills/saigen-record/SKILL.md")
