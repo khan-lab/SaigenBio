@@ -546,7 +546,7 @@ $("#auto-arrange").onclick=async()=>{
  }
 };
 $("#add-state").onclick=()=>addState();
-$("#selection-tools").onclick=e=>{if(selection.size!==1)return;const mode=e.target.closest("[data-edit-action]")?.dataset.editAction,n=selectedStates()[0];if(!n)return;if(mode==="edit")openStateEditor(n);if(mode==="branch")addState(n);if(mode==="connect")startConnecting(n.id);};
+$("#selection-tools").onclick=e=>{if(e.target.closest("#create-pipeline")){openPipeline(selectedStates());return;}if(selection.size!==1)return;const mode=e.target.closest("[data-edit-action]")?.dataset.editAction,n=selectedStates()[0];if(!n)return;if(mode==="edit")openStateEditor(n);if(mode==="branch")addState(n);if(mode==="connect")startConnecting(n.id);};
 $("#fit").onclick=()=>{hidePopups();fit();};
 $("#zoom-in").onclick=()=>zoom(1.2);$("#zoom-out").onclick=()=>zoom(1/1.2);
 function renderGroupDialog(){
@@ -572,9 +572,61 @@ function toggleAnalysisGroup(id){
  }
  renderGraph();
 }
+function openPipeline(nodes, chooseMembers=false){
+ if(!nodes.length||busy||reports.active)return;
+ hidePopups();
+ const form=$("#pipeline-form");
+ $("#pipeline-targets").hidden=false;
+ form.dataset.revision=flow.revision;
+ $("#pipeline-targets").innerHTML=nodes.map(node=>'<label><input type="checkbox" name="pipeline-target" value="'+esc(node.id)+'"'+(chooseMembers?"":" checked")+'>'+esc(node.title)+'</label>').join("");
+ $("#pipeline-error").textContent="";
+ $("#pipeline-request").hidden=true;
+ $("#copy-pipeline").hidden=true;
+ $("#prepare-pipeline").hidden=false;
+ $("#pipeline-dialog").showModal();
+}
+$("#close-pipeline").onclick=()=>$("#pipeline-dialog").close();
+$("#pipeline-form").onsubmit=async event=>{
+ event.preventDefault();
+ const button=$("#prepare-pipeline");
+ if(button.disabled)return;
+ const error=$("#pipeline-error");
+ const targets=[...$("#pipeline-targets").querySelectorAll("input:checked")].map(input=>input.value);
+ if(!targets.length){error.textContent="Choose at least one target result.";return;}
+ button.disabled=true;error.textContent="";
+ try{
+   const selection=await request("/api/pipelines/selections",{targets,revision:Number(event.currentTarget.dataset.revision)});
+   $("#pipeline-prompt").value="Use the SaigenBio skill to propose a pipeline for Canvas selection "+selection.id+
+     ". Review the engine, inputs, steps, parameters, and targets with me before generating files.";
+   $("#pipeline-request").hidden=false;$("#copy-pipeline").hidden=false;button.hidden=true;
+   $("#pipeline-targets").hidden=true;
+   $("#pipeline-prompt").focus();$("#pipeline-prompt").select();
+ }catch(failure){
+   error.textContent=failure.status===409?"The Canvas changed. Close this window and select the results again.":failure.message;
+ }finally{button.disabled=false;}
+};
+$("#copy-pipeline").onclick=async()=>{
+ const prompt=$("#pipeline-prompt");
+ try{await navigator.clipboard.writeText(prompt.value);toast("Request copied.");}
+ catch{prompt.focus();prompt.select();}
+};
 $("#groups-control").onclick=()=>openGroups();
 $("#close-groups").onclick=()=>$("#groups-dialog").close();
 $("#groups-body").onclick=e=>{
+ const pick=e.target.closest("[data-group-pipeline]");
+ if(pick){
+   const byId=new Map(groupView.groups.map(group=>[group.id,group]));
+   const contains=group=>{
+     for(let current=group;current;current=byId.get(current.parentId)){
+       if(current.id===pick.dataset.groupPipeline)return true;
+     }
+     return false;
+   };
+   const ids=new Set(groupView.groups.filter(contains).flatMap(group=>group.stateIds));
+   $("#groups-dialog").close();
+   openPipeline(flow.states.filter(node=>ids.has(node.id)),true);
+   return;
+ }
  const toggle=e.target.closest("[data-toggle-analysis-group]");
  if(toggle){
    const id=toggle.dataset.toggleAnalysisGroup;toggleAnalysisGroup(id);

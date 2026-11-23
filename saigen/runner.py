@@ -92,6 +92,7 @@ def run(store, parents, title, command, *, inputs=(), outputs=(), actor="AI agen
         extra_records.append(store.capture(p if p.is_absolute() else store.root/p,role="environment"))
     executable=shutil.which(command[0])
     environment={"platform":platform.platform(),"recorderPython":sys.version,"recorderVersion":__version__,"executable":executable,"executableSha256":digest(executable) if executable and Path(executable).is_file() else None,"declaredToolVersions":list(tool_versions),"capturedFiles":[r["id"] for r in extra_records]}
+    environment["stdoutOutput"]=stdout_name
     environment["declaredSourceURLs"]=list(source_urls)
     code["scriptArtifacts"]=[r["id"] for r in extra_records if r["role"]=="code"]
     if explanation or selections:

@@ -118,6 +118,9 @@ class Handler(BaseHTTPRequestHandler):
             body=json.loads(self.rfile.read(length))
             if not isinstance(body,dict) or type(body.get("revision")) is not int: raise RecordError("A project revision is required")
             path=urlsplit(self.path).path
+            if path=="/api/pipelines/selections":
+                from .workflows.export import select
+                return self.reply(201,select(self.store,body.get("targets"),body["revision"],"Human"))
             if path=="/api/explanations":
                 from .story import append
                 flow=append(self.store,body.get("entry"),body["revision"],"Human")

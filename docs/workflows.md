@@ -89,3 +89,13 @@ Evidence statuses include running, completed, failed, cached, skipped, unknown, 
 Engine setup and downloads are deliberate choices. Inspection may evaluate pipeline code or fetch dependencies; adapters must report these requirements. Local source, schemas and documentation take priority over repeated web searches. Inspection caches must include engine version, pipeline content and configuration.
 
 Tests and installations belong outside the source repository. Select the particular Data Carpentry example before the real Nextflow integration test; that example has not yet been agreed. No biological analysis is run by foundation tests.
+
+## Export selected Canvas results as a pipeline
+
+Select the results you want to reproduce and choose **Create pipeline…** from the Canvas selection toolbar. In **Groups**, the same action lists the results in a group and its subgroups. Choose individual targets, prepare the request, then paste it into your active research agent with the SaigenBio skill loaded. You can also ask that agent directly.
+
+The agent traces recorded file inputs and proposes a workflow in Nextflow or Snakemake. You can choose an intermediate result as the starting point and use its artifact as an input. Review the concrete steps, parameters, inputs, outputs, and gaps in chat. The agent records your explicit agreement to the reviewed proposal before generating the bundle. The agreement records the declared agent session and researcher.
+
+The bundle is saved under `.saigen/pipelines/` in the project. It includes the workflow, captured scripts, recorded command settings, required input paths, and a manifest linking the export to source state/action IDs and the reviewed project revision. Materialize the inputs at the paths in the README and install the recorded tools before running. The first exporter supports replay of explicit file-based commands with structured arguments and preserved or supplied scripts. Steps with unresolved inputs, unsupported command evidence, or missing scripts can be exported as an agreed incomplete draft. Execution and any comparison with the original artifacts are separate work.
+
+The agent-facing `saigen pipeline` commands are `show`, `propose`, `approve`, and `generate`. They are distinct from `saigen workflow`, which handles importing and executing existing workflows.
