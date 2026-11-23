@@ -12,10 +12,17 @@ globalThis.SaigenAnalysisGroups = (() => {
 
   const leftmost = (a, b) => !a || b.x < a.x || (b.x === a.x && b.y < a.y) ? b : a;
 
+  function newerFigure(current, candidate) {
+    if (!candidate) return current;
+    if (!current || candidate.date > current.date ||
+        (candidate.date === current.date && candidate.node.id < current.node.id)) return candidate;
+    return current;
+  }
+
   function groupAt(group, occupied, scale) {
     // Anchor near a real member. Keep the summary legible at overview scale.
     const anchor = group.anchor;
-    const width = Math.max(W, 112 / scale);
+    const width = Math.max(W, 112 / scale) + (group.figure ? Math.max(W * .7, 76 / scale) : 0);
     const height = Math.max(H, 65 / scale);
     const x = anchor.x;
     let y = anchor.y;
@@ -30,7 +37,7 @@ globalThis.SaigenAnalysisGroups = (() => {
       fontScale: Math.max(1, .56 / scale), anchorId: anchor.id};
   }
 
-  function hierarchy(groups, byId, {overrides, automatic, full, scale}) {
+  function hierarchy(groups, byId, {overrides, automatic, full, scale, figureFor}) {
     const children = new Map();
     for (const group of groups) {
       const parent = group.parentId ?? null;
@@ -49,7 +56,7 @@ globalThis.SaigenAnalysisGroups = (() => {
       const hiddenBy = parent ? parent.hiddenBy || (parent.collapsed ? parent.id : null) : null;
       const covering = hiddenBy || (collapsed ? group.id : null);
       const entry = {...group, depth, collapsed, hiddenBy, parentTitle:parent?.title,
-        count:0, failed:0, running:0, anchor:null};
+        count:0, failed:0, running:0, anchor:null, figure:null};
       for (const id of group.stateIds) {
         const member = byId.get(id);
         if (!member) continue;
@@ -57,7 +64,16 @@ globalThis.SaigenAnalysisGroups = (() => {
         if (member.status === "failed") entry.failed++;
         if (member.status === "running") entry.running++;
         entry.anchor = leftmost(entry.anchor, member);
-        if (covering) endpoint.set(id, groupKey(covering));
+        if (covering) {
+          endpoint.set(id, groupKey(covering));
+          if (["completed", "imported", "saved"].includes(member.status)) {
+            const artifact = figureFor?.(member);
+            if (artifact) {
+              const date = Date.parse(member.finishedAt || member.createdAt) || 0;
+              entry.figure = newerFigure(entry.figure, {node: member, artifact, date});
+            }
+          }
+        }
       }
       ordered.push({entry, parent});
       const descendants = children.get(group.id) || [];
@@ -70,6 +86,7 @@ globalThis.SaigenAnalysisGroups = (() => {
       parent.failed += entry.failed;
       parent.running += entry.running;
       parent.anchor = leftmost(parent.anchor, entry.anchor);
+      parent.figure = newerFigure(parent.figure, entry.figure);
     }
     return {groups: ordered.map(({entry}) => entry).filter(group => group.count), endpoint};
   }
@@ -109,15 +126,22 @@ globalThis.SaigenAnalysisGroups = (() => {
       group.failed && countLabel(group.failed, "failed result")].filter(Boolean).join(" · ");
   }
 
-  function card(group, esc) {
+  function card(group, esc, imagePreview) {
     const detail = status(group);
-    return '<button type="button" class="analysis-group-card" data-analysis-group="'+esc(group.groupId)+
-      '" aria-expanded="false" aria-label="'+esc("Expand "+group.title+(group.parentTitle?" in "+group.parentTitle:"")+
-        ", "+countLabel(group.count,"result")+(detail ? ", "+detail : ""))+'">'+
+    const source = group.figure?.node;
+    const preview = source && imagePreview ? '<span class="group-card-figure">'+
+      imagePreview(source, "group-card-thumbnail")+'<span class="group-card-source" title="'+esc(source.title)+'">'+
+      esc(source.title)+'</span></span>' : "";
+    const label = "Expand "+group.title+(group.parentTitle?" in "+group.parentTitle:"")+
+      ", "+countLabel(group.count,"result")+(detail ? ", "+detail : "")+
+      (preview ? ", figure from "+source.title : "");
+    return '<button type="button" class="analysis-group-card'+(preview?' has-group-figure':'')+
+      '" data-analysis-group="'+esc(group.groupId)+'" aria-expanded="false" aria-label="'+esc(label)+'">'+
+      '<span class="group-card-summary">'+
       (group.parentTitle?'<span class="group-card-parent">'+esc(group.parentTitle)+'</span>':"")+
       '<span class="group-card-title">'+esc(group.title)+
       '</span><span class="group-card-meta">'+countLabel(group.count,"result")+
-      '</span>'+(detail?'<span class="group-card-status">'+esc(detail)+'</span>':"")+'</button>';
+      '</span>'+(detail?'<span class="group-card-status">'+esc(detail)+'</span>':"")+'</span>'+preview+'</button>';
   }
 
   function connectionPath(from, to) {

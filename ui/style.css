@@ -171,3 +171,10 @@ summary{cursor:pointer;padding:9px 0}.history-event{margin:8px 0;padding:0 12px;
 #pipeline-banner{position:absolute;z-index:5;bottom:76px;left:24px;right:24px;max-width:max-content;display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:13px;box-shadow:var(--shadow)}
 #pipeline-banner select{max-width:100%;border:1px solid var(--line);border-radius:5px;padding:6px}
 #pipeline-banner label{font-weight:600}
+
+.group-card-summary{display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-width:0}
+.analysis-group-card.has-group-figure{flex-direction:row;align-items:center;gap:10px}
+.has-group-figure .group-card-summary{flex:1}
+.group-card-figure{display:flex;flex:0 0 40%;min-width:0;height:100%;flex-direction:column;justify-content:center;gap:4px}
+.group-card-thumbnail{display:block;width:100%;flex:1;min-height:0;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:4px}
+.group-card-source{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#4c6354;font-size:calc(12px * var(--group-font-scale,1))}

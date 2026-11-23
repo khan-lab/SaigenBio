@@ -77,3 +77,26 @@ const opened=nestedView(.35,new Map(),new Map([["large",false]]));
 assert.deepEqual(opened.summaries.map(group=>group.groupId),["middle","other"]);
 assert.match(card(opened.summaries[0],escape),/Cell type.*Intermediate/);
 console.log("Analysis group projection, edge traceability, zoom, overrides and report isolation passed.");
+
+const figures = {
+  a: {id:"plot_a"},
+  b: {id:"plot_b"},
+  other: {id:"plot_other"},
+  compare: {id:"unrelated"},
+};
+const figureFlow={...nested,states:states.map(node=>({
+  ...node,
+  status: node.id==="input"?"failed":"completed",
+  finishedAt: node.id==="a"?"2026-01-01":"2026-02-01",
+}))};
+const figureView=()=>project(figureFlow,{automatic:new Map(),overrides:new Map(),full:false,scale:.35,
+  figureFor:node=>figures[node.id]});
+let summary=figureView().summaries[0];
+assert.equal(summary.figure.node.id,"b","the outer group uses the latest figure from a nested result");
+assert.match(card(summary,escape,node=>'<img src="'+node.id+'">'), /figure from Cell markers/);
+delete figures.b;
+assert.equal(figureView().summaries[0].figure.node.id,"a","an unavailable figure can fall back to another result");
+delete figures.a;
+summary=figureView().summaries[0];
+assert.equal(summary.figure,null,"groups without available member figures stay text-only");
+assert.doesNotMatch(card(summary,escape,()=>{throw Error("no figure expected");}), /group-card-thumbnail/);
