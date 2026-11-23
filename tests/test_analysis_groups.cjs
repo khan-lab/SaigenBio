@@ -35,7 +35,7 @@ assert.deepEqual(overview.states.map(state=>state.id),["input","compare"]);
 assert.deepEqual(overview.actions.map(action=>action.id),[]);
 assert.deepEqual(overview.summaries.map(group=>[group.count,group.running,group.failed]),[[2,1,1],[1,0,0]]);
 assert.ok(overview.summaries.every(group=>group.width*.3>=112));
-assert.match(card(overview.summaries[0],escape),/HeLa &lt;cells&gt;.*1 running result · 1 failed result/);
+assert.match(card(overview.summaries[0],escape),/aria-label="Expand HeLa &lt;cells&gt;, 2 results, 1 running result · 1 failed result"/);
 const compare=overview.connections.find(link=>link.from.id==="group:hela"&&link.to.id==="compare");
 assert.deepEqual(compare.links.map(link=>[link.action.id,link.source.id]),[
  ["compare_cells","a"],["compare_cells","b"],["compare_counts","a"],
@@ -132,3 +132,12 @@ assert.equal(closeInspections(low.groups,inspections,.7),true);
 assert.deepEqual([...inspections.keys()],["large"],"deeper inspections expire at higher zoom levels");
 assert.equal(closeInspections(low.groups,inspections,.55),true);
 assert.equal(inspections.size,0);
+
+// Keep failure emphasis independent of the running count, including when
+// the two counts originate in different descendants of a collapsed group.
+for(const [running,failed] of [[0,0],[2,0],[0,1],[2,1]]){
+  const markup=card({...low.summaries[0],running,failed},escape);
+  assert.equal(markup.includes('class="group-card-running">2 running results'),running>0);
+  assert.equal(markup.includes('class="group-card-failed">1 failed result'),failed>0);
+  assert.equal(markup.includes('class="group-card-status"'),running+failed>0);
+}
