@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import patch
 
 from saigen.reconstruction_sources import sources
-from saigen.reconstruction_shortcuts import PATHS
+from saigen.agent_shortcuts import RECONSTRUCTION_PATHS as PATHS
 from saigen.workspace import prepare, setup
 from saigen.records import RecordError
 

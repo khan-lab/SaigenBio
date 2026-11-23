@@ -1,6 +1,6 @@
 ---
 name: saigen-record
-description: Record biological analysis in SaigenBio or reconstruct an existing analysis on its Canvas. Use for recorded analysis, planning, and reconstruction requests, including ordinary scientific requests when project instructions designate SaigenBio as the recorder.
+description: Record, reconstruct, or organize biological analysis in SaigenBio. Use for analysis plans, recorded execution, historical reconstruction, and grouping results on the Canvas.
 ---
 
 # Record an analysis
@@ -149,6 +149,12 @@ Execution is foreground and stage cards finalize at engine exit. Check `workflow
 ## Explain results and decisions
 
 Use `saigen story STATE_ID` to inspect What, Why, Who and When evidence. When the user supplies findings, interpretations, limitations or a decision rationale, record it as an optional attributed explanation rather than rewriting execution facts. Follow the [result and decision reference](references/story.md) for `saigen explain`, evidence citations, participant roles, corrections and replacement links. Do not invent missing scientific conclusions or agreement history; these records do not grant execution permission.
+
+## Organize analysis groups
+
+Read the active project and CLI from `saigen-workspace.json`. Inspect `saigen flow` for state IDs and dependencies and `saigen groups show` for the saved arrangement. Review both at the same project revision. Propose a hierarchy using the researcher's preferred depth and membership. Show the nesting, name the member results, explain the rationale, and point out shared or ambiguous results to leave outside. A state can be assigned directly to one group and will also appear under its ancestors. Preserve unrelated groups and use existing states and connections.
+
+Discuss and refine the grouping before saving. After the researcher agrees, pass the complete list to `saigen groups save --file groups.json --revision REV` using the reviewed revision. Each object has `id`, `title`, direct `stateIds`, and optional `parentId` and `reason`. A parent may have an empty `stateIds` list when its descendants contain states. Use stable group IDs for revisions. On a revision conflict, re-read the groups and states and resolve changes with the researcher before saving. Verify the final hierarchy and point them to **Groups** on the Canvas.
 
 ## Bring in an existing analysis
 

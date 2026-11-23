@@ -117,6 +117,35 @@ Group moves snap using the dragged card against unselected cards and save as one
 
 Edits save to the project. Notes and layout can change; recorded execution facts are retained. Unused standalone plans can be deleted, including agent-created plans; remove dependent plans first. For an unused workflow, open a stage editor and choose **Cancel workflow** to retire the entire proposal while retaining its history. Recorded attempts remain protected. Undo checks for conflicting changes and can restore deleted standalone plans when their inputs are still available; workflow cancellation cannot be undone.
 
+## Organize the Canvas
+
+Ask your agent “Organize this canvas by cell type,” or invoke `$saigen-organize` in Codex or `/saigen-organize` in Claude Code or OpenCode. Choose how broadly or finely to group the work. For example, use **HeLa cell analysis** as a top-level group with **Quality control** and **Modeling** inside it, and leave shared preprocessing outside. Review the proposed hierarchy, members, and rationale in chat. The agent saves it after you agree. Ask it to revise the arrangement as the analysis changes.
+
+The Canvas collapses top-level groups at 55% zoom or lower and expands them at 65% or higher. It keeps the previous view in between. Deeper groups expand at higher zoom levels. Click a summary card to reveal its next layer, or use **Groups** to expand, collapse, or reveal a specific subgroup. Manual choices take precedence in the current tab. **Use zoom** returns to automatic level of detail. Click a summary connection to inspect the original dependencies. Report selection shows individual results.
+
+Each state can be assigned directly to one group or remain ungrouped. A group can hold results, subgroups, or both. Its summary counts results across all descendants and shows running and failed counts when applicable. Archiving or deleting a state removes its membership, and groups with no results anywhere under them disappear. Grouping leaves the original positions, states, actions, and artifacts intact.
+
+The agent uses `saigen groups show` to read the saved groups and project revision. To save an agreed arrangement from a terminal, put the complete list in a JSON file such as `groups.json`:
+
+```json
+[
+  {
+    "id": "hela",
+    "title": "HeLa cell analysis",
+    "stateIds": []
+  },
+  {
+    "id": "hela_modeling",
+    "parentId": "hela",
+    "title": "Modeling",
+    "stateIds": ["hela_counts", "hela_model"],
+    "reason": "Inputs and outputs of the HeLa modeling branch."
+  }
+]
+```
+
+Run `saigen groups save --file groups.json --revision REV` with the revision you reviewed. An empty list clears the grouping. These commands store the Canvas organization, and the agent shortcut guides the conversation that produces it. See [how to refresh older workspace instructions](agent-integrations.md#refresh-existing-workspace-instructions).
+
 ## Plan before executing
 
 Ask the agent to propose an analysis and wait for your approval. Proposed result nodes appear without execution edges. After approval, each recorded step becomes running and then completed or failed. Very short runs may finish between browser updates.

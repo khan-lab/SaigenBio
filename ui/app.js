@@ -9,6 +9,8 @@ const {W,H}=SaigenGeometry;
 let flow={schemaVersion:1,project:"Project",revision:0,states:[],actions:[],artifacts:{},revisions:[]};
 let history=[],selection=new Set(),connecting=null,editorContext=null;
 let reports;
+let groupView=null,groupDialogEdge=null;
+const groupOverrides=new Map(),groupAutomatic=new Map();
 let camera={x:70,y:90,scale:.72},savedCamera=null,drag=null,hoverTimer=null,hideTimer=null,toastTimer=null;
 let ready=false,busy=false,token="",allEvents=[],artifactRequest=0;
 const getState=id=>flow.states.find(n=>n.id===id);
@@ -172,7 +174,7 @@ function selectNode(id,additive=false){
  hidePopups();syncSelection();
 }
 function syncSelection(){
- selection=new Set([...selection].filter(id=>getState(id)));
+ selection=new Set([...selection].filter(id=>getState(id)&&!groupView?.endpoint.has(id)));
  $("#viewport").classList.toggle("multi-select",selection.size>1);
  $("#nodes").querySelectorAll("[data-state]").forEach(card=>{
    const selected=selection.has(card.dataset.state);
@@ -183,17 +185,27 @@ function syncSelection(){
  positionSelection();
 }
 function renderWorkflowLabels(){
- $("#workflow-labels").innerHTML=workflows.labels();
+ $("#workflow-labels").innerHTML=workflows.labels(groupView?.endpoint);
  $("#workflow-labels").querySelectorAll("[data-workflow-state]").forEach(b=>b.onclick=()=>openState(b.dataset.workflowState));
 }
 function renderNodes(){
  renderWorkflowLabels();
- $("#planned-help").hidden=!flow.states.some(n=>n.status==="planned");
- $("#nodes").innerHTML=flow.states.map(n=>'<button class="state '+esc(n.status)+(firstPlot(n)?" has-plot":"")+(selection.has(n.id)?" selected":"")+'" data-state="'+esc(n.id)+'" style="left:'+n.x+'px;top:'+n.y+'px" aria-pressed="'+selection.has(n.id)+'" aria-describedby="selection-help" aria-label="'+esc(n.title)+'">'+reportBadge(n.id)+nodeContent(n)+'<span class="port" title="Connect to another state" aria-hidden="true"></span></button>').join("");
+ const states=groupView?.states??flow.states;
+ $("#planned-help").hidden=!states.some(n=>n.status==="planned");
+ $("#nodes").innerHTML=states.map(n=>'<button class="state '+esc(n.status)+(firstPlot(n)?" has-plot":"")+(selection.has(n.id)?" selected":"")+'" data-state="'+esc(n.id)+'" style="left:'+n.x+'px;top:'+n.y+'px" aria-pressed="'+selection.has(n.id)+'" aria-describedby="selection-help" aria-label="'+esc(n.title)+'">'+reportBadge(n.id)+nodeContent(n)+'<span class="port" title="Connect to another state" aria-hidden="true"></span></button>').join("")+
+   (groupView?.summaries.map(group=>SaigenAnalysisGroups.card(group,esc)).join("")??"");
+ positionGroupCards();
  syncSelection();
 }
+function positionGroupCards(){
+ for(const group of groupView?.summaries??[]){
+   const card=$("#nodes").querySelector('[data-analysis-group="'+CSS.escape(group.groupId)+'"]');
+   Object.assign(card.style,{left:group.x+"px",top:group.y+"px",width:group.width+"px",height:group.height+"px"});
+   card.style.setProperty("--group-font-scale",group.fontScale);
+ }
+}
 const {edgeAnchor,edgePath}=SaigenGeometry;
-const actionJunction=a=>SaigenGeometry.actionJunction(a,flow.states);
+const actionJunction=a=>SaigenGeometry.actionJunction(a,groupView?.placed??flow.states);
 function executedScriptName(a){
  const argv=a.argv||a.argvTemplate||[];
  if(!argv.length)return "";
@@ -231,7 +243,7 @@ function edgeLabel(a,x,y){
 
 function renderEdges(){
  let html='<defs><marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M1 1L7 4L1 7" fill="none" stroke="#a0b097" stroke-width="1.2"/></marker></defs>';
- for(const a of flow.actions){const t=getState(a.to);
+ for(const a of groupView?.actions??flow.actions){const t=getState(a.to);
  if(a.from.length>1){
    const p=actionJunction(a),running=a.status==="running",planned=a.status==="planned",cls=running?"running-edge":planned?"planned-edge":"";
    const path=(d,arrow=false)=>'<path class="edge-line '+cls+'" d="'+d+'"'+(arrow&&!running?' marker-end="url(#arrow)"':"")+'/><path class="edge-hit" d="'+d+'"/>';
@@ -244,13 +256,55 @@ function renderEdges(){
  if(index===0){const labelY=a.from.length>1?t.y+H/2-23:p.y-20;html+=edgeLabel(a,p.x,labelY+8);}
  if(running)html+='<g class="particle"><path d="M-27 0H-2M-8 -4L-2 0L-8 4" stroke="#44815e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/><animateMotion dur="2.5s" repeatCount="indefinite" rotate="auto" path="'+p.d+'"/></g>';
  html+='</g>';});}
+ if(groupView)html+=groupView.connections.map((edge,index)=>SaigenAnalysisGroups.edge(edge,index,esc)).join("");
  $("#edges").innerHTML=html;
 }
-function render(){$("#reconstruction-notice").hidden=!Object.values(flow.reconstructions||{}).some(p=>["draft","partial"].includes(p.status));reports.render();renderNodes();renderEdges();$("#undo").disabled=!history.length;$("#auto-arrange").disabled=flow.states.length<2;positionSelection();}
-function applyCamera(){ $("#scene").style.transform="translate("+camera.x+"px,"+camera.y+"px) scale("+camera.scale+")";$("#zoom-label").textContent=Math.round(camera.scale*100)+"%";positionSelection();}
+function projectGroups(){
+ const groups=flow.analysisGroups||[];
+ const ids=new Set(groups.map(group=>group.id));
+ for(const preferences of [groupOverrides,groupAutomatic]){
+   for(const id of preferences.keys())if(!ids.has(id))preferences.delete(id);
+ }
+ groupView=groups.length?SaigenAnalysisGroups.project(flow,{
+   automatic:groupAutomatic,overrides:groupOverrides,full:reports.active||!!connecting,scale:camera.scale
+ }):null;
+}
+function focusProjectedState(stateId){
+ if(!stateId)return;
+ const hiddenBy=groupView?.endpoint.get(stateId);
+ const selector=hiddenBy
+   ? '[data-analysis-group="'+CSS.escape(hiddenBy.slice(6))+'"]'
+   : '[data-state="'+CSS.escape(stateId)+'"]';
+ ($("#nodes").querySelector(selector)||$("#groups-control")).focus({preventScroll:true});
+}
+function renderGraph(recompute=true){
+ const focused=document.activeElement;
+ const stateId=focused?.dataset?.state,groupId=focused?.dataset?.analysisGroup;
+ if(recompute)projectGroups();
+ renderNodes();renderEdges();
+ $("#groups-control").hidden=!!connecting||!groupView?.groups.length;
+ if($("#groups-dialog").open)renderGroupDialog();
+ focusProjectedState(stateId??groupView?.groups.find(group=>group.id===groupId)?.anchor.id);
+}
+function render(){$("#reconstruction-notice").hidden=!Object.values(flow.reconstructions||{}).some(p=>["draft","partial"].includes(p.status));reports.render();renderGraph();$("#undo").disabled=!history.length;$("#auto-arrange").disabled=flow.states.length<2;positionSelection();}
+function applyCamera(scaleChanged=false){
+ $("#scene").style.transform="translate("+camera.x+"px,"+camera.y+"px) scale("+camera.scale+")";
+ $("#zoom-label").textContent=Math.round(camera.scale*100)+"%";
+ if(scaleChanged&&groupView){
+   const previous=groupView.summaries;
+   projectGroups();
+   const current=groupView.summaries;
+   if(previous.length!==current.length||previous.some((group,i)=>group.id!==current[i].id)){
+     renderGraph(false);
+   }else if(current.length){
+     positionGroupCards();renderEdges();
+   }
+ }
+ positionSelection();
+}
 function bounds(){const ns=flow.states;if(!ns.length)return {x:0,y:0,w:1000,h:600};const x=Math.min(...ns.map(n=>n.x)),y=Math.min(...ns.map(n=>n.y));return {x,y,w:Math.max(...ns.map(n=>n.x+W))-x,h:Math.max(...ns.map(n=>n.y+H))-y};}
-function fit(initial=false){cancelDrag();const v=$("#viewport"),b=bounds(),w=v.clientWidth,h=v.clientHeight;let scale=Math.min(1,(w-100)/b.w,(h-170)/b.h);if(initial)scale=Math.max(scale,w<800?.67:.62);scale=Math.max(.22,scale);camera={scale,x:w>b.w*scale?(w-b.w*scale)/2-b.x*scale:65-b.x*scale,y:Math.max(90,(h-b.h*scale)/2)-b.y*scale};applyCamera();}
-function zoom(factor,cx,cy){cancelDrag();const v=$("#viewport").getBoundingClientRect();cx=cx??v.width/2;cy=cy??v.height/2;const next=Math.max(.22,Math.min(1.8,camera.scale*factor)),ratio=next/camera.scale;camera.x=cx-(cx-camera.x)*ratio;camera.y=cy-(cy-camera.y)*ratio;camera.scale=next;hidePopups();applyCamera();}
+function fit(initial=false){cancelDrag();const v=$("#viewport"),b=bounds(),w=v.clientWidth,h=v.clientHeight;let scale=Math.min(1,(w-100)/b.w,(h-170)/b.h);if(initial&&!flow.analysisGroups?.length)scale=Math.max(scale,w<800?.67:.62);scale=Math.max(.22,scale);camera={scale,x:w>b.w*scale?(w-b.w*scale)/2-b.x*scale:65-b.x*scale,y:Math.max(90,(h-b.h*scale)/2)-b.y*scale};applyCamera(true);}
+function zoom(factor,cx,cy){cancelDrag();const v=$("#viewport").getBoundingClientRect();cx=cx??v.width/2;cy=cy??v.height/2;const next=Math.max(.22,Math.min(1.8,camera.scale*factor)),ratio=next/camera.scale;if(ratio===1)return;camera.x=cx-(cx-camera.x)*ratio;camera.y=cy-(cy-camera.y)*ratio;camera.scale=next;hidePopups();applyCamera(true);}
 function positionSelection(){
  const el=$("#selection-tools"),nodes=selectedStates();
  if(reports.active||!nodes.length||!$("#detail-view").hidden||connecting){el.hidden=true;return;}
@@ -373,7 +427,7 @@ function route(){
  try{const id=match?decodeURIComponent(match[1]):null;n=id?(getState(id)||detailController.state(id)):null;
  if(id&&!n){$("#flow-view").hidden=true;$("#detail-view").hidden=false;$("#detail-content").textContent="Loading recorded state…";detailController.load(id);return;}}catch{}
  if(n){$("#flow-view").hidden=true;$("#detail-view").hidden=false;$("#selection-tools").hidden=true;detailController.render(n);$("#detail-view").scrollTop=0;}
- else{$("#flow-view").hidden=false;$("#detail-view").hidden=true;if(savedCamera){camera={...savedCamera};savedCamera=null;}applyCamera();}
+ else{$("#flow-view").hidden=false;$("#detail-view").hidden=true;const restored=!!savedCamera;if(restored){camera={...savedCamera};savedCamera=null;}applyCamera(restored);}
 }
 function field(name,label,value="",type="input",placeholder=""){
  const c=type==="textarea"?'<textarea name="'+name+'" rows="3" placeholder="'+esc(placeholder)+'">'+esc(value)+'</textarea>':'<input name="'+name+'" value="'+esc(value)+'" '+(name==="title"||name==="label"?"required":"")+' maxlength="'+(name==="title"?80:1000)+'" placeholder="'+esc(placeholder)+'">';
@@ -418,7 +472,7 @@ function connectTo(id){
  if(flow.actions.some(a=>a.from.includes(source.id)&&a.to===target.id)){toast("These states are already connected.");return;}
  const seen=new Set();function reaches(n){if(n===source.id)return true;if(seen.has(n))return false;seen.add(n);return flow.actions.filter(a=>a.from.includes(n)).some(a=>reaches(a.to));}
  if(reaches(target.id)){toast("This connection would create a cycle.");return;}
- const from=source.id,to=target.id;connecting=null;$("#viewport").classList.remove("connecting");
+ const from=source.id,to=target.id;connecting=null;$("#viewport").classList.remove("connecting");renderGraph();
 
  showEditor({type:"connect",from,to},"Connect states",field("label","Label on the arrow","","input","Script or tool")+field("command","Command or action","","textarea")+field("reason","Why are these states connected?","","textarea"));
 }
@@ -495,6 +549,43 @@ $("#add-state").onclick=()=>addState();
 $("#selection-tools").onclick=e=>{if(selection.size!==1)return;const mode=e.target.closest("[data-edit-action]")?.dataset.editAction,n=selectedStates()[0];if(!n)return;if(mode==="edit")openStateEditor(n);if(mode==="branch")addState(n);if(mode==="connect")startConnecting(n.id);};
 $("#fit").onclick=()=>{hidePopups();fit();};
 $("#zoom-in").onclick=()=>zoom(1.2);$("#zoom-out").onclick=()=>zoom(1/1.2);
+function renderGroupDialog(){
+ const all=groupView?.groups??[];
+ const edge=groupView?.connections.find(item=>item.from.id===groupDialogEdge?.from.id&&item.to.id===groupDialogEdge?.to.id);
+ $("#groups-title").textContent=groupDialogEdge?"Underlying dependencies":"Analysis groups";
+ $("#groups-body").innerHTML=groupDialogEdge
+   ? edge?SaigenAnalysisGroups.dependencyList(edge,esc):"<p>This summary connection is no longer visible.</p>"
+   : SaigenAnalysisGroups.groupList(all,groupOverrides.size>0,esc);
+}
+function openGroups(edge=null){
+ if(reports.active)return;
+ hidePopups();groupDialogEdge=edge;renderGroupDialog();$("#groups-dialog").showModal();
+}
+function toggleAnalysisGroup(id){
+ const group=groupView?.groups.find(item=>item.id===id);
+ if(!group||reports.active||connecting)return;
+ hidePopups();
+ groupOverrides.set(id,group.hiddenBy?false:!group.collapsed);
+ if(group.hiddenBy){
+   const byId=new Map(groupView.groups.map(item=>[item.id,item]));
+   for(let parent=group.parentId;parent;parent=byId.get(parent).parentId)groupOverrides.set(parent,false);
+ }
+ renderGraph();
+}
+$("#groups-control").onclick=()=>openGroups();
+$("#close-groups").onclick=()=>$("#groups-dialog").close();
+$("#groups-body").onclick=e=>{
+ const toggle=e.target.closest("[data-toggle-analysis-group]");
+ if(toggle){
+   const id=toggle.dataset.toggleAnalysisGroup;toggleAnalysisGroup(id);
+   $("#groups-body").querySelector('[data-toggle-analysis-group="'+CSS.escape(id)+'"]')?.focus();
+ }else if(e.target.closest("[data-reset-analysis-groups]")){
+   groupOverrides.clear();renderGraph();$("#close-groups").focus();
+ }else{
+   const target=e.target.closest("[data-group-target]");
+   if(target){$("#groups-dialog").close();openState(target.dataset.groupTarget);}
+ }
+};
 $("#viewport").addEventListener("wheel",e=>{e.preventDefault();const r=e.currentTarget.getBoundingClientRect();zoom(Math.exp(-e.deltaY*.0015),e.clientX-r.left,e.clientY-r.top);},{passive:false});
 $("#nodes").addEventListener("pointerover",e=>{const n=e.target.closest("[data-state]");if(reports.active||!n||n.contains(e.relatedTarget))return;clearTimeout(hideTimer);clearTimeout(hoverTimer);hoverTimer=setTimeout(()=>showPreview(n.dataset.state,n),650);});
 $("#nodes").addEventListener("keydown",e=>{
@@ -512,7 +603,7 @@ $("#viewport").addEventListener("pointerdown",e=>{
  if(e.button!==0||drag||busy||!ready)return;
  const card=e.target.closest("[data-state]");
  if(e.target.closest(".port")&&!reports.active){e.preventDefault();startConnecting(card.dataset.state);return;}
- if(e.target.closest(".edge-group,.workflow-label"))return;
+ if(e.target.closest(".edge-group,.workflow-label,[data-analysis-group]"))return;
  if(connecting&&card)return;
  if(card&&reports.active)return;
  // Shift gestures toggle selection on click; they never begin a layout drag.
@@ -537,6 +628,7 @@ function positionDraggedNodes(positions) {
    const card=$("#nodes").querySelector('[data-state="'+CSS.escape(id)+'"]');
    if(card){card.style.left=x+"px";card.style.top=y+"px";}
  }
+ if(groupView?.summaries.length){projectGroups();positionGroupCards();}
  renderEdges();
  renderWorkflowLabels();
  positionSelection();
@@ -550,7 +642,7 @@ function moveDrag(clientX, clientY, bypass) {
  if (drag.id) {
    selection=new Set(drag.originals.map(n=>n.id));syncSelection();
    const position = {id: drag.id, x: drag.x + dx/camera.scale, y: drag.y + dy/camera.scale};
-   const next = SaigenGeometry.alignment(position, flow.states.filter(n=>!selection.has(n.id)), camera.scale, drag.guides, bypass);
+   const next = SaigenGeometry.alignment(position, (groupView?.states??flow.states).filter(n=>!selection.has(n.id)), camera.scale, drag.guides, bypass);
    drag.guides = next.guides;
    const x = next.guides.x ? next.x : Math.round(next.x);
    const y = next.guides.y ? next.y : Math.round(next.y);
@@ -612,19 +704,39 @@ function updateAlignmentModifier(event) {
 }
 document.addEventListener("keyup", updateAlignmentModifier);
 $("#nodes").addEventListener("click",e=>{
- if(suppressClick||e.target.closest(".port"))return;const n=e.target.closest("[data-state]");if(!n)return;
+ if(suppressClick||e.target.closest(".port"))return;
+ const group=e.target.closest("[data-analysis-group]");
+ if(group){
+   const summary=groupView.summaries.find(item=>item.groupId===group.dataset.analysisGroup);
+   toggleAnalysisGroup(summary.groupId);
+   focusProjectedState(summary.anchorId);
+   return;
+ }
+ const n=e.target.closest("[data-state]");if(!n)return;
  if(reports.active){reports.toggleState(n.dataset.state);return;}
  if(connecting){connectTo(n.dataset.state);return;}
  selectNode(n.dataset.state,e.shiftKey);
 });
-$("#edges").addEventListener("click",e=>{const g=e.target.closest("[data-action]");if(g){if(e.target.closest(".edge-label,.edge-sub"))showActionFiles(g.dataset.action,e.target);else showAction(g.dataset.action,g);}});
-$("#edges").addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){const g=e.target.closest("[data-action]");if(g){e.preventDefault();showAction(g.dataset.action,g);}}});
+function groupConnection(target){
+ const edge=target.closest("[data-group-edge]");
+ return edge?groupView?.connections[Number(edge.dataset.groupEdge)]:null;
+}
+$("#edges").addEventListener("click",e=>{
+ const summary=groupConnection(e.target);if(summary){openGroups(summary);return;}
+ const g=e.target.closest("[data-action]");if(g){if(e.target.closest(".edge-label,.edge-sub"))showActionFiles(g.dataset.action,e.target);else showAction(g.dataset.action,g);}
+});
+$("#edges").addEventListener("keydown",e=>{
+ if(!["Enter"," "].includes(e.key))return;
+ const summary=groupConnection(e.target);
+ if(summary){e.preventDefault();openGroups(summary);return;}
+ const g=e.target.closest("[data-action]");if(g){e.preventDefault();showAction(g.dataset.action,g);}
+});
 document.addEventListener("pointerdown",e=>{if(!e.target.closest("#action-preview")&&!e.target.closest(".edge-group"))$("#action-preview").hidden=true;});
 document.addEventListener("keydown",e=>{
  updateAlignmentModifier(e);
  if(e.key==="Escape"&&document.querySelector('dialog[open]'))return;
  if(e.key==="Escape"&&drag){cancelDrag();selection.clear();syncSelection();return;}
- if(e.key==="Escape"){if(reports.active)reports.setMode(false);hidePopups();connecting=null;$("#viewport").classList.remove("connecting");selection.clear();syncSelection();}
+ if(e.key==="Escape"){if(reports.active)reports.setMode(false);hidePopups();const wasConnecting=!!connecting;connecting=null;$("#viewport").classList.remove("connecting");selection.clear();if(wasConnecting)renderGraph();else syncSelection();}
  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="z"&&!reports.active&&!e.target.closest("input,textarea")&&!$("#editor").open){e.preventDefault();$("#undo").click();}
 });
 window.addEventListener("hashchange",route);

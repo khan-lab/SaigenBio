@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 # Re-export record helpers for compatibility with existing integrations.
 from .records import (ID, TERMINAL, RecordError, Conflict, now, uid, entity,
                       text, names, coordinates, plan_removal_error, validate)
+from .analysis_groups import remove_missing_members
 
 def digest(path):
     h = hashlib.sha256()
@@ -84,8 +85,10 @@ class Store:
                              for sid in e['states'] + ([e['replacementStateId']] if e.get('replacementStateId') else [])
                              + [r['id'] for r in e.get('evidence', []) if r['type'] == 'state']}
             payload, inverse = change(flow)
-            if kind != 'flow.undo' and ({n['id'] for n in flow['states']} - prior_ids) & explained_ids:
+            current_ids = {n['id'] for n in flow['states']}
+            if kind != 'flow.undo' and (current_ids - prior_ids) & explained_ids:
                 raise RecordError('State ID belongs to existing explanation history; use a new ID')
+            remove_missing_members(flow, prior_ids - current_ids)
             validate(flow)
             flow["revision"] += 1
             at = now()

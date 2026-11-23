@@ -25,7 +25,7 @@ Sources: [Claude Code](https://claude.com/blog/steering-claude-code-skills-hooks
 
 ## Git workspaces
 
-With an agent selected, `saigen init` and `saigen setup` add rules to the workspace’s `.gitignore` for the generated `saigen-record` directories listed above and any generated reconstruction shortcut. The rules are relative to that workspace, including when it sits in a subdirectory of a repository.
+With an agent selected, `saigen init` and `saigen setup` add rules to the workspace’s `.gitignore` for the generated `saigen-record` directories and any generated reconstruction or organization shortcuts. The rules are relative to that workspace, including when it sits in a subdirectory of a repository.
 
 After cloning a workspace with ignored skills, run `saigen setup` with the workspace’s agent, analysis path, and saved input paths to recreate them. If a team wants to pin a generated copy, review it and use `git add -f` on that agent’s `saigen-record` directory to include `SKILL.md` and its references. Git continues tracking files already in the index.
 
@@ -37,6 +37,8 @@ The selected Python environment must remain available at that path. When changin
 
 For [existing-analysis reconstruction](getting-started.md#start-reconstruction-in-your-agent), setup provides `$saigen-reconstruct` as a workspace skill in Codex and `/saigen-reconstruct` as a workspace command in Claude Code and OpenCode. In any supported agent, you can also ask “Reconstruct this project on the SaigenBio canvas.” [Codex skills](https://learn.chatgpt.com/docs/build-skills), [Claude Code skills and commands](https://code.claude.com/docs/en/skills), [OpenCode commands](https://opencode.ai/docs/commands/).
 
+For [analysis groups](getting-started.md#organize-the-canvas), use `$saigen-organize` in Codex, `/saigen-organize` in Claude Code or OpenCode, or ask any configured agent to organize the Canvas. The organization shortcut uses existing state IDs. `saigen-record` guides recording, and `saigen-reconstruct` drafts a historical workflow from evidence. Use `saigen groups` in a terminal to read or save the group arrangement.
+
 ## Refresh existing workspace instructions
 
 Setup copies the recording skill into the workspace. Upgrading SaigenBio does not update that copy, and rerunning setup refuses to overwrite differing files.
@@ -47,7 +49,7 @@ After upgrading the installation used by the workspace:
 2. Generate the current instructions in a new temporary directory outside the software checkout: `saigen setup --workspace /absolute/path/to/new-temporary-directory --agent codex --analysis-project /absolute/path/to/existing-analysis`. Substitute your agent and paths; repeat --agent for multiple agents. If the existing project uses a saved permissionMode, also supply its matching --permissions ask or --permissions flexible option so generated instructions retain that authorization. This generates instructions only; it does not initialize or execute analysis.
 3. Compare the generated skill, its reference files, and project instructions with the workspace copies at the agent-specific paths in the table above. Back up existing files and merge updated guidance while retaining intentional local customizations. Replace unmodified skill and reference files with the generated versions. Review project instructions separately to preserve local rules and workflow permissions.
 4. Retain the workspace's project, input, and viewer settings. If its CLI location changed, update the cli and python paths in saigen-workspace.json to the new installation. Review generated project instructions if needed rather than replacing existing instructions wholesale.
-5. Rerun setup in the original workspace with its saved project and inputs to add any new generated files, such as the reconstruction shortcut. If setup flags a file you customized, merge it deliberately. Open a fresh agent session so it loads the updated skill. Check a planning-only request before approving execution.
+5. Rerun setup in the original workspace with its saved project and inputs to add new generated files, including the reconstruction or organization shortcuts. If setup flags a file you customized, merge it deliberately. Open a fresh agent session so it loads the updated skill. Check a planning-only request before approving execution.
 
 For concise planned nodes, the shared skill now separates short result titles, one-sentence expected results, proposed methods, and prerequisites. All supported agents receive this same guidance.
 
