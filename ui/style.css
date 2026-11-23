@@ -172,7 +172,6 @@ summary{cursor:pointer;padding:9px 0}.history-event{margin:8px 0;padding:0 12px;
 #pipeline-targets label{display:flex;align-items:baseline;gap:8px;padding:6px 0;font-size:13px}
 #pipeline-error{font-size:12px;color:#a2543a}
 #selection-tools{max-width:calc(100vw - 20px);flex-wrap:wrap}
-.group-dialog-list li:has([data-group-pipeline]){flex-wrap:wrap}
 
 #pipeline-banner{position:absolute;z-index:5;bottom:76px;left:24px;right:24px;max-width:max-content;display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:13px;box-shadow:var(--shadow)}
 #pipeline-banner select{max-width:100%;border:1px solid var(--line);border-radius:5px;padding:6px}
@@ -184,3 +183,6 @@ summary{cursor:pointer;padding:9px 0}.history-event{margin:8px 0;padding:0 12px;
 .group-card-figure{display:flex;flex:0 0 40%;min-width:0;height:100%;flex-direction:column;justify-content:center;gap:4px}
 .group-card-thumbnail{display:block;width:100%;flex:1;min-height:0;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:4px}
 .group-card-source{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#4c6354;font-size:calc(12px * var(--group-font-scale,1))}
+
+#pipeline-targets details{padding:3px 0 3px 12px}
+#pipeline-targets summary{cursor:pointer;line-height:1.7}

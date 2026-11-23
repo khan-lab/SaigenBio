@@ -124,3 +124,11 @@ for(const [i,a] of smaller.placed.entries())for(const b of smaller.placed.slice(
             a.y+(a.height??132)<=b.y||b.y+(b.height??132)<=a.y,"zoomed-out cards must clear one another");
 }
 assert.deepEqual(project(savedFlow,{...cycleOptions,full:true}).states,states);
+
+const {closeInspections}=globalThis.SaigenAnalysisGroups;
+const inspections=new Map([["large",false],["middle",false],["inner",false]]);
+assert.equal(closeInspections(low.groups,inspections,.9),false);
+assert.equal(closeInspections(low.groups,inspections,.7),true);
+assert.deepEqual([...inspections.keys()],["large"],"deeper inspections expire at higher zoom levels");
+assert.equal(closeInspections(low.groups,inspections,.55),true);
+assert.equal(inspections.size,0);

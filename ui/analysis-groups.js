@@ -10,6 +10,14 @@ globalThis.SaigenAnalysisGroups = (() => {
     return wasCompact ? scale < .65 + offset : scale <= .55 + offset;
   }
 
+  function closeInspections(groups, overrides, scale) {
+    let changed = false;
+    for (const group of groups) {
+      if (compactAt(scale, false, group.depth) && overrides.delete(group.id)) changed = true;
+    }
+    return changed;
+  }
+
   const leftmost = (a, b) => !a || b.x < a.x || (b.x === a.x && b.y < a.y) ? b : a;
 
   function newerFigure(current, candidate) {
@@ -238,20 +246,6 @@ globalThis.SaigenAnalysisGroups = (() => {
       '</title><path class="edge-line" d="'+path+'" marker-end="url(#arrow)"/><path class="edge-hit" d="'+path+'"/></g>';
   }
 
-  function groupList(groups, hasOverrides, esc) {
-    if (!groups.length) return "<p>No analysis groups are saved.</p>";
-    return '<p class="group-dialog-help">Level of detail follows zoom. Use a manual choice for this tab, or return to automatic.</p>'+
-      '<ul class="group-dialog-list">'+groups.map(group => {
-        const label = group.hiddenBy ? "Reveal" : group.collapsed ? "Expand" : "Collapse";
-        return '<li style="padding-inline-start:'+Math.min(group.depth,5)*13+'px"><div><strong>'+esc(group.title)+'</strong><small>'+countLabel(group.count,"result")+
-        (status(group)?" · "+esc(status(group)):"")+'</small>'+
-        (group.reason?'<p>'+esc(group.reason)+'</p>':"")+'</div><button class="outline" data-toggle-analysis-group="'+
-        esc(group.id)+'" aria-expanded="'+(!group.collapsed&&!group.hiddenBy)+'" aria-label="'+
-        esc(label+" "+group.title)+'">'+label+'</button><button class="outline" data-group-pipeline="'+esc(group.id)+'" aria-label="'+esc("Create pipeline from "+group.title)+'">Create pipeline…</button></li>';
-      }).join("")+
-      '</ul><button class="outline" data-reset-analysis-groups'+(hasOverrides?"":" disabled")+'>Use zoom</button>';
-  }
-
   function dependencyList(connection, esc) {
     const entries = new Map();
     for (const link of connection.links) {
@@ -269,5 +263,5 @@ globalThis.SaigenAnalysisGroups = (() => {
       }).join("")+'</ul>';
   }
 
-  return {compactAt, project, arrange, card, edge, groupList, dependencyList};
+  return {compactAt, closeInspections, project, arrange, card, edge, dependencyList};
 })();
