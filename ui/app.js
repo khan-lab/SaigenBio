@@ -193,7 +193,7 @@ function renderNodes(){
  const states=groupView?.states??flow.states;
  $("#planned-help").hidden=!states.some(n=>n.status==="planned");
  $("#nodes").innerHTML=states.map(n=>'<button class="state '+esc(n.status)+(firstPlot(n)?" has-plot":"")+(selection.has(n.id)?" selected":"")+'" data-state="'+esc(n.id)+'" style="left:'+n.x+'px;top:'+n.y+'px" aria-pressed="'+selection.has(n.id)+'" aria-describedby="selection-help" aria-label="'+esc(n.title)+'">'+reportBadge(n.id)+nodeContent(n)+'<span class="port" title="Connect to another state" aria-hidden="true"></span></button>').join("")+
-   (groupView?.summaries.map(group=>SaigenAnalysisGroups.card(group,esc)).join("")??"");
+   (groupView?.summaries.map(group=>SaigenAnalysisGroups.card(group,esc,imagePreview)).join("")??"");
  positionGroupCards();
  syncSelection();
 }
@@ -266,7 +266,7 @@ function projectGroups(){
    for(const id of preferences.keys())if(!ids.has(id))preferences.delete(id);
  }
  groupView=groups.length?SaigenAnalysisGroups.project(flow,{
-   automatic:groupAutomatic,overrides:groupOverrides,full:reports.active||!!connecting,scale:camera.scale
+   automatic:groupAutomatic,overrides:groupOverrides,full:reports.active||!!connecting,scale:camera.scale,figureFor:firstPlot
  }):null;
 }
 function focusProjectedState(stateId){
@@ -340,6 +340,7 @@ function handleImageError(e){
  if(!id){
    const message=document.createElement("span");message.className="action-meta";message.textContent="Preview unavailable · inspect the recorded file";img.replaceWith(message);return;
  }
+ const affectsGroup=groupView?.summaries.some(group=>group.figure?.artifact.id===id);
  unavailablePlots.add(id);
  // Update only affected cards; the underlying records and canvas position stay intact.
  for(const n of flow.states.filter(n=>(n.artifactIds||[]).includes(id))){
@@ -353,6 +354,7 @@ function handleImageError(e){
      const top=$("#detail-view").scrollTop;detailController.render(n);$("#detail-view").scrollTop=top;
    }
  }
+ if(affectsGroup)renderGraph();
 }
 function showAction(id,anchor){
  hidePopups();const a=getAction(id);if(!a)return;
