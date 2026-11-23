@@ -6,7 +6,7 @@ import subprocess
 import sysconfig
 import sys
 from .records import RecordError
-from .reconstruction_shortcuts import shortcut_files
+from .agent_shortcuts import shortcut_files
 
 ADAPTERS = {
     "codex": (".agents/skills", "AGENTS.md"),

@@ -188,8 +188,8 @@ def initialize(store, *, name=None, agents=None, port=None, permission=None,
         if agents:
             print("Open this folder in your selected AI agent to begin.")
             if existing_project is not None:
-                from .reconstruction_shortcuts import INVOCATIONS
-                shortcuts = [f"{agent}: {INVOCATIONS[agent]}" for agent in agents if agent in INVOCATIONS]
+                from .agent_shortcuts import RECONSTRUCTION_INVOCATIONS
+                shortcuts = [f"{agent}: {RECONSTRUCTION_INVOCATIONS[agent]}" for agent in agents if agent in RECONSTRUCTION_INVOCATIONS]
                 if shortcuts:
                     print("Reconstruction shortcut in your agent (" + ", ".join(shortcuts) + ").")
                 print('You can also ask: "Reconstruct this project on the SaigenBio canvas."')

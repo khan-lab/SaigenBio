@@ -30,12 +30,13 @@ globalThis.SaigenWorkflows=Object.freeze({create({getFlow,escape:esc,displayPath
   const c=context(node);if(!c)return "";
   return '<div class="workflow-preview"><div class="preview-label">'+esc(pipelineName(c.proposal))+' · '+esc(engineName(c.proposal))+'</div><p>'+esc(method(node))+'</p><small>Parameters: '+esc(Object.entries(c.proposal.spec.configuration.parameters||{}).map(([k,v])=>k+' = '+(typeof v==='object'?JSON.stringify(v):String(v))).join(' · ')||'None supplied')+'</small></div>';
  }
- function labels(){
+ function labels(hiddenStates){
   const groups=new Map();
   for(const node of getFlow().states){if(!context(node))continue;const key=node.workflowRun||node.workflowProposal;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(node);}
   return [...groups.values()].map(nodes=>{
    const node=nodes[0],c=context(node),left=Math.min(...nodes.map(n=>n.x)),top=Math.min(...nodes.map(n=>n.y))-34;
    const status=c.run?.status||(c.proposal.approval?"Approved · awaiting execution":"Proposed · awaiting agreement");
+   if(hiddenStates?.has(node.id))return "";
    return '<button class="workflow-label" data-workflow-state="'+esc(node.id)+'" style="left:'+left+'px;top:'+top+'px" title="Review workflow and parameters">'+esc(pipelineName(c.proposal))+' <span>· '+esc(engineName(c.proposal))+' · '+esc(status)+'</span></button>';
   }).join("");
  }

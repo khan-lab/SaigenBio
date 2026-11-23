@@ -3,7 +3,7 @@
 // Pure canvas geometry. Inputs are recorded states; no DOM or application state.
 globalThis.SaigenGeometry = (() => {
 const W=192,H=132;
-function edgeAnchor(n,right=false){return {x:n.x+(right?W:0),y:n.y+H/2};}
+function edgeAnchor(n,right=false){return {x:n.x+(right?(n.width??W):0),y:n.y+(n.height??H)/2};}
 function edgePath(from,to){
  const start=edgeAnchor(from,true),end=edgeAnchor(to),dx=Math.max(35,(end.x-start.x)*.5);
  const d=start.y===end.y&&end.x>=start.x?'M '+start.x+' '+start.y+' L '+end.x+' '+end.y:
@@ -74,7 +74,7 @@ function junctionRoute(start, end, boxes, source, target, index) {
  } else {
    const nearby = boxes.filter(box => box.left <= start.x + 40 && box.right >= end.x - 40);
    const top = Math.min(source.y, target.y, ...nearby.map(box => box.top));
-   const bottom = Math.max(source.y + H, target.y + H, ...nearby.map(box => box.bottom));
+   const bottom = Math.max(source.y + (source.height ?? H), target.y + (target.height ?? H), ...nearby.map(box => box.bottom));
    for (const lane of [top - clearance, bottom + clearance]) add(backwardDetour(start, end, lane), lane);
  }
  candidates.sort((a, b) => a.cost - b.cost);
@@ -96,7 +96,7 @@ function actionJunction(a,states){
  const inputs=sources.map((s,index)=>{
    const start = edgeAnchor(s, true);
    const boxes = states.filter(n => n.id !== s.id && n.id !== target.id).map(n => ({
-     left: n.x - 8, right: n.x + W + 8, top: n.y - 8, bottom: n.y + H + 8,
+     left: n.x - 8, right: n.x + (n.width ?? W) + 8, top: n.y - 8, bottom: n.y + (n.height ?? H) + 8,
    }));
    return {id: s.id, d: cubicPath(junctionRoute(start, junction, boxes, s, target, index))};
  });
