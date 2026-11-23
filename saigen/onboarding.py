@@ -187,6 +187,12 @@ def initialize(store, *, name=None, agents=None, port=None, permission=None,
         print("Viewer command: " + viewer_command(store, port))
         if agents:
             print("Open this folder in your selected AI agent to begin.")
+            if existing_project is not None:
+                from .reconstruction_shortcuts import INVOCATIONS
+                shortcuts = [f"{agent}: {INVOCATIONS[agent]}" for agent in agents if agent in INVOCATIONS]
+                if shortcuts:
+                    print("Reconstruction shortcut in your agent (" + ", ".join(shortcuts) + ").")
+                print('You can also ask: "Reconstruct this project on the SaigenBio canvas."')
             print("Host permissions: allow workspace writes and, for downloads, network access in your agent's permission settings.")
             if "codex" in agents:
                 print("Codex permission guidance: https://learn.chatgpt.com/docs/agent-approvals-security")

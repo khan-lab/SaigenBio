@@ -1,5 +1,15 @@
 # Existing-analysis proposal
 
+## Choose evidence
+
+Read `saigen-workspace.json` for the CLI path, SaigenBio project, and configured source locations. Run `saigen reconstruct sources --project WORKSPACE --agent AGENT` with that CLI from the agent workspace. Use the analysis project configured for subsequent `flow`, `show`, and `propose` commands.
+
+The sources command lists configured paths when provided. Otherwise, Codex can suggest local sessions by their original working directory and date. Display the available paths with their dates and project directories when supplied. Ask the researcher which sessions (one, several, or none) and which project evidence to inspect before opening transcripts or reading other evidence. Include a manual path option. If discovery is unavailable, finds nothing, or was limited, explain that a manual path or project files alone are enough. For a broad review, explain the possible time and token cost and offer to start with a small scope.
+
+Read only selected sessions. For Codex JSONL, see [Reading selected Codex JSONL sessions](#reading-selected-codex-jsonl-sessions). Use relevant scripts, outputs, and local Git history to corroborate reported claims. Preview any sensitive preservation scope before copying evidence. Then publish the evidence-linked proposal without executing historical commands or accepting draft items on the researcher's behalf.
+
+## Proposal format
+
 All relative file paths are resolved from the SaigenBio workspace. Source files and selected result files are preserved locally. Use stable, unique IDs. The command requires the current project revision from `saigen flow`.
 
 ```json
