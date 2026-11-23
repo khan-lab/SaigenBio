@@ -157,7 +157,7 @@ globalThis.SaigenAnalysisGroups = (() => {
         (status(group)?" · "+esc(status(group)):"")+'</small>'+
         (group.reason?'<p>'+esc(group.reason)+'</p>':"")+'</div><button class="outline" data-toggle-analysis-group="'+
         esc(group.id)+'" aria-expanded="'+(!group.collapsed&&!group.hiddenBy)+'" aria-label="'+
-        esc(label+" "+group.title)+'">'+label+'</button></li>';
+        esc(label+" "+group.title)+'">'+label+'</button><button class="outline" data-group-pipeline="'+esc(group.id)+'" aria-label="'+esc("Create pipeline from "+group.title)+'">Create pipeline…</button></li>';
       }).join("")+
       '</ul><button class="outline" data-reset-analysis-groups'+(hasOverrides?"":" disabled")+'>Use zoom</button>';
   }

@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from saigen.workspace import setup
-from saigen.agent_shortcuts import ORGANIZATION_PATHS, RECONSTRUCTION_PATHS
+from saigen.agent_shortcuts import ORGANIZATION_PATHS, PIPELINE_PATHS, RECONSTRUCTION_PATHS
 
 REPO = Path(__file__).resolve().parent.parent
 RULES = [
@@ -49,7 +49,7 @@ class SkillIgnoreTests(unittest.TestCase):
             folder = "analysis" + rule.rstrip("/")
             for path in (f"{folder}/SKILL.md", f"{folder}/references/example.md"):
                 self.assertEqual(self.git("check-ignore", "-q", path).returncode, 0)
-        for path in (*RECONSTRUCTION_PATHS.values(), *ORGANIZATION_PATHS.values()):
+        for path in (*RECONSTRUCTION_PATHS.values(), *ORGANIZATION_PATHS.values(), *PIPELINE_PATHS.values()):
             self.assertEqual(self.git("check-ignore", "-q", f"analysis/{path}").returncode, 0)
         for path in (".agents/skills/saigen-record/SKILL.md",
                      "analysis/.agents/skills/another/SKILL.md",
@@ -69,7 +69,7 @@ class SkillIgnoreTests(unittest.TestCase):
         setup(self.root, "opencode", ".", [])
         self.assertEqual(self.git("ls-files", skill).stdout.strip(), skill)
         self.assertEqual(ignore.read_text().splitlines(), RULES[1:] + [
-            "/" + ORGANIZATION_PATHS["claude"], "/" + RECONSTRUCTION_PATHS["claude"],
-            "/" + ORGANIZATION_PATHS["opencode"], "/" + RECONSTRUCTION_PATHS["opencode"],
+            "/" + ORGANIZATION_PATHS["claude"], "/" + PIPELINE_PATHS["claude"], "/" + RECONSTRUCTION_PATHS["claude"],
+            "/" + ORGANIZATION_PATHS["opencode"], "/" + PIPELINE_PATHS["opencode"], "/" + RECONSTRUCTION_PATHS["opencode"],
         ])
         self.git("check-ignore", "-q", ".opencode/skills/saigen-record/SKILL.md")

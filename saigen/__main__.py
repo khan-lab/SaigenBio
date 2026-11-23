@@ -16,7 +16,7 @@ def main():
     parser.add_argument("--version",action="version",version="%(prog)s "+__version__)
     parser.add_argument("--project",default=os.environ.get("SAIGEN_PROJECT","."))
     parser.add_argument("--actor",default=None,help="Declared identity; not authenticated")
-    sub=parser.add_subparsers(dest="command",required=True,metavar="{verify,workflow,reconstruct,groups,explain,story,annotate,acquire,setup,init,snapshot,plan,remove-plan,run,serve,flow,history,recover,export,start,save,pause,resume,status,commands}")
+    sub=parser.add_subparsers(dest="command",required=True,metavar="{verify,workflow,pipeline,reconstruct,groups,explain,story,annotate,acquire,setup,init,snapshot,plan,remove-plan,run,serve,flow,history,recover,export,start,save,pause,resume,status,commands}")
     def command(name,**kwargs):
         p=sub.add_parser(name,**kwargs)
         p.add_argument("--project",default=argparse.SUPPRESS)
@@ -24,6 +24,8 @@ def main():
         return p
     from .workflows.cli import register as register_workflows
     register_workflows(command)
+    from .workflows.export_cli import register as register_pipeline
+    register_pipeline(command)
     from .verification_cli import register as register_verification
     register_verification(command)
     p=command("setup",help="Prepare a workspace for an AI agent")
@@ -118,6 +120,9 @@ def main():
     try:
         if args.command=="verify":
             from .verification_cli import dispatch
+            result=dispatch(store,args)
+        elif args.command=="pipeline":
+            from .workflows.export_cli import dispatch
             result=dispatch(store,args)
         elif args.command=="workflow":
             from .workflows.cli import dispatch

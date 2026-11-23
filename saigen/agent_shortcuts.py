@@ -13,6 +13,7 @@ def paths_for(name):
 
 RECONSTRUCTION_PATHS = paths_for("saigen-reconstruct")
 ORGANIZATION_PATHS = paths_for("saigen-organize")
+PIPELINE_PATHS = paths_for("saigen-pipeline")
 RECONSTRUCTION_INVOCATIONS = {
     agent: prefix + "saigen-reconstruct" for agent, (_, _, prefix) in _FORMATS.items()
 }
@@ -32,6 +33,12 @@ def shortcut_files(agents, skill_folders):
                 f"Use `saigen reconstruct sources --agent {agent}` with the configured CLI to identify "
                 "candidate evidence. Confirm the source selection before reading transcripts and publish "
                 "a draft for the researcher to review on the Canvas.",
+            ),
+            "saigen-pipeline": (
+                "Select Canvas results and review a Nextflow or Snakemake export in this session.",
+                f"Read the Export a pipeline from recorded results section of `{skill}`. "
+                "Open or resume a Canvas selection request for this workspace and session. "
+                "Ask the researcher to choose their target results on the Canvas, then review the pipeline in chat.",
             ),
             "saigen-organize": (
                 "Discuss and save analysis groups for the SaigenBio Canvas.",
