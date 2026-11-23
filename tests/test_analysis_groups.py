@@ -112,3 +112,23 @@ class AnalysisGroupsTests(unittest.TestCase):
             self.assertIn("description:", skill)
             if agent == "codex":
                 self.assertIn("name: saigen-organize", skill)
+
+    def test_overview_layout_is_saved_and_undone_without_moving_states(self):
+        groups = [{"id": "results", "title": "Results", "stateIds": ["model"]}]
+        revision = replace(self.store, groups, self.before["revision"], "Agent")["revision"]
+        layout = {"scale": .5, "cards": [
+            {"id": "input", "x": 64, "y": 65},
+            {"id": "group:results", "x": 560, "y": 67},
+        ]}
+        saved = self.store.edit([{"op": "edit_overview", "layout": layout}], revision)
+        self.assertEqual(saved["states"], self.before["states"])
+        self.assertEqual(saved["actions"], self.before["actions"])
+        self.assertEqual(set(saved["overviewLayouts"]), {"group:results|input"})
+        self.assertEqual(self.store.flow()["overviewLayouts"], saved["overviewLayouts"])
+        with self.assertRaises(RecordError):
+            self.store.edit([{"op": "edit_overview", "layout": {**layout, "cards": [
+                {"id": "group:unknown", "x": 12, "y": 40},
+            ]}}], saved["revision"])
+        undone = self.store.undo(saved["revision"], saved["revision"])
+        self.assertNotIn("overviewLayouts", undone)
+        self.assertEqual(undone["states"], self.before["states"])

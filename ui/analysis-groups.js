@@ -94,17 +94,80 @@ globalThis.SaigenAnalysisGroups = (() => {
     return {groups: ordered.map(({entry}) => entry).filter(group => group.count), endpoint};
   }
 
+  const layoutKey = cards => cards.map(card => card.id).sort().join("|");
+
+  function groupSize(scale) {
+    return {width:Math.max(W, 112 / scale) + Math.max(W * .7, 76 / scale),
+      height:Math.max(H, 65 / scale)};
+  }
+
+  function arrange(view, scale) {
+    const ids = view.placed.map(card => card.id).sort();
+    const children = new Map(ids.map(id => [id, new Set()]));
+    const parentCounts = new Map(ids.map(id => [id, 0]));
+    for (const {from, to} of [...view.actions, ...view.connections.map(edge =>
+      ({from:[edge.from.id], to:edge.to.id}))]) {
+      for (const source of from) {
+        if (children.get(source).has(to)) continue;
+        children.get(source).add(to);
+        parentCounts.set(to, parentCounts.get(to) + 1);
+      }
+    }
+    // A collapsed group can create a cycle in the projection. Ignore DFS
+    // back edges for ranking only. The edge renderer still uses every link.
+    const active = new Set(), done = new Set(), ordered = [];
+    ids.sort((a, b) => parentCounts.get(a) - parentCounts.get(b));
+    for (const root of ids) {
+      if (done.has(root)) continue;
+      active.add(root);
+      const stack = [{id:root, links:[...children.get(root)].sort().values()}];
+      while (stack.length) {
+        const top = stack.at(-1), next = top.links.next();
+        if (next.done) {
+          active.delete(top.id);
+          done.add(top.id);
+          stack.pop();
+        } else if (!active.has(next.value)) {
+          ordered.push({from:[top.id], to:next.value});
+          if (!done.has(next.value)) {
+            active.add(next.value);
+            stack.push({id:next.value, links:[...children.get(next.value)].sort().values()});
+          }
+        }
+      }
+    }
+    const {width, height} = groupSize(scale);
+    return {scale, cards:SaigenGeometry.autoArrange(view.placed, ordered, {
+      boxWidth:Math.ceil(width), boxHeight:Math.ceil(height)
+    })};
+  }
+
   function project(flow, options) {
     const byId = new Map(flow.states.map(node => [node.id, node]));
     const {groups, endpoint} = hierarchy(flow.analysisGroups || [], byId, options);
-    const states = endpoint.size ? flow.states.filter(node => !endpoint.has(node.id)) : flow.states;
-    const placed = [...states];
-    const summaries = groups.filter(group => group.collapsed && !group.hiddenBy).map(group => {
+    let states = endpoint.size ? flow.states.filter(node => !endpoint.has(node.id)) : flow.states;
+    let placed = [...states];
+    let summaries = groups.filter(group => group.collapsed && !group.hiddenBy).map(group => {
       const summary = groupAt(group, placed, options.scale);
       placed.push(summary);
       byId.set(summary.id, summary);
       return summary;
     });
+    const layout = summaries.length ? flow.overviewLayouts?.[layoutKey(placed)] : null;
+    if (layout) {
+      const positions = new Map(layout.cards.map(card => [card.id, card]));
+      // At low zoom, scale spacing with the minimum readable card size.
+      const stretch = Math.max(1, layout.scale / options.scale);
+      const relocate = card => {
+        const {x,y} = positions.get(card.id);
+        const next = {...card, x:x*stretch, y:y*stretch};
+        byId.set(next.id,next);
+        return next;
+      };
+      states = states.map(relocate);
+      summaries = summaries.map(relocate);
+      placed = [...states, ...summaries];
+    }
     const actions = [];
     const connections = new Map();
     for (const action of flow.actions) {
@@ -121,7 +184,7 @@ globalThis.SaigenAnalysisGroups = (() => {
         connections.get(key).links.push({action, source: byId.get(sourceId), target: byId.get(action.to)});
       }
     }
-    return {states, groups, summaries, actions, connections: [...connections.values()], endpoint, placed};
+    return {states, groups, summaries, actions, connections: [...connections.values()], endpoint, placed, layout, byId};
   }
 
   function status(group) {
@@ -206,5 +269,5 @@ globalThis.SaigenAnalysisGroups = (() => {
       }).join("")+'</ul>';
   }
 
-  return {compactAt, project, card, edge, groupList, dependencyList};
+  return {compactAt, project, arrange, card, edge, groupList, dependencyList};
 })();

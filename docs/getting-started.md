@@ -109,7 +109,7 @@ Open the viewer address shown by serve.
 - When a command uses several input states, their paths meet at a small junction with one outgoing arrow and one command label. Longer ancestor-input paths route above intermediate cards. The execution details retain every recorded input.
 - Failed attempts stay available in gray. A successful retry is a separate attempt.
 
-Choose **Auto-arrange** to lay out the whole canvas by its recorded dependencies. Inputs sit to the left of downstream results, and connected groups stay together. The layout runs locally and saves as one edit. Choose **Undo** to restore the previous positions.
+Choose **Auto-arrange** to lay out the visible Canvas by its dependencies. With collapsed groups, it arranges the group cards and visible results together. SaigenBio saves those positions for that overview. Expand the groups to return to the detailed result positions. Each arrangement saves as one edit, and **Undo** restores the previous layout.
 
 Drag a card to arrange the canvas. Temporary alignment guides appear as it snaps into a row or column with nearby cards. Hold **Option** on Mac or **Alt** on other keyboards to position it freely. Press **Esc** to cancel the drag, or choose **Undo** after dropping the card.
 

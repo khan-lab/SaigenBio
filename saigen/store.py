@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from .records import (ID, TERMINAL, RecordError, Conflict, now, uid, entity,
                       text, names, coordinates, plan_removal_error, validate)
 from .analysis_groups import remove_missing_members
+from .overview_layout import edit_overview
 
 def digest(path):
     h = hashlib.sha256()
@@ -273,6 +274,8 @@ class Store:
 
     def _operation(self, f, op, actor, internal=False):
         kind=op.get("op")
+        if kind == "edit_overview":
+            return edit_overview(f, op, internal)
         ident=op.get("id")
         if not isinstance(ident,str) or not ID.fullmatch(ident): raise RecordError("Invalid record ID")
         group="actions" if "action" in str(kind) else "states"
