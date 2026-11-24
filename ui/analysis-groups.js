@@ -210,7 +210,8 @@ globalThis.SaigenAnalysisGroups = (() => {
       ", "+countLabel(group.count,"result")+(detail ? ", "+detail : "")+
       (preview ? ", figure from "+source.title : "");
     return '<button type="button" class="analysis-group-card'+(preview?' has-group-figure':'')+
-      '" data-analysis-group="'+esc(group.groupId)+'" aria-expanded="false" aria-label="'+esc(label)+'">'+
+      '" data-analysis-group="'+esc(group.groupId)+'" aria-expanded="false" aria-label="'+esc(label)+
+      '" aria-keyshortcuts="Shift+ArrowUp Shift+ArrowDown Shift+ArrowLeft Shift+ArrowRight" title="Click to expand. Drag or use Shift+arrow keys to move.">'+
       '<span class="group-card-summary">'+
       (group.parentTitle?'<span class="group-card-parent">'+esc(group.parentTitle)+'</span>':"")+
       '<span class="group-card-title">'+esc(group.title)+

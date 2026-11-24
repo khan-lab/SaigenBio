@@ -213,6 +213,10 @@ function positionGroupCards(){
    card.style.setProperty("--group-font-scale",group.fontScale);
  }
 }
+function overviewMove(view, positions){
+ const byId=new Map(positions.map(position=>[position.id,position]));
+ return overviewOperation({scale:camera.scale,cards:view.placed.map(({id,x,y})=>byId.get(id)??{id,x,y})});
+}
 const {edgeAnchor,edgePath}=SaigenGeometry;
 const actionJunction=a=>SaigenGeometry.actionJunction(a,groupView?.placed??flow.states);
 function executedScriptName(a){
@@ -405,7 +409,7 @@ function handleImageError(e){
      const top=$("#detail-view").scrollTop;detailController.render(n);$("#detail-view").scrollTop=top;
    }
  }
- if(affectsGroup)renderGraph();
+ if(affectsGroup){cancelDrag();renderGraph();}
 }
 function showAction(id,anchor){
  hidePopups();const a=getAction(id);if(!a)return;
@@ -617,6 +621,7 @@ function openGroupDependencies(edge){
  hidePopups();groupDialogEdge=edge;renderGroupDialog();$("#groups-dialog").showModal();
 }
 function inspectAnalysisGroup(summary){
+ cancelDrag();
  hidePopups();
  groupOverrides.set(summary.groupId,false);
  renderGraph();
@@ -694,6 +699,18 @@ $("#groups-body").onclick=e=>{
 $("#viewport").addEventListener("wheel",e=>{e.preventDefault();const r=e.currentTarget.getBoundingClientRect();zoom(Math.exp(-e.deltaY*.0015),e.clientX-r.left,e.clientY-r.top);},{passive:false});
 $("#nodes").addEventListener("pointerover",e=>{const n=e.target.closest("[data-state]");if(reports.active||!n||n.contains(e.relatedTarget))return;clearTimeout(hideTimer);clearTimeout(hoverTimer);hoverTimer=setTimeout(()=>showPreview(n.dataset.state,n),650);});
 $("#nodes").addEventListener("keydown",e=>{
+ const group=e.target.closest("[data-analysis-group]");
+ if(group&&e.shiftKey&&e.key.startsWith("Arrow")){
+   e.preventDefault();
+   if(!ready||busy||drag||e.repeat)return;
+   const node=groupView?.byId.get("group:"+group.dataset.analysisGroup);
+   if(!node)return;
+   const step=20;
+   const x=node.x+step*(Number(e.key==="ArrowRight")-Number(e.key==="ArrowLeft"));
+   const y=node.y+step*(Number(e.key==="ArrowDown")-Number(e.key==="ArrowUp"));
+   mutate([overviewMove(groupView,[{id:node.id,x,y}])]).catch(error=>toast(error.message));
+   return;
+ }
  if(reports.active||connecting||!["Enter"," "].includes(e.key))return;
  const n=e.target.closest("[data-state]");if(!n)return;
  if(e.shiftKey&&e.key===" "){e.preventDefault();selectNode(n.dataset.state,true);return;}
@@ -707,17 +724,23 @@ let suppressClick=false;
 $("#viewport").addEventListener("pointerdown",e=>{
  if(e.button!==0||drag||busy||!ready)return;
  const card=e.target.closest("[data-state]");
+ const group=e.target.closest("[data-analysis-group]");
  if(e.target.closest(".port")&&!reports.active){e.preventDefault();startConnecting(card.dataset.state);return;}
- if(e.target.closest(".edge-group,.workflow-label,[data-analysis-group]"))return;
+ if(e.target.closest(".edge-group,.workflow-label"))return;
  if(connecting&&card)return;
  if(card&&reports.active)return;
  // Shift gestures toggle selection on click; they never begin a layout drag.
  if(card&&e.shiftKey){hidePopups();return;}
+ const id=group?"group:"+group.dataset.analysisGroup:card?.dataset.state;
+ const node=id?canvasState(id):null;
+ if(id&&!node)return;
  hidePopups();e.preventDefault();$("#viewport").setPointerCapture(e.pointerId);
- const id=card?.dataset.state||null,ids=id?(selection.has(id)?[...selection]:[id]):[];
+ const ids=group?[id]:id?(selection.has(id)?[...selection]:[id]):[];
  const originals=ids.map(id=>canvasState(id)).filter(Boolean).map(n=>({id:n.id,x:n.x,y:n.y}));
- drag={id,originals,startX:e.clientX,startY:e.clientY,x:card?canvasState(id).x:camera.x,y:card?canvasState(id).y:camera.y,moved:false,pointerId:e.pointerId,guides:{}};
- if(!card){$("#viewport").classList.add("panning");selection.clear();syncSelection();}
+ drag={id,originals,startX:e.clientX,startY:e.clientY,x:node?.x??camera.x,y:node?.y??camera.y,
+   moved:false,pointerId:e.pointerId,guides:{},group:!!group};
+ if(group)group.focus({preventScroll:true});
+ if(!node){$("#viewport").classList.add("panning");selection.clear();syncSelection();}
 });
 function showAlignmentGuides(guides = {}) {
  const vertical = guides.x, horizontal = guides.y;
@@ -730,13 +753,14 @@ function positionStateCard({id,x,y}){
  const card=$("#nodes").querySelector('[data-state="'+CSS.escape(id)+'"]');
  if(card){card.style.left=x+"px";card.style.top=y+"px";}
 }
-function positionDraggedNodes(positions) {
+function positionDraggedNodes(positions, group = false) {
  for(const {id,x,y} of positions){
    const node=canvasState(id);if(!node)continue;
    node.x=x;node.y=y;
-   positionStateCard(node);
+   if(!group)positionStateCard(node);
  }
- if(groupView?.summaries.length&&!groupView.layout){projectGroups();positionGroupCards();}
+ if(group)positionGroupCards();
+ else if(groupView?.summaries.length&&!groupView.layout){projectGroups();positionGroupCards();}
  renderEdges();
  renderWorkflowLabels();
  positionSelection();
@@ -748,13 +772,19 @@ function moveDrag(clientX, clientY, bypass) {
  if (!drag.moved) return;
  drag.last = {clientX, clientY};
  if (drag.id) {
-   selection=new Set(drag.originals.map(n=>n.id));syncSelection();
-   const position = {id: drag.id, x: drag.x + dx/camera.scale, y: drag.y + dy/camera.scale};
-   const next = SaigenGeometry.alignment(position, (groupView?.states??flow.states).filter(n=>!selection.has(n.id)), camera.scale, drag.guides, bypass);
+   if(drag.group)$("#viewport").classList.add("dragging-group");
+   const draggedIds=new Set(drag.originals.map(n=>n.id));
+   if(!drag.group){selection=draggedIds;syncSelection();}
+   const node=canvasState(drag.id);
+   const position = {id: drag.id, x: drag.x + dx/camera.scale, y: drag.y + dy/camera.scale,
+     width:node.width,height:node.height};
+   const visible=drag.group?groupView.placed:(groupView?.states??flow.states);
+   const neighbors=visible.filter(n=>!draggedIds.has(n.id));
+   const next = SaigenGeometry.alignment(position, neighbors, camera.scale, drag.guides, bypass);
    drag.guides = next.guides;
    const x = next.guides.x ? next.x : Math.round(next.x);
    const y = next.guides.y ? next.y : Math.round(next.y);
-   positionDraggedNodes(drag.originals.map(n=>({id:n.id,x:n.x+x-drag.x,y:n.y+y-drag.y})));
+   positionDraggedNodes(drag.originals.map(n=>({id:n.id,x:n.x+x-drag.x,y:n.y+y-drag.y})),drag.group);
    showAlignmentGuides(next.guides);
  } else {
    camera.x = drag.x + dx;
@@ -768,9 +798,10 @@ function clearDrag() {
  drag = null;
  const viewport = $("#viewport");
  viewport.classList.remove("panning");
+ viewport.classList.remove("dragging-group");
  showAlignmentGuides();
  if (viewport.hasPointerCapture(current.pointerId)) viewport.releasePointerCapture(current.pointerId);
- if (current.moved) {
+ if (current.moved || current.group) {
    suppressClick = true;
    setTimeout(() => suppressClick = false, 50);
  }
@@ -780,7 +811,7 @@ function clearDrag() {
 function cancelDrag(event) {
  if (!drag || (event?.pointerId !== undefined && event.pointerId !== drag.pointerId)) return;
  const current = clearDrag();
- if (current.id && current.moved) positionDraggedNodes(current.originals);
+ if (current.id && current.moved) positionDraggedNodes(current.originals,current.group);
 }
 
 $("#viewport").addEventListener("pointermove", e => {
@@ -792,17 +823,21 @@ $("#viewport").addEventListener("pointerup", async e => {
  const current = clearDrag();
  if (!current.id) return;
  // Viewport pointer capture can retarget the eventual click away from the card.
- if (!current.moved) {selectNode(current.id);return;}
+ if (!current.moved) {
+   if(current.group)inspectAnalysisGroup(canvasState(current.id));
+   else selectNode(current.id);
+   return;
+ }
  const moved=current.originals.map(original=>({original,node:canvasState(original.id)})).filter(({original,node})=>node&&(node.x!==original.x||node.y!==original.y));
  if(!moved.length)return;
  try {
-   const operations=groupView?.layout
-     ? [overviewOperation({scale:camera.scale,cards:groupView.placed.map(({id,x,y})=>({id,x,y}))})]
+   const operations=current.group||groupView?.layout
+     ? [overviewMove(groupView,[])]
      : moved.map(({node})=>({op:"edit_state",id:node.id,changes:{x:node.x,y:node.y}}));
    await mutate(operations);
  } catch (error) {
    toast(error.message);
-   positionDraggedNodes(moved.filter(({node})=>canvasState(node.id)===node).map(({original})=>original));
+   positionDraggedNodes(moved.filter(({node})=>canvasState(node.id)===node).map(({original})=>original),current.group);
  }
 });
 $("#viewport").addEventListener("pointercancel", cancelDrag);
