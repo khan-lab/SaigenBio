@@ -35,7 +35,7 @@ delete flow.workflows.runs.run.stageMethods;
 assert.ok(ui.card(node).includes('Tool unknown via Nextflow'));
 assert.ok(!ui.execution(node).tool.includes('Python'));
 proposal.spec.stages[0].method={tool:'Python',summary:'QUAL ≥ 100'};
-assert.ok(ui.details(node).includes('Tool version was not recorded'));
+assert.ok(!ui.details(node).includes('Tool version was not recorded'));
 node.workflowEvidence={source:'Trace',error:'Missing output',rows:[]};
 assert.ok(ui.details(node).includes('Missing output'));
 proposal.spec.pipeline.name='<img src=x onerror=alert(1)>';

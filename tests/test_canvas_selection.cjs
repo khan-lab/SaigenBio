@@ -79,6 +79,7 @@ async function drag(id,dx,dy){
  assert.deepEqual(positions(),before.map(n=>n.id==='c'?n:{...n,x:n.x+60,y:n.y+40}));
  assert.equal(submissions.length,1);assert.equal(submissions[0].operations.length,2);
  assert.equal(server.revision,1,'one group move is one revision');
+ assert.equal(element('#toast').textContent,'','saving a drag should be silent');
  assert.equal(element('#undo').disabled,true); // Fake history is intentionally empty.
  await click('b');assert.deepEqual(selected(),['b'],'plain click collapses to one node');
  await click('a',true);
@@ -89,6 +90,7 @@ async function drag(id,dx,dy){
  assert.deepEqual(positions(),beforeCancel);assert.equal(submissions.length,1);
  // A network failure restores the whole group. A stale response keeps the server's positions.
  failure='offline';await drag('a',40,30);assert.deepEqual(positions(),beforeCancel);
+ assert.equal(element('#toast').textContent,'Offline','a failed drag save should report its error');
  failure='stale';await drag('a',40,30);
  assert.equal(positions()[0].x,999);assert.equal(positions()[1].x,server.states[1].x);
  failure=null;

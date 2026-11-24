@@ -15,7 +15,8 @@ assert.ok(html.indexOf('>Inputs<')<html.indexOf('>Outputs<'));
 assert.ok(html.indexOf('>Method<')<html.indexOf('>Outputs<'));
 assert.ok(html.includes('Original calls'));
 assert.ok(html.includes('calls.csv'));
-assert.ok(html.includes('Method explanation not recorded.'));
+assert.ok(!html.includes('not recorded'));
+assert.ok(html.includes('python filter.py'));
 assert.ok(!html.slice(html.indexOf('>Where<'),html.indexOf('>Outputs<')).includes('filter.py'));
 flow.actions[0].code.explanation={summary:'Keep DP ≥ 5 <script>',recordedBy:'Agent',excerpts:[{artifactId:'code',start:2,end:3,text:'if a < b:\n    keep()'}]};
 html=ui.render(n);
@@ -31,7 +32,7 @@ assert.ok(html.includes('Proposed method'));
 assert.ok(html.includes('Expected outputs'));
 assert.ok(!html.includes('>Outputs<'));
 html=ui.render({id:'import',status:'imported',artifactIds:['input','reference']});
-assert.ok(html.includes('no produced files'));
+assert.ok(!html.includes('>Outputs<'));
 assert.ok(html.includes('Additional references'));
 assert.ok(!html.includes('execution-details'));
 flow.actions[0].inputArtifacts.push('reference');
@@ -48,5 +49,6 @@ for(const status of ['planned','running','completed','failed','cancelled','unkno
 }
 delete flow.workflows.proposals.p.spec.stages[0].method;
 html=ui.render({...n,workflowProposal:'p',workflowStage:'filter'});
-assert.ok(html.includes('Method explanation not recorded.'));
+assert.ok(!html.includes('Method explanation not recorded.'));
+assert.equal(ui.render({id:'bare',status:'planned',planDetails:' '}),'');
 console.log('State details: file roles, plans, workflow scope, excerpts, legacy records, and escaping passed.');

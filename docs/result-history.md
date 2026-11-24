@@ -9,7 +9,7 @@ State details use four principal sections:
 | Who | Declared proposers, contributors, approval participants, execution actors, reviewers and recorders, associated with their records |
 | When | Recorder event times and expandable event records; reported historical dates stay with their statements |
 
-**How** expands methods, parameters, commands, scripts and execution evidence. **Where** expands source states, input/output files and references. Missing information is explicit. Ordinary notes remain annotations; a successful execution does not establish a biological conclusion.
+**How** expands methods, parameters, commands, scripts and execution evidence. **Where** expands source states, input/output files and references. The detail screen shows sections when they have content. Ordinary notes remain annotations; a successful execution does not establish a biological conclusion.
 
 ## Add or correct an explanation
 
