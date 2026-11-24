@@ -2,6 +2,7 @@
 from pathlib import Path
 
 from .records import RecordError
+from .lineage import legacy_actions
 from .store import table_preview
 from .workflows.service import removal_options
 
@@ -31,6 +32,7 @@ class CanvasView:
     @staticmethod
     def with_removal_options(flow):
         # Operates on the caller's detached response, never on stored records.
+        flow['actions'] = legacy_actions(flow)
         flow['removalOptions'] = removal_options(flow)
         return flow
 

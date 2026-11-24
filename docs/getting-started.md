@@ -146,6 +146,10 @@ The agent uses `saigen groups show` to read the saved groups and project revisio
 
 Run `saigen groups save --file groups.json --revision REV` with the revision you reviewed. An empty list clears the grouping. These commands store the Canvas organization, and the agent shortcut guides the conversation that produces it. See [how to refresh older workspace instructions](agent-integrations.md#refresh-existing-workspace-instructions).
 
+## Reuse a recorded file
+
+Use `--input artifact:ID` to pass a recorded file to a new run. If you omit `--from`, SaigenBio uses each artifact's unique owning result as a parent. In **Ask** mode, review the inferred connections with your agent before it uses `--approved`. In **Flexible** mode, unique connections can be recorded automatically. If several results own the same artifact, choose the intended parent with `--from`. Files supplied by path still need an explicit parent when no artifact owner provides one.
+
 ## Plan before executing
 
 Ask the agent to propose an analysis and wait for your approval. Proposed result nodes appear without execution edges. After approval, each recorded step becomes running and then completed or failed. Very short runs may finish between browser updates.

@@ -110,3 +110,35 @@ class PipelineExportTests(unittest.TestCase):
         result = export.propose(self.store, ident, None, [], "nextflow", self.revision(), "Agent", session="agent-1")
         with self.assertRaises(RecordError):
             export.approve(self.store, result["id"], result["digest"], "agent-2", "Researcher", False, self.revision(), "Agent")
+
+    def test_inferred_producers_and_explicit_context(self):
+        aid = next(n["artifactIds"][0] for n in self.store.flow()["states"] if n["id"] == "intermediate")
+        for parents, name in (([], "inferred"), (["intermediate", "source"], "with_context")):
+            result = run(self.store, parents, name,
+                         [sys.executable, str(self.script), "{input:0}", name + ".txt"],
+                         inputs=[f"artifact:{aid}"], outputs=[name + ".txt"], ident=name, approved=True)
+            self.assertEqual(result["exitCode"], 0)
+        for engine in ("nextflow", "snakemake"):
+            proposal = export.propose(self.store, None, ["inferred", "with_context"], [],
+                                      engine, self.revision(), "Agent")
+            self.assertEqual([step["stateId"] for step in proposal["plan"]["steps"]],
+                             ["intermediate", "inferred", "with_context"])
+            self.assertFalse(proposal["plan"]["gaps"])
+            self.assertEqual(proposal["plan"]["steps"][-1]["contextParents"], ["source"])
+
+    def test_exact_legacy_links_recover_without_updating_history(self):
+        from saigen.views import CanvasView
+        def legacy(flow):
+            action = next(a for a in flow["actions"] if a["to"] == "target")
+            action.pop("fileInputBindings")
+            action["from"] = ["source"]
+            return {}, None
+        self.store.update("fixture.legacy", "Fixture", legacy)
+        raw = self.store.flow()["actions"][-1]
+        shown = CanvasView(self.store).flow()["actions"][-1]
+        self.assertEqual(shown["from"], ["source", "intermediate"])
+        self.assertEqual(shown["recoveredFileInputBindings"][0]["stateId"], "intermediate")
+        proposal = export.propose(self.store, None, ["target"], [], "nextflow", self.revision(), "Agent")
+        self.assertEqual([step["stateId"] for step in proposal["plan"]["steps"]], ["intermediate", "target"])
+        self.assertFalse(proposal["plan"]["gaps"])
+        self.assertEqual(self.store.flow()["actions"][-1], raw)

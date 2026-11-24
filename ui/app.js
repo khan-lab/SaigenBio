@@ -411,6 +411,10 @@ function showAction(id,anchor){
  hidePopups();const a=getAction(id);if(!a)return;
  const el=$("#action-preview");el.classList.remove("file-popover");
  el.innerHTML='<div class="preview-inner"><button class="close-pop" aria-label="Close action details">×</button><div class="preview-label">'+esc(a.status)+'</div><div class="preview-title">'+esc(a.label)+'</div>'+comparisonMarkup(a)+'<pre>'+esc(displayCommand(a))+'</pre><p class="preview-note">'+esc(a.reason||"Reason not recorded")+'</p>'+(a.annotation?'<p class="preview-note"><strong>Human note:</strong> '+esc(a.annotation)+'</p>':"")+'<div class="action-meta">'+esc(a.methodSource)+'</div><div class="action-meta">'+esc(a.performedBy?"Executor: "+a.performedBy:"No execution recorded")+'</div></div>';
+ if(a.recoveredFileInputBindings?.length){
+   el.querySelector(".preview-inner").insertAdjacentHTML("beforeend",
+     '<p class="action-meta">An input connection was recovered from an exact recorded artifact ID.</p>');
+ }
  if(a.from.length>1){
    el.querySelector(".preview-inner").insertAdjacentHTML("beforeend",'<div class="preview-label action-meta">Input states</div><ul class="preview-files">'+a.from.map(id=>'<li><button class="source-link" data-input-state="'+esc(id)+'">'+esc(getState(id).title)+'</button></li>').join('')+'</ul>');
    el.querySelectorAll("[data-input-state]").forEach(b=>b.onclick=()=>{el.hidden=true;openState(b.dataset.inputState);});

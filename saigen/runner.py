@@ -13,6 +13,7 @@ import threading
 import time
 from . import __version__
 from .store import Store, digest
+from .lineage import permission_mode, run_lineage
 from .records import RecordError, now, entity, text
 
 def code_info(folder):
@@ -38,11 +39,16 @@ def local_output(work, name):
 
 def run(store, parents, title, command, *, inputs=(), outputs=(), actor="AI agent",
         reason="", label=None, ident=None, stdout_name=None, source_repo=None,
-        scripts=(), environment_files=(), tool_versions=(), planned=None, expected="", acquisition=False, source_urls=(), explanation="", script_excerpts=()):
+        scripts=(), environment_files=(), tool_versions=(), planned=None, expected="", acquisition=False, source_urls=(), explanation="", script_excerpts=(), approved=False):
     if not command or not all(isinstance(v,str) and v for v in command):
         raise RecordError("Supply a command after --")
     if any(n['id'] in parents and n.get('reconstruction',{}).get('review')=='draft' for n in store.flow()['states']):
         raise RecordError("Review and accept the reconstruction before using its states in a run")
+    inputs=list(inputs)
+    artifact_ids=[str(spec).split(":",1)[1] for spec in inputs if str(spec).startswith("artifact:")]
+    ask=not parents and not acquisition and permission_mode(store.root)!="flexible"
+    if not acquisition and not parents:
+        run_lineage(store.flow(), parents, artifact_ids, ask=ask, approved=approved)
     outputs=list(outputs)
     if stdout_name and stdout_name not in outputs: outputs.append(stdout_name)
     for output in outputs: local_output(Path("/placeholder"),output)
@@ -115,7 +121,8 @@ def run(store, parents, title, command, *, inputs=(), outputs=(), actor="AI agen
             session_id=None
         else:
             sessions.active(store.flow(),session_id)
-    aid,sid=store.begin(title,list(parents),list(command),actor,reason,outputs,input_records+extra_records,code,environment,ident,label,planned,expected,acquisition)
+    aid,sid=store.begin(title,list(parents),list(command),actor,reason,outputs,input_records+extra_records,code,environment,ident,label,planned,expected,acquisition,
+                        explicit_artifacts=artifact_ids,ask_lineage=ask,approved=approved)
     if session_id:sessions.attach_run(store,session_id,aid)
     work=store.home/"runs"/aid/"work"
     work.mkdir(parents=True)

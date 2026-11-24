@@ -3,6 +3,7 @@ from pathlib import Path, PurePosixPath
 import re
 
 from ..records import RecordError
+from ..lineage import legacy_actions
 
 
 def state_ids(value, states, label, *, required=False):
@@ -29,7 +30,7 @@ def build(flow, root, selected, boundary, engine, supplied):
     state_ids(boundary, states, "starting")
     artifacts = flow["artifacts"]
     incoming = {}
-    for action in flow["actions"]:
+    for action in legacy_actions(flow):
         incoming.setdefault(action["to"], []).append(action)
 
     def producer(sid):
@@ -37,6 +38,28 @@ def build(flow, root, selected, boundary, engine, supplied):
         if sid in boundary or states[sid]["origin"] == "imported":
             return None
         return actions[0] if len(actions) == 1 and not actions[0].get("acquisition") else None
+
+    def source_matches(action, aid):
+        exact = {entry["artifactId"]: entry["stateId"] for entry in
+                 action.get("fileInputBindings", []) + action.get("recoveredFileInputBindings", [])}
+        if aid in exact:
+            return [(exact[aid], aid)]
+        item = artifacts[aid]
+        candidates = [(parent, candidate) for parent in action["from"]
+                      for candidate in states[parent].get("artifactIds", [])
+                      if candidate == aid or (artifacts[candidate]["sha256"], artifacts[candidate]["sourcePath"])
+                      == (item["sha256"], item["sourcePath"])]
+        return [match for match in candidates if match[1] == aid] or candidates
+
+    def file_inputs(action):
+        return [aid for aid in action.get("inputArtifacts", [])
+                if artifacts[aid]["role"] not in {"code", "environment", "log"}]
+
+    def parents_for_export(action):
+        if not (action.get("fileInputBindings") or action.get("recoveredFileInputBindings")):
+            return action["from"]
+        matched = {parent for aid in file_inputs(action) for parent, _ in source_matches(action, aid)}
+        return [parent for parent in action["from"] if parent in matched]
 
     steps, inputs, gaps, paths = [], {}, [], {}
     ordered, seen = [], set()
@@ -50,7 +73,7 @@ def build(flow, root, selected, boundary, engine, supplied):
             stack.append((sid, True))
             action = producer(sid)
             if action:
-                stack.extend((parent, False) for parent in reversed(action["from"]))
+                stack.extend((parent, False) for parent in reversed(parents_for_export(action)))
     if set(supplied) - {sid for sid in ordered if producer(sid)}:
         raise RecordError("A supplied script must belong to an included step")
     if set(boundary) - seen:
@@ -94,27 +117,26 @@ def build(flow, root, selected, boundary, engine, supplied):
             problems.append("The step needs distinct recorded output files.")
         parents_used = set()
         bindings, literals = [], {}
-        for aid in action.get("inputArtifacts", []):
+        for aid in file_inputs(action):
             item = artifacts[aid]
-            if item["role"] in {"code", "environment", "log"}:
-                continue
-            matches = [(parent, candidate, path) for parent in action["from"]
-                       for candidate, path in paths[parent].items()
-                       if candidate == aid or (artifacts[candidate]["sha256"], artifacts[candidate]["sourcePath"])
-                       == (item["sha256"], item["sourcePath"])]
-            if len(matches) > 1 and any(candidate == aid for _, candidate, _ in matches):
-                matches = [match for match in matches if match[1] == aid]
+            matches = source_matches(action, aid)
+            path = None
             if len(matches) == 1:
-                parent, _, path = matches[0]
-                parents_used.add(parent)
-            else:
-                if matches:
-                    problems.append(f"Several upstream files match {item['name']}.")
+                parent, candidate = matches[0]
+                path = paths.get(parent, {}).get(candidate)
+                if path:
+                    parents_used.add(parent)
+                else:
+                    problems.append(f"The recorded source of {item['name']} has no portable output.")
+            elif matches:
+                problems.append(f"Several upstream files match {item['name']}.")
+            if path is None:
                 path = external(aid)
             token = f"{{input:{len(bindings)}}}"
             literals[item["sourcePath"]] = token
             bindings.append(path)
-        if set(action["from"]) - parents_used:
+        dependencies = parents_for_export(action)
+        if set(dependencies) - parents_used:
             problems.append("A recorded parent has no matched file input. Record the input explicitly or revise the pipeline boundary.")
         replacement = supplied.get(sid)
         original_argv = action.get("argvTemplate", [])
@@ -165,7 +187,9 @@ def build(flow, root, selected, boundary, engine, supplied):
             problems.append("No portable command is available.")
         environment = action.get("environment", {})
         steps.append({"key": key, "stateId": sid, "actionId": action["id"], "title": node["title"],
-                      "evidence": action.get("origin"), "inputs": bindings, "outputs": output_records,
+                      "evidence": action.get("origin"),
+                      "contextParents": [parent for parent in action["from"] if parent not in dependencies],
+                      "inputs": bindings, "outputs": output_records,
                       "argv": argv, "scripts": scripts, "toolVersions": environment.get("declaredToolVersions", []),
                       "stdout": environment.get("stdoutOutput")})
         gaps.extend({"stateId": sid, "message": problem} for problem in dict.fromkeys(problems))
