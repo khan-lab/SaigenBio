@@ -51,6 +51,15 @@ assert.equal(align(nearCompetitor, [above, competitor], 1).x, 108);
 assert.equal(align(nearCompetitor, [competitor, above], 1, both.guides).x, 100);
 assert.equal(align({...moving,x:110}, [above, competitor], 1, both.guides).x, 108);
 assert.equal(align(moving, [competitor, above], 1).guides.x.id, "above");
+const group = {id:"group:a", x:104, y:196, width:310, height:164};
+const wideNeighbor = {id:"group:b", x:500, y:200, width:360, height:190};
+const groupGuides = align(group, [above, wideNeighbor], 1);
+assert.equal(groupGuides.x, 100, "wide group aligns to the left edge of a smaller state");
+assert.equal(groupGuides.guides.x.at, 100);
+assert.equal(groupGuides.guides.x.end, 372, "vertical guide spans the group's actual height");
+assert.equal(groupGuides.y, 200);
+assert.equal(groupGuides.guides.y.at, 200);
+assert.equal(groupGuides.guides.y.end, 868, "horizontal guide spans the neighbor's actual width");
 console.log("Alignment checks passed: matching axes, zoom, range, tie-breaking, retention and bypass.");
 
 const arrange = evaluate("SaigenGeometry.autoArrange");

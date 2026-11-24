@@ -123,6 +123,8 @@ Ask your agent “Organize this canvas by cell type,” or invoke `$saigen-organ
 
 The Canvas collapses top-level groups at 55% zoom or lower and expands them at 65% or higher. It keeps the previous view in between. Deeper groups expand at higher zoom levels. Click a summary card to inspect its next layer. Zoom out to its collapse threshold to return to the overview. If you open a group while already below its threshold, the next zoom-out action collapses it. Click a summary connection to inspect the original dependencies. Report selection shows individual results.
 
+Drag a collapsed group card to place it in the current overview. Alignment guides snap its left or top edge to nearby cards. Hold Alt (Option on Mac) to bypass snapping, or press Escape to cancel the drag. With the card focused, use Shift + arrow keys to move it. Each move can be undone. Opening the group shows its existing internal layout.
+
 Each state can be assigned directly to one group or remain ungrouped. A group can hold results, subgroups, or both. Its summary counts results across all descendants and shows running and failed counts when applicable. Archiving or deleting a state removes its membership, and groups with no results anywhere under them disappear. Grouping leaves the original positions, states, actions, and artifacts intact.
 
 The agent uses `saigen groups show` to read the saved groups and project revision. To save an agreed arrangement from a terminal, put the complete list in a JSON file such as `groups.json`:

@@ -104,23 +104,26 @@ function actionJunction(a,states){
  return {inputs,junction,output:'M '+junction.x+' '+junction.y+' L '+end.x+' '+end.y,
    label:{x:(edgeAnchor(nearest,true).x+junction.x)/2,y:Math.min(nearest.y,target.y)-14}};
 }
-// Cards share one size across statuses, so matching a corresponding edge or
-// center yields the same position. Use a center guide between the cards.
+// Matching left or top edges gives cards of different sizes a shared starting edge.
 function alignment(position, states, scale, previous = {}, bypass = false) {
  const result = {x: position.x, y: position.y, guides: {}};
  if (bypass) return result;
 
  const snap = 6 / scale, release = 9 / scale, nearby = 240 / scale;
- for (const [axis, cross, size, crossSize] of [["x", "y", W, H], ["y", "x", H, W]]) {
+ for (const [axis, cross, dimension, crossDimension, size, crossSize] of [
+   ["x", "y", "width", "height", W, H], ["y", "x", "height", "width", H, W],
+ ]) {
    let best;
    for (const state of states) {
      if (state.id === position.id) continue;
      const delta = Math.abs(state[axis] - position[axis]);
-     const separation = Math.abs(state[cross] - position[cross]);
-     const gap = Math.max(0, separation - crossSize);
+     const ownLength = position[crossDimension] ?? crossSize;
+     const otherLength = state[crossDimension] ?? crossSize;
+     const separation = Math.abs(state[cross] + otherLength / 2 - position[cross] - ownLength / 2);
+     const gap = Math.max(0, state[cross] - position[cross] - ownLength, position[cross] - state[cross] - otherLength);
      const retained = previous[axis]?.id === state.id;
      // Only align with a neighbor in the perpendicular direction.
-     if (separation < crossSize / 2 || gap > nearby || delta > (retained ? release : snap)) continue;
+     if (separation < Math.min(ownLength, otherLength) / 2 || gap > nearby || delta > (retained ? release : snap)) continue;
      if (!best || retained || (!best.retained && (
        delta < best.delta || (delta === best.delta && (
          separation < best.separation || (separation === best.separation && state.id < best.state.id)
@@ -129,16 +132,18 @@ function alignment(position, states, scale, previous = {}, bypass = false) {
    }
    if (best) {
      result[axis] = best.state[axis];
-     result.guides[axis] = {id: best.state.id, at: best.state[axis] + size / 2};
+     const isOverviewCard = position[dimension] !== undefined || best.state[dimension] !== undefined;
+     result.guides[axis] = {id: best.state.id, at: best.state[axis] + (isOverviewCard ? 0 : size / 2)};
    }
  }
- for (const [axis, cross, crossSize] of [["x", "y", H], ["y", "x", W]]) {
+ for (const [axis, cross, dimension, crossSize] of [["x", "y", "height", H], ["y", "x", "width", W]]) {
    const guide = result.guides[axis];
    if (!guide) continue;
    const neighbor = states.find(state => state.id === guide.id);
    const padding = 8 / scale;
    guide.start = Math.min(neighbor[cross], result[cross]) - padding;
-   guide.end = Math.max(neighbor[cross], result[cross]) + crossSize + padding;
+   guide.end = Math.max(neighbor[cross] + (neighbor[dimension] ?? crossSize),
+     result[cross] + (position[dimension] ?? crossSize)) + padding;
  }
  return result;
 }
