@@ -48,12 +48,20 @@ globalThis.SaigenWorkflows=Object.freeze({create({getFlow,escape:esc,displayPath
   const row=(label,value)=>'<tr><th scope="row">'+esc(label)+'</th><td>'+esc(typeof value==="object"?JSON.stringify(value):String(value))+'</td></tr>';
   const approval=p.approval?"Agreement recorded by "+p.approval.declaredBy+" · "+p.approval.at:"Awaiting user agreement";
   const executionInfo=execution(node),declared=stage?.method;
+  const tool=executionInfo.tool==='Tool unknown'?'':executionInfo.tool+' via ';
+  const checks=[
+   tool?'Tool identity is '+executionInfo.toolSource+'.':'',
+   executionInfo.version?'Tool version '+executionInfo.version+' (declared).':'',
+   executionInfo.engineVerified?'Engine version verified before launch.':executionInfo.planned?'Engine is proposed; execution has not been observed.':'Engine association comes from the saved proposal; this older run has no structured engine verification record.',
+  ].filter(Boolean).join(' ');
+  const settings=Object.entries(params).map(([k,v])=>row(k,v)).concat(Object.entries(p.spec.configuration).filter(([k])=>k!=="parameters").map(([k,v])=>row(k,v))).join("");
   const inputs=p.spec.inputBindings.map(b=>{const art=flow.artifacts[b.artifactId];return '<li>'+esc(b.name)+' → '+esc(art?.name||b.artifactId)+(art?' · SHA-256 '+esc(art.sha256):"")+'</li>';}).join("");
   return '<section class="detail-section workflow-details"><div class="section-label">Workflow</div><h2>'+esc(pipelineName(p))+'</h2><p>'+esc(engineName(p))+' · '+esc(run?.status||"planned")+'</p>'+
-   '<h3>Method</h3><p>'+esc(executionInfo.tool+' via '+executionInfo.engine+' · '+executionInfo.summary)+'</p><small>'+esc('Tool identity '+(executionInfo.tool==='Tool unknown'?'was not recorded.':'is '+executionInfo.toolSource+'.')+' '+(executionInfo.version?'Tool version '+executionInfo.version+' (declared).':'Tool version was not recorded.')+' '+(executionInfo.engineVerified?'Engine version verified before launch.':executionInfo.planned?'Engine is proposed; execution has not been observed.':'Engine association comes from the saved proposal; this older run has no structured engine verification record.'))+'</small>'+
-   '<h3>'+(p.approval?'Approved parameters':'Proposed parameters')+'</h3><p>'+esc(approval)+'</p><table class="workflow-parameters"><tbody>'+Object.entries(params).map(([k,v])=>row(k,v)).join("")+(Object.keys(params).length?"":row("Parameters","None supplied"))+Object.entries(p.spec.configuration).filter(([k])=>k!=="parameters").map(([k,v])=>row(k,v)).join("")+'</tbody></table><small>Supplied parameter values; pipeline defaults are defined in the preserved source.</small>'+
-   '<h3>Recorded inputs</h3><ul class="files">'+inputs+'</ul><h3>Pipeline identity</h3><p>'+esc(displayPath(p.spec.pipeline.source))+'</p><p>Revision: '+esc(p.spec.pipeline.revision)+'</p><p class="workflow-digest">Source SHA-256: '+esc(p.spec.pipeline.contentDigest)+'</p><p class="workflow-digest">Proposal digest: '+esc(p.executionDigest)+'</p>'+
-   (run?'<p>Attempt: '+esc(run.id)+'<br>Engine session: '+esc(run.engineRunId||"Not recorded")+'</p>':"")+
+   '<h3>Method</h3><p>'+esc(tool+executionInfo.engine+(executionInfo.summary?' · '+executionInfo.summary:''))+'</p><small>'+esc(checks)+'</small>'+
+   (settings?'<h3>'+(p.approval?'Approved parameters':'Proposed parameters')+'</h3>':'')+'<p>'+esc(approval)+'</p>'+
+   (settings?'<table class="workflow-parameters"><tbody>'+settings+'</tbody></table><small>Supplied parameter values; pipeline defaults are defined in the preserved source.</small>':'')+
+   (inputs?'<h3>Recorded inputs</h3><ul class="files">'+inputs+'</ul>':'')+'<h3>Pipeline identity</h3><p>'+esc(displayPath(p.spec.pipeline.source))+'</p><p>Revision: '+esc(p.spec.pipeline.revision)+'</p><p class="workflow-digest">Source SHA-256: '+esc(p.spec.pipeline.contentDigest)+'</p><p class="workflow-digest">Proposal digest: '+esc(p.executionDigest)+'</p>'+
+   (run?'<p>Attempt: '+esc(run.id)+(run.engineRunId?'<br>Engine session: '+esc(run.engineRunId):'')+'</p>':"")+
    (node.workflowEvidence?'<h3>Execution evidence</h3><p>'+esc(node.workflowEvidence.source)+'</p>'+(node.workflowEvidence.error?'<p class="execution-error">'+esc(node.workflowEvidence.error)+'</p>':"")+'<details><summary>Task observations</summary><pre>'+esc(JSON.stringify(node.workflowEvidence.rows,null,2))+'</pre></details>':"")+
    (declared?.version?'<p>Proposed tool version: '+esc(declared.version)+' (declared)</p>':"")+
    (p.spec.limitations?.length?'<h3>Limitations</h3><ul>'+p.spec.limitations.map(v=>'<li>'+esc(v)+'</li>').join("")+'</ul>':"")+'</section>';

@@ -134,18 +134,12 @@ globalThis.SaigenDetailController = Object.freeze({
         esc(n.title) +
         '</h1>' +
         (getState(n.id) ? (bookmarkButton?.(n) ?? "") : "") +
-        '</div><nav class="story-jumps" aria-label="Result detail sections">' +
-        ["What", "Why", "Who", "When"]
-          .map(
-            (label) =>
-              '<button data-story-jump="' + label + '">' + label + "</button>",
-          )
-          .join("") +
-        "</nav>" +
+        "</div>" +
         SaigenStory.create({ escape: esc, shortDate, fileRows }).render(
           story,
           visual,
           flow.artifacts,
+          {navigation: true},
         ) +
         (story
           ? SaigenVerification.create({
