@@ -70,7 +70,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(404,{"error":"Not found"})
             if path=="/api/flow":
                 return self.reply(200,self.server.canvas.flow())
-            if path=="/api/revision": return self.reply(200,{"revision":self.store.flow()["revision"]})
+            if path=="/api/revision":
+                from .bookmarks import canvas_status
+                return self.reply(200,canvas_status(self.store))
             if path=="/api/session": return self.reply(200,{"token":self.server.token,"projectRoot":str(self.store.root)})
             if path=="/api/history":
                 return self.reply(200,self.server.canvas.history())
@@ -116,8 +118,11 @@ class Handler(BaseHTTPRequestHandler):
             length=int(self.headers.get("Content-Length","0"))
             if not 0<length<=1024*1024: return self.reply(413,{"error":"Invalid request size"})
             body=json.loads(self.rfile.read(length))
-            if not isinstance(body,dict) or type(body.get("revision")) is not int: raise RecordError("A project revision is required")
             path=urlsplit(self.path).path
+            if path=="/api/bookmarks" and isinstance(body,dict):
+                from .bookmarks import set_saved
+                return self.reply(200,{"bookmarks":set_saved(self.store,body.get("stateId"),body.get("saved"))})
+            if not isinstance(body,dict) or type(body.get("revision")) is not int: raise RecordError("A project revision is required")
             if path=="/api/pipelines/selections":
                 from .workflows.export import select
                 return self.reply(201,select(self.store,body.get("request"),body.get("targets"),body["revision"],"Human"))

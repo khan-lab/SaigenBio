@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from .records import (ID, TERMINAL, RecordError, Conflict, now, uid, entity,
                       text, names, coordinates, plan_removal_error, validate)
 from .analysis_groups import remove_missing_members
+from .bookmarks import remove_deleted
 from .overview_layout import edit_overview
 from .lineage import run_lineage
 
@@ -91,6 +92,7 @@ class Store:
             if kind != 'flow.undo' and (current_ids - prior_ids) & explained_ids:
                 raise RecordError('State ID belongs to existing explanation history; use a new ID')
             remove_missing_members(flow, prior_ids - current_ids)
+            remove_deleted(db, prior_ids - current_ids)
             validate(flow)
             flow["revision"] += 1
             at = now()

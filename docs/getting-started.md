@@ -111,6 +111,8 @@ Open the viewer address shown by serve.
 
 Choose **Auto-arrange** to lay out the visible Canvas by its dependencies. With collapsed groups, it arranges the group cards and visible results together. SaigenBio saves those positions for that overview. Expand the groups to return to the detailed result positions. Each arrangement saves as one edit, and **Undo** restores the previous layout.
 
+Bookmark a state from its card or details. Click **Saved** to show only bookmarked states, including ones inside collapsed groups. The view shows direct connections between visible states. Click **Saved** again to return to the full Canvas. Bookmarks are shared across viewers of the same local project and persist after a reload.
+
 Drag a card to arrange the canvas. Temporary alignment guides appear as it snaps into a row or column with nearby cards. Hold **Option** on Mac or **Alt** on other keyboards to position it freely. Press **Esc** to cancel the drag, or choose **Undo** after dropping the card.
 
 Group moves snap using the dragged card against unselected cards and save as one edit; Undo restores the whole group's positions. Selection and layout do not change recorded dependencies or evidence. Report mode has its own ordered selection: clicking nodes, including Shift-clicking, retains the report's normal add/remove behavior rather than selecting a movement group.

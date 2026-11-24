@@ -34,7 +34,7 @@ const context=vm.createContext({document:doc,innerWidth:1280,innerHeight:800,CSS
 for(const name of ['geometry.js','paths.js','api.js','workflows.js','reports.js','explanation-editor.js','detail-controller.js'])vm.runInContext(fs.readFileSync('ui/'+name,'utf8'),context);
 const app=fs.readFileSync('ui/app.js','utf8'),evaluate=code=>vm.runInContext(code,context);
 evaluate(app.slice(0,app.indexOf('$("#editor-form").onsubmit')));
-evaluate('render=()=>syncSelection();renderEdges=()=>{};renderWorkflowLabels=()=>{};hidePopups=()=>{};showPreview=()=>{};');
+evaluate('const originalRenderEdges=renderEdges;render=()=>syncSelection();renderEdges=()=>{};renderWorkflowLabels=()=>{};hidePopups=()=>{};showPreview=()=>{};');
 evaluate(app.slice(app.indexOf('$("#nodes").addEventListener("keydown"'),app.indexOf('$("#nodes").addEventListener("pointerout"')));
 evaluate(app.slice(app.indexOf('let suppressClick=false;'),app.indexOf('window.addEventListener("hashchange",route);')));
 evaluate(app.slice(app.indexOf('reports=SaigenReports.create'),app.indexOf('render();start();setInterval(poll,1000);')));
@@ -116,5 +116,14 @@ async function drag(id,dx,dy){
  // Updates prune disappeared nodes and hide the toolbar if nothing remains.
  await click('a');evaluate('flow.states=flow.states.filter(n=>n.id!=="a");syncSelection()');
  assert.deepEqual(selected(),[]);assert.equal(element('#selection-tools').hidden,true);
+ // Saved view projects original connections, even when another input to a join is hidden.
+ evaluate('flow=copy(fixture); bookmarks=new Set(["a","c"]); savedOnly=true; renderEdges=originalRenderEdges;');
+ evaluate('flow.actions=[{id:"join",from:["a","b"],to:"c",label:"Join",status:"planned"},{id:"hidden",from:["b"],to:"a",label:"Hidden",status:"planned"}]; renderNodes();renderEdges();renderSavedControls();');
+ assert.match(element('#nodes').innerHTML,/data-bookmark="a" aria-pressed="true"/);
+ assert.doesNotMatch(element('#nodes').innerHTML,/data-state="b"/);
+ assert.match(element('#edges').innerHTML,/data-action="join".*Join from a to c/);
+ assert.doesNotMatch(element('#edges').innerHTML,/data-action="hidden"/);
+ assert.equal(evaluate('flow.actions[0].from.length'),2);
+ assert.equal(element('#saved-toggle').textContent,'Saved (2)');
  console.log('Canvas selection checks passed: toggling, group save, cancellation, failure/stale recovery, keyboard, report isolation and pruning.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

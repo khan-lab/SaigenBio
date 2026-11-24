@@ -30,9 +30,9 @@ globalThis.SaigenWorkflows=Object.freeze({create({getFlow,escape:esc,displayPath
   const c=context(node);if(!c)return "";
   return '<div class="workflow-preview"><div class="preview-label">'+esc(pipelineName(c.proposal))+' · '+esc(engineName(c.proposal))+'</div><p>'+esc(method(node))+'</p><small>Parameters: '+esc(Object.entries(c.proposal.spec.configuration.parameters||{}).map(([k,v])=>k+' = '+(typeof v==='object'?JSON.stringify(v):String(v))).join(' · ')||'None supplied')+'</small></div>';
  }
- function labels(hiddenStates, positions){
+ function labels(hiddenStates, positions, states=getFlow().states){
   const groups=new Map();
-  for(const node of getFlow().states){if(!context(node))continue;const key=node.workflowRun||node.workflowProposal;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(node);}
+  for(const node of states){if(!context(node))continue;const key=node.workflowRun||node.workflowProposal;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(node);}
   return [...groups.values()].map(nodes=>{
    const node=nodes[0],c=context(node);
    const displayed=nodes.filter(n=>!hiddenStates?.has(n.id)).map(n=>positions?.get(n.id)??n);

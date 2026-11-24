@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from saigen.bookmarks import canvas_status, set_saved
 from saigen.records import RecordError
 from saigen.store import Store
 from saigen.views import CanvasView
@@ -58,3 +59,24 @@ class CanvasViewTests(unittest.TestCase):
         self.assertEqual(self.store.events(), stored)
         self.store.undo(history[-1]['revision'], self.store.flow()['revision'])
         self.assertEqual(self.store.flow()['states'][0]['note'], '')
+
+    def test_bookmarks_persist_separately_from_graph_and_history(self):
+        before = self.store.flow()
+        events = self.store.events()
+        self.assertEqual(canvas_status(self.store), {'revision': before['revision'], 'bookmarks': []})
+        self.assertEqual(set_saved(self.store, 'counts', True), ['counts'])
+        self.assertEqual(set_saved(self.store, 'counts', True), ['counts'])
+        self.assertEqual(canvas_status(Store(self.root))['bookmarks'], ['counts'])
+        with self.assertRaises(RecordError):
+            set_saved(self.store, 'missing', True)
+        with self.assertRaises(RecordError):
+            set_saved(self.store, 'counts', 1)
+        self.assertEqual(self.store.flow(), before)
+        self.assertEqual(self.store.events(), events)
+        self.assertEqual(set_saved(self.store, 'counts', False), [])
+
+    def test_removing_a_state_clears_its_bookmark(self):
+        self.store.plan('Proposed result', ['counts'], 'Expected output', ident='plan')
+        set_saved(self.store, 'plan', True)
+        self.store.edit([{'op': 'delete_state', 'id': 'plan'}], self.store.flow()['revision'])
+        self.assertEqual(canvas_status(self.store)['bookmarks'], [])

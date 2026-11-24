@@ -9,11 +9,14 @@ const {W,H}=SaigenGeometry;
 let flow={schemaVersion:1,project:"Project",revision:0,states:[],actions:[],artifacts:{},revisions:[]};
 let history=[],selection=new Set(),connecting=null,editorContext=null;
 let reports;
+let bookmarks=new Set(),savedOnly=false,fullCanvasCamera=null;
 let groupView=null,groupDialogEdge=null;
 const groupOverrides=new Map(),groupAutomatic=new Map();
 let camera={x:70,y:90,scale:.72},savedCamera=null,drag=null,hoverTimer=null,hideTimer=null,toastTimer=null;
 let ready=false,busy=false,token="",allEvents=[],artifactRequest=0;
 const getState=id=>flow.states.find(n=>n.id===id);
+const showingSaved=()=>savedOnly&&!reports.active;
+const visibleStates=()=>groupView?.states??(showingSaved()?flow.states.filter(n=>bookmarks.has(n.id)):flow.states);
 const canvasState=id=>groupView?.byId.get(id)??getState(id);
 const overviewOperation=layout=>({op:"edit_overview",layout});
 const getAction=id=>flow.actions.find(a=>a.id===id);
@@ -67,7 +70,9 @@ async function applyChange(path,body,message){
 async function start(){
  try{
    const session=await request("/api/session");token=session.token;projectRoot=session.projectRoot||"";
-   await accept(await request("/api/flow"));ready=true;
+   const [next,preferences]=await Promise.all([request("/api/flow"),request("/api/revision")]);
+   bookmarks=new Set(preferences.bookmarks);await accept(next);ready=true;
+   renderSavedControls();
    $("#connection").textContent="";$("#connection").hidden=true;
    $("#report-toggle").disabled=false;fit(true);route();
  }catch(error){$("#connection").hidden=false;$("#connection").textContent="Offline";$("#intro p").textContent=error.message;}
@@ -77,10 +82,14 @@ async function poll(){
  try{
    if(!ready){await start();return;}
    const next=await request("/api/revision");
+   if(busy||drag)return;
    const reconnected=$("#connection").textContent==="Offline";
    if(reconnected)unavailablePlots.clear();
+   const saved=next.bookmarks??[];
+   const bookmarksChanged=saved.length!==bookmarks.size||saved.some(id=>!bookmarks.has(id));
+   bookmarks=new Set(saved);
    if(next.revision!==flow.revision)await accept(await request("/api/flow"));
-   else if(reconnected)redraw();
+   else if(reconnected||bookmarksChanged)redraw();
    $("#connection").textContent="";$("#connection").hidden=true;
  }catch(error){$("#connection").hidden=false;$("#connection").textContent="Offline";$("#connection").title=error.message;}
 }
@@ -169,6 +178,43 @@ function nodeContent(n){
 }
 
 function reportBadge(id){const i=reports.position(id);return reports.active&&i>=0?'<span class="report-badge" aria-label="Report position '+(i+1)+'">'+(i+1)+'</span>':"";}
+function bookmarkButton(n){
+ const saved=bookmarks.has(n.id);
+ return '<button type="button" class="bookmark" data-bookmark="'+esc(n.id)+'" aria-pressed="'+saved+'" aria-label="Bookmark '+esc(n.title)+'" title="'+(saved?"Remove bookmark":"Bookmark this node")+'"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M5 3h10v14l-5-3.5L5 17z"/></svg></button>';
+}
+async function toggleBookmark(button){
+ if(busy||!ready)return;
+ const stateId=button.dataset.bookmark;
+ busy=true;button.disabled=true;hidePopups();
+ try{
+   const {bookmarks:saved}=await request("/api/bookmarks",{stateId,saved:!bookmarks.has(stateId)});
+   bookmarks=new Set(saved);redraw();
+   if(document.activeElement===document.body){
+     const scope=$("#detail-view").hidden?$("#nodes"):$("#detail-content");
+     (scope.querySelector('[data-bookmark="'+CSS.escape(stateId)+'"]')||$("#saved-toggle")).focus({preventScroll:true});
+   }
+ }catch(error){toast(error.message);}
+ finally{busy=false;button.disabled=false;}
+}
+function renderSavedControls(){
+ const count=flow.states.filter(n=>bookmarks.has(n.id)).length;
+ const active=showingSaved(),button=$("#saved-toggle");
+ button.disabled=!ready;
+ button.setAttribute("aria-pressed",String(active));
+ button.textContent="Saved ("+count+")";
+ $("#saved-empty").hidden=!active||count>0;
+}
+function toggleSaved(){
+ if(!ready||busy)return;
+ cancelDrag();hidePopups();selection.clear();connecting=null;
+ $("#viewport").classList.remove("connecting");
+ savedOnly=!savedOnly;
+ if(savedOnly)fullCanvasCamera={...camera};
+ else if(fullCanvasCamera){camera=fullCanvasCamera;fullCanvasCamera=null;}
+ render();
+ if(savedOnly)fit();
+ else applyCamera();
+}
 function selectedStates(){return flow.states.filter(n=>selection.has(n.id));}
 function selectNode(id,additive=false){
  if(additive){if(selection.has(id))selection.delete(id);else selection.add(id);}
@@ -176,7 +222,7 @@ function selectNode(id,additive=false){
  hidePopups();syncSelection();
 }
 function syncSelection(){
- selection=new Set([...selection].filter(id=>getState(id)&&!groupView?.endpoint.has(id)));
+ selection=new Set([...selection].filter(id=>getState(id)&&!groupView?.endpoint.has(id)&&(!showingSaved()||bookmarks.has(id))));
  $("#viewport").classList.toggle("multi-select",selection.size>1);
  $("#use-pipeline-targets").textContent=selection.size?"Use selected results":"Choose results…";
  $("#nodes").querySelectorAll("[data-state]").forEach(card=>{
@@ -188,14 +234,14 @@ function syncSelection(){
  positionSelection();
 }
 function renderWorkflowLabels(){
- $("#workflow-labels").innerHTML=workflows.labels(groupView?.endpoint,groupView?.byId);
+ $("#workflow-labels").innerHTML=workflows.labels(groupView?.endpoint,groupView?.byId,showingSaved()?visibleStates():undefined);
  $("#workflow-labels").querySelectorAll("[data-workflow-state]").forEach(b=>b.onclick=()=>openState(b.dataset.workflowState));
 }
 function renderNodes(){
  renderWorkflowLabels();
- const states=groupView?.states??flow.states;
+ const states=visibleStates();
  $("#planned-help").hidden=!states.some(n=>n.status==="planned");
- $("#nodes").innerHTML=states.map(n=>'<button class="state '+esc(n.status)+(firstPlot(n)?" has-plot":"")+(selection.has(n.id)?" selected":"")+'" data-state="'+esc(n.id)+'" style="left:'+n.x+'px;top:'+n.y+'px" aria-pressed="'+selection.has(n.id)+'" aria-describedby="selection-help" aria-label="'+esc(n.title)+'">'+reportBadge(n.id)+nodeContent(n)+'<span class="port" title="Connect to another state" aria-hidden="true"></span></button>').join("")+
+ $("#nodes").innerHTML=states.map(n=>'<div class="state-slot" style="left:'+n.x+'px;top:'+n.y+'px"><button class="state '+esc(n.status)+(firstPlot(n)?" has-plot":"")+(selection.has(n.id)?" selected":"")+'" data-state="'+esc(n.id)+'" aria-pressed="'+selection.has(n.id)+'" aria-describedby="selection-help" aria-label="'+esc(n.title)+'">'+reportBadge(n.id)+nodeContent(n)+'<span class="port" title="Connect to another state" aria-hidden="true"></span></button>'+(reports.active||connecting?"":bookmarkButton(n))+'</div>').join("")+
    (groupView?.summaries.map(group=>SaigenAnalysisGroups.card(group,esc,imagePreview)).join("")??"");
  positionGroupCards();
  syncSelection();
@@ -256,7 +302,11 @@ function edgeLabel(a,x,y){
 
 function renderEdges(){
  let html='<defs><marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M1 1L7 4L1 7" fill="none" stroke="#a0b097" stroke-width="1.2"/></marker></defs>';
- for(const a of groupView?.actions??flow.actions){const t=canvasState(a.to);
+ const actions=groupView?.actions??(showingSaved()?flow.actions
+   .filter(a=>bookmarks.has(a.to))
+   .map(a=>({...a,from:a.from.filter(id=>bookmarks.has(id))}))
+   .filter(a=>a.from.length):flow.actions);
+ for(const a of actions){const t=canvasState(a.to);
  if(a.from.length>1){
    const p=actionJunction(a),running=a.status==="running",planned=a.status==="planned",cls=running?"running-edge":planned?"planned-edge":"";
    const path=(d,arrow=false)=>'<path class="edge-line '+cls+'" d="'+d+'"'+(arrow&&!running?' marker-end="url(#arrow)"':"")+'/><path class="edge-hit" d="'+d+'"/>';
@@ -278,7 +328,7 @@ function projectGroups(){
  for(const preferences of [groupOverrides,groupAutomatic]){
    for(const id of preferences.keys())if(!ids.has(id))preferences.delete(id);
  }
- groupView=groups.length?SaigenAnalysisGroups.project(flow,{
+ groupView=groups.length&&!showingSaved()?SaigenAnalysisGroups.project(flow,{
    automatic:groupAutomatic,overrides:groupOverrides,full:reports.active||!!connecting,scale:camera.scale,figureFor:firstPlot
  }):null;
 }
@@ -292,13 +342,14 @@ function focusProjectedState(stateId){
 }
 function renderGraph(recompute=true){
  const focused=document.activeElement;
- const stateId=focused?.dataset?.state,groupId=focused?.dataset?.analysisGroup;
+ const {state:stateId,analysisGroup:groupId,bookmark}=focused?.dataset??{};
  if(recompute)projectGroups();
  renderNodes();renderEdges();
  if($("#groups-dialog").open)renderGroupDialog();
- focusProjectedState(stateId??groupView?.groups.find(group=>group.id===groupId)?.anchor.id);
+ if(bookmark&&$("#detail-view").hidden)($("#nodes").querySelector('[data-bookmark="'+CSS.escape(bookmark)+'"]')||$("#saved-toggle")).focus({preventScroll:true});
+ else focusProjectedState(stateId??groupView?.groups.find(group=>group.id===groupId)?.anchor.id);
 }
-function render(){$("#reconstruction-notice").hidden=!Object.values(flow.reconstructions||{}).some(p=>["draft","partial"].includes(p.status));reports.render();renderGraph();renderPipelineRequests();$("#undo").disabled=!history.length;$("#auto-arrange").disabled=flow.states.length<2;positionSelection();}
+function render(){$("#reconstruction-notice").hidden=!Object.values(flow.reconstructions||{}).some(p=>["draft","partial"].includes(p.status));reports.render();renderSavedControls();renderGraph();renderPipelineRequests();$("#undo").disabled=!history.length;$("#auto-arrange").disabled=showingSaved()||flow.states.length<2;positionSelection();}
 function applyCamera(scaleChanged=false){
  $("#scene").style.transform="translate("+camera.x+"px,"+camera.y+"px) scale("+camera.scale+")";
  $("#zoom-label").textContent=Math.round(camera.scale*100)+"%";
@@ -343,7 +394,7 @@ function fitOverview(){
 function fit(initial=false){
  cancelDrag();
  if(!initial&&groupView?.layout){fitOverview();return;}
- const v=$("#viewport"),box=bounds(),w=v.clientWidth,h=v.clientHeight;
+ const v=$("#viewport"),box=showingSaved()?bounds(visibleStates()):bounds(),w=v.clientWidth,h=v.clientHeight;
  let scale=Math.min(1,(w-100)/box.w,(h-170)/box.h);
  if(initial&&!flow.analysisGroups?.length)scale=Math.max(scale,w<800?.67:.62);
  centerCanvas(box,Math.max(.22,scale));
@@ -365,7 +416,7 @@ function positionSelection(){
  if(reports.active||!nodes.length||!$("#detail-view").hidden||connecting){el.hidden=true;return;}
  const multiple=nodes.length>1;
  $("#single-selection-actions").hidden=multiple;
- $("#selection-count").hidden=!multiple;$("#group-selection-hint").hidden=!multiple;
+ $("#selection-count").hidden=!multiple;$("#group-selection-hint").hidden=!multiple||showingSaved();
  $("#selection-count").textContent=nodes.length+" nodes selected";
  const r=$("#viewport").getBoundingClientRect(),x=(Math.min(...nodes.map(n=>n.x))+Math.max(...nodes.map(n=>n.x+W)))/2,y=Math.min(...nodes.map(n=>n.y));
  el.hidden=false;
@@ -479,7 +530,8 @@ const detailController = SaigenDetailController.create({
  request, accept, toast, editor: explanationEditor, firstPlot, firstTable,
  imagePreview, tableMarkup, displayText, displayCommand, displayRecord,
  shortDate, fileRows, workflows, planMarkup, terminalMarkup, bindOriginalCommands,
- openStateEditor, openState, openArtifact,
+ openStateEditor, openState, openArtifact, bookmarkButton, toggleBookmark,
+ activeElement: () => document.activeElement,
  getElementById: id => document.getElementById(id)
 });
 function route(){
@@ -516,6 +568,7 @@ function planFields(n={}){
  return field("expectedSummary","Expected result · one short sentence",n.expectedSummary||"","textarea")+field("planDetails","Proposed method",n.planDetails||"","textarea")+field("planRequires","Prerequisite",n.planRequires||"","textarea")+'<p class="field-hint">Prerequisites describe when to proceed; SaigenBio does not enforce them.</p>';
 }
 function addState(parent=null){
+ if(showingSaved())toggleSaved();
  showEditor({type:"add",parent:parent?.id},parent?"Add a branch":"Add a state",field("title","State name","","input","Short result name")+planFields()+field("note","Notes","","textarea")+field("files","Expected output names · one per line","","textarea")+(parent?field("label","Action label","","input","Script or tool")+field("command","Proposed command","","textarea")+field("reason","Why take this branch?","","textarea"):""));
 }
 function openActionEditor(a){
@@ -588,8 +641,9 @@ $("#delete-item").onclick=async()=>{
 $("#close-editor").onclick=$("#cancel-editor").onclick=()=>$("#editor").close();
 $("#editor").addEventListener("click",e=>{if(e.target===$("#editor")){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();}});
 $("#undo").onclick=async()=>{if(!history.length||busy)return;try{await mutate(null,history.at(-1));}catch(error){toast(error.message);}};
+$("#saved-toggle").onclick=$("#show-all-nodes").onclick=toggleSaved;
 $("#auto-arrange").onclick=async()=>{
- if(!ready||busy||drag||reports.active||flow.states.length<2)return;
+ if(!ready||busy||drag||reports.active||showingSaved()||flow.states.length<2)return;
  const button=$("#auto-arrange");
  button.disabled=true;
  try{
@@ -722,13 +776,13 @@ $("#preview").onpointerleave=()=>{hideTimer=setTimeout(()=>$("#preview").hidden=
 $("#preview").onclick=e=>{const b=e.target.closest("[data-open]");if(b)openState(b.dataset.open);};
 let suppressClick=false;
 $("#viewport").addEventListener("pointerdown",e=>{
- if(e.button!==0||drag||busy||!ready)return;
+ if(e.button!==0||drag||busy||!ready||e.target.closest("[data-bookmark]"))return;
  const card=e.target.closest("[data-state]");
  const group=e.target.closest("[data-analysis-group]");
  if(e.target.closest(".port")&&!reports.active){e.preventDefault();startConnecting(card.dataset.state);return;}
  if(e.target.closest(".edge-group,.workflow-label"))return;
  if(connecting&&card)return;
- if(card&&reports.active)return;
+ if(card&&(reports.active||showingSaved()))return;
  // Shift gestures toggle selection on click; they never begin a layout drag.
  if(card&&e.shiftKey){hidePopups();return;}
  const id=group?"group:"+group.dataset.analysisGroup:card?.dataset.state;
@@ -751,7 +805,7 @@ function showAlignmentGuides(guides = {}) {
 
 function positionStateCard({id,x,y}){
  const card=$("#nodes").querySelector('[data-state="'+CSS.escape(id)+'"]');
- if(card){card.style.left=x+"px";card.style.top=y+"px";}
+ if(card){const slot=card.closest(".state-slot")??card;slot.style.left=x+"px";slot.style.top=y+"px";}
 }
 function positionDraggedNodes(positions, group = false) {
  for(const {id,x,y} of positions){
@@ -778,7 +832,7 @@ function moveDrag(clientX, clientY, bypass) {
    const node=canvasState(drag.id);
    const position = {id: drag.id, x: drag.x + dx/camera.scale, y: drag.y + dy/camera.scale,
      width:node.width,height:node.height};
-   const visible=drag.group?groupView.placed:(groupView?.states??flow.states);
+   const visible=drag.group?groupView.placed:visibleStates();
    const neighbors=visible.filter(n=>!draggedIds.has(n.id));
    const next = SaigenGeometry.alignment(position, neighbors, camera.scale, drag.guides, bypass);
    drag.guides = next.guides;
@@ -850,6 +904,8 @@ function updateAlignmentModifier(event) {
 }
 document.addEventListener("keyup", updateAlignmentModifier);
 $("#nodes").addEventListener("click",e=>{
+ const bookmark=e.target.closest("[data-bookmark]");
+ if(bookmark){toggleBookmark(bookmark);return;}
  if(suppressClick||e.target.closest(".port"))return;
  const group=e.target.closest("[data-analysis-group]");
  if(group){
