@@ -55,12 +55,16 @@ async function accept(next){
 async function mutate(operations,undo=null){
  return applyChange(undo?"/api/undo":"/api/edit",undo?{event:undo}:{operations},undo?"Change undone. History preserved.":"Saved to this project.");
 }
+function saveLayout(operations){
+ return applyChange("/api/edit",{operations});
+}
 async function applyChange(path,body,message){
  if(busy)throw new Error("A change is already being saved.");
  busy=true;
  try{
    const next=await request(path,{...body,revision:flow.revision});
-   await accept(next);toast(message);
+   await accept(next);
+   if(message)toast(message);
    return true;
  }catch(error){
    if(error.status===409){await accept(await request("/api/flow"));throw new Error(error.message);}
@@ -653,7 +657,7 @@ $("#auto-arrange").onclick=async()=>{
      : SaigenGeometry.autoArrange(flow.states,flow.actions)
          .filter(({id,x,y})=>getState(id).x!==x||getState(id).y!==y)
          .map(({id,x,y})=>({op:"edit_state",id,changes:{x,y}}));
-   if(operations.length)await mutate(operations);
+   if(operations.length)await saveLayout(operations);
    else toast("The canvas is already arranged.");
    fit();
  }catch(error){
@@ -762,7 +766,7 @@ $("#nodes").addEventListener("keydown",e=>{
    const step=20;
    const x=node.x+step*(Number(e.key==="ArrowRight")-Number(e.key==="ArrowLeft"));
    const y=node.y+step*(Number(e.key==="ArrowDown")-Number(e.key==="ArrowUp"));
-   mutate([overviewMove(groupView,[{id:node.id,x,y}])]).catch(error=>toast(error.message));
+   saveLayout([overviewMove(groupView,[{id:node.id,x,y}])]).catch(error=>toast(error.message));
    return;
  }
  if(reports.active||connecting||!["Enter"," "].includes(e.key))return;
@@ -888,7 +892,7 @@ $("#viewport").addEventListener("pointerup", async e => {
    const operations=current.group||groupView?.layout
      ? [overviewMove(groupView,[])]
      : moved.map(({node})=>({op:"edit_state",id:node.id,changes:{x:node.x,y:node.y}}));
-   await mutate(operations);
+   await saveLayout(operations);
  } catch (error) {
    toast(error.message);
    positionDraggedNodes(moved.filter(({node})=>canvasState(node.id)===node).map(({original})=>original),current.group);
