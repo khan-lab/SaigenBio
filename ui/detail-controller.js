@@ -29,6 +29,9 @@ globalThis.SaigenDetailController = Object.freeze({
     openStateEditor,
     openState,
     openArtifact,
+    bookmarkButton,
+    toggleBookmark,
+    activeElement,
     getElementById,
   }) {
     const storyCache = new Map();
@@ -68,6 +71,7 @@ globalThis.SaigenDetailController = Object.freeze({
     function renderDetail(n) {
       const flow = getFlow();
       if (!n) return;
+      const restoreBookmarkFocus = activeElement?.()?.dataset.bookmark === n.id;
       const story =
         storyCache.get(n.id)?.revision === flow.revision
           ? storyCache.get(n.id)
@@ -126,9 +130,11 @@ globalThis.SaigenDetailController = Object.freeze({
           : '<button class="quiet" id="edit-detail">Edit state</button>') +
         '</div></nav><div class="detail-kicker">' +
         esc(story?.archive?.label || n.status) +
-        '</div><h1 class="detail-title">' +
+        '</div><div class="detail-heading"><h1 class="detail-title">' +
         esc(n.title) +
-        '</h1><nav class="story-jumps" aria-label="Result detail sections">' +
+        '</h1>' +
+        (getState(n.id) ? (bookmarkButton?.(n) ?? "") : "") +
+        '</div><nav class="story-jumps" aria-label="Result detail sections">' +
         ["What", "Why", "Who", "When"]
           .map(
             (label) =>
@@ -283,6 +289,11 @@ globalThis.SaigenDetailController = Object.freeze({
         );
       bindOriginalCommands($("#detail-content"));
       $("#back-flow").onclick = () => goBack();
+      const bookmark = $("#detail-content").querySelector("[data-bookmark]");
+      if (bookmark) {
+        bookmark.onclick = () => toggleBookmark(bookmark);
+        if (restoreBookmarkFocus) bookmark.focus({preventScroll: true});
+      }
       $("#edit-detail")?.addEventListener("click", () => openStateEditor(n));
       $("#detail-content")
         .querySelectorAll("[data-open]")

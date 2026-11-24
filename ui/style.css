@@ -144,6 +144,21 @@ summary{cursor:pointer;padding:9px 0}.history-event{margin:8px 0;padding:0 12px;
 
 @media(max-width:700px){#edit-tools{max-width:calc(100% - 26px);justify-content:flex-end;flex-wrap:wrap}}
 
+.state-slot{position:absolute;width:192px;height:132px}
+.state-slot>.state{inset:0}
+.bookmark{display:inline-grid;place-items:center;width:32px;height:32px;flex:none;padding:0;color:var(--green);border-radius:5px}
+.bookmark svg{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round}
+.bookmark:hover,.bookmark:focus-visible{background:var(--soft)}
+.bookmark[aria-pressed=true] svg{fill:currentColor}
+.state-slot>.bookmark{position:absolute;top:5px;right:4px;opacity:0}
+.state-slot:has(.bookmark) .node-title{padding-right:21px}
+.state-slot:hover>.bookmark,.state-slot:focus-within>.bookmark,.state-slot>.bookmark[aria-pressed=true]{opacity:1}
+.detail-heading{display:flex;align-items:center;gap:10px}
+#saved-toggle[aria-pressed=true]{background:var(--ink);color:white}
+#saved-empty{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;font-size:13px;color:var(--muted)}
+#saved-empty button{margin-top:12px}
+@media(hover:none){.state-slot>.bookmark{opacity:1}}
+
 .analysis-group-card{position:absolute;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:5px;padding:9px 13px;text-align:left;border:1px solid #a5a8a1;border-radius:10px;background:#fcfcfa;color:var(--ink);overflow:hidden;
   --group-stack-offset:calc(6px * var(--group-font-scale,1));
   --group-stack-line:calc(1.5px * var(--group-font-scale,1));
