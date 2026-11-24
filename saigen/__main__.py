@@ -83,7 +83,7 @@ def main():
     p.add_argument("--requires",default="",help="Prerequisite for proceeding; descriptive, not enforced")
     p=command("run",aliases=["acquire"])
     p.add_argument("--plan",help="Reuse a proposed state after user approval")
-    p.add_argument("--approved",action="store_true",help="Declare that the user approved executing this plan")
+    p.add_argument("--approved",action="store_true",help="Declare that the user approved the plan or inferred input connections")
     p.add_argument("--expect",default="",help="Brief description of expected output")
     p.add_argument("--from",dest="parents",action="append",default=[])
     p.add_argument("--source-url",action="append",default=[])
@@ -174,7 +174,6 @@ def main():
             result=store.plan(args.title,parents,args.expect,args.output,args.actor or "AI agent",args.id,
                               details=args.details,requires=args.requires)
         elif args.command in {"run","acquire"}:
-            if args.command=="run" and not args.parents: raise RecordError("A run needs --from; use acquire for a root download")
             if args.command=="acquire" and (args.parents or args.plan): raise RecordError("Acquisition has no parent or planned target")
             if args.plan and not args.approved:
                 raise RecordError("Execute a proposed state only after user approval; supply --approved")
@@ -182,7 +181,7 @@ def main():
             argv=args.argv[1:] if args.argv[:1]==["--"] else args.argv
             actor=args.actor or (sessions.session(store.flow(),os.environ["SAIGEN_SESSION"])["actor"] if os.environ.get("SAIGEN_SESSION") and Path(os.environ.get("SAIGEN_PROJECT","")).resolve()==store.root else "AI agent")
             parents=[sessions.resolve_state(store.flow(),p) for p in args.parents]
-            result=run(store,parents,args.title,argv,inputs=args.input,outputs=args.output,actor=actor,reason=args.reason,label=args.label,ident=args.id,stdout_name=args.stdout,source_repo=args.source_repo,scripts=args.script,environment_files=args.environment,tool_versions=args.tool_version,planned=args.plan,expected=args.expect,acquisition=args.command=="acquire",source_urls=args.source_url,explanation=args.explanation,script_excerpts=args.script_excerpt)
+            result=run(store,parents,args.title,argv,inputs=args.input,outputs=args.output,actor=actor,reason=args.reason,label=args.label,ident=args.id,stdout_name=args.stdout,source_repo=args.source_repo,scripts=args.script,environment_files=args.environment,tool_versions=args.tool_version,planned=args.plan,expected=args.expect,acquisition=args.command=="acquire",source_urls=args.source_url,explanation=args.explanation,script_excerpts=args.script_excerpt,approved=args.approved)
             print(json.dumps(result,indent=2))
             return 0 if result["status"]=="completed" else 130 if result["status"]=="cancelled" else 1
         elif args.command=="serve":

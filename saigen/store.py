@@ -18,6 +18,7 @@ from .records import (ID, TERMINAL, RecordError, Conflict, now, uid, entity,
                       text, names, coordinates, plan_removal_error, validate)
 from .analysis_groups import remove_missing_members
 from .overview_layout import edit_overview
+from .lineage import run_lineage
 
 def digest(path):
     h = hashlib.sha256()
@@ -185,19 +186,28 @@ class Store:
             return {"state":n}, None
         return entity(self.update("plan.proposed",actor,change),"states",ident)
 
-    def begin(self, title, parents, command, actor, reason, outputs, inputs, code, environment, ident=None, label=None, planned=None, expected="", acquisition=False):
+    def begin(self, title, parents, command, actor, reason, outputs, inputs, code, environment, ident=None, label=None, planned=None, expected="", acquisition=False,
+              *, explicit_artifacts=(), ask_lineage=True, approved=False):
         ident = planned or ident or uid("st")
         aid = uid("run")
         def change(f):
             existing = next((n for n in f["states"] if n["id"]==ident),None)
+            declared_parents = parents
+            if acquisition:
+                resolved_parents, file_bindings = declared_parents, []
+            else:
+                resolved_parents, file_bindings = run_lineage(f, declared_parents, explicit_artifacts,
+                                                              ask=ask_lineage, approved=approved)
             if planned:
                 if not existing or existing.get("origin")!="agent-plan" or existing["status"]!="planned":
                     raise RecordError("Select an unexecuted agent plan")
-                if parents != existing["planParents"]:
+                if not declared_parents and set(resolved_parents)==set(existing["planParents"]):
+                    resolved_parents=existing["planParents"]
+                if resolved_parents != existing["planParents"]:
                     raise RecordError("Run inputs must match the planned parents")
             elif existing:
                 raise RecordError("State ID already exists")
-            ps = [entity(f,"states",i) for i in parents]
+            ps = [entity(f,"states",i) for i in resolved_parents]
             if any(n.get("reconstruction",{}).get("review")=="draft" for n in ps):raise RecordError("Accept reconstruction before running from its states")
             if not ps and not acquisition: raise RecordError("A run needs at least one parent")
             if acquisition and ps: raise RecordError("Acquisition must be a root state")
@@ -209,8 +219,9 @@ class Store:
             inherited = list(dict.fromkeys(a for n in ps for a in n.get("manifest",[])))
             at = now()
             n = {"id":ident,"title":text(title,"title",120,True),"note":text(reason,"reason"),"x":x,"y":y,"status":"running","origin":"recorded","writtenBy":actor,"performedBy":actor,"createdAt":at,"codeRef":code.get("commit"),"code":code,"artifactIds":[],"manifest":inherited,"files":[],"expectedFiles":outputs,"references":[]}
-            a = {"id":aid,"from":parents,"to":ident,"label":text(label or Path(command[0]).name,"label",160,True),"command":"","argvTemplate":command,"reason":reason,"reasonSource":"agent-stated" if actor!="Human" else "human-stated","status":"running","origin":"recorded","writtenBy":actor,"performedBy":actor,"startedAt":at,"heartbeatAt":at,"exitCode":None,"runnerPid":os.getpid(),"inputArtifacts":[i["id"] for i in inputs],"code":code,"environment":environment,"methodSource":"Observed by the SaigenBio execution wrapper."}
+            a = {"id":aid,"from":resolved_parents,"to":ident,"label":text(label or Path(command[0]).name,"label",160,True),"command":"","argvTemplate":command,"reason":reason,"reasonSource":"agent-stated" if actor!="Human" else "human-stated","status":"running","origin":"recorded","writtenBy":actor,"performedBy":actor,"startedAt":at,"heartbeatAt":at,"exitCode":None,"runnerPid":os.getpid(),"inputArtifacts":[i["id"] for i in inputs],"code":code,"environment":environment,"methodSource":"Observed by the SaigenBio execution wrapper."}
             a["acquisition"] = acquisition
+            a["fileInputBindings"] = file_bindings
             n["expectedSummary"] = expected or (existing.get("expectedSummary","") if existing else "")
             if existing:
                 n["x"], n["y"] = existing["x"], existing["y"]

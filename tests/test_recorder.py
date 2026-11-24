@@ -292,6 +292,42 @@ class RecorderTests(unittest.TestCase):
         data=json.loads(path.read_text())
         self.assertEqual(data["flow"]["revision"],data["events"][-1]["revision"])
 
+    def test_artifact_parent_inference_respects_workspace_permission(self):
+        aid = self.parent["artifactIds"][0]
+        command = [sys.executable, "-B", "-m", "saigen", "--project", str(self.root), "run",
+                   "--title", "Artifact reuse", "--input", f"artifact:{aid}"]
+        body = ["--", sys.executable, "-c", "pass", "{input:0}"]
+        config = self.root / "saigen-workspace.json"
+        config.write_text(json.dumps({"project": ".", "permissionMode": "ask"}))
+        refused = subprocess.run(command + body, cwd=REPO, text=True, capture_output=True)
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn(f"Input (input) supplies input.txt ({aid})", refused.stderr)
+        self.assertEqual(self.store.flow()["actions"], [])
+        confirmed = subprocess.run(command + ["--approved"] + body, cwd=REPO, text=True, capture_output=True)
+        self.assertEqual(confirmed.returncode, 0, confirmed.stderr)
+        config.write_text(json.dumps({"project": ".", "permissionMode": "flexible"}))
+        flexible = subprocess.run(command + body, cwd=REPO, text=True, capture_output=True)
+        self.assertEqual(flexible.returncode, 0, flexible.stderr)
+        for action in self.store.flow()["actions"]:
+            self.assertEqual(action["from"], ["input"])
+            self.assertEqual(action["fileInputBindings"], [{"artifactId": aid, "stateId": "input"}])
+
+    def test_artifact_inference_requires_exact_unambiguous_ownership(self):
+        aid = self.parent["artifactIds"][0]
+        duplicate = self.store.snapshot("Other result", [], ident="other")
+        def share(flow):
+            entity(flow, "states", duplicate["id"])["artifactIds"] = [aid]
+            return {}, None
+        self.store.update("fixture", "Test", share)
+        with self.assertRaisesRegex(RecordError, "several recorded owners"):
+            run(self.store, [], "Ambiguous", [sys.executable, "-c", "pass"], inputs=[f"artifact:{aid}"], approved=True)
+        with self.assertRaisesRegex(RecordError, "needs --from or an artifact input"):
+            run(self.store, [], "Same bytes", [sys.executable, "-c", "pass"], inputs=[self.input], approved=True)
+        self.assertEqual(self.store.flow()["actions"], [])
+        self.execute("pass", inputs=[f"artifact:{aid}"])
+        self.assertEqual(self.store.flow()["actions"][0]["fileInputBindings"], [{"artifactId": aid, "stateId": "input"}])
+
+
 class ServerTests(unittest.TestCase):
     def setUp(self):
         RecorderTests.setUp(self)
