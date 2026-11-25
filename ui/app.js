@@ -11,14 +11,13 @@ let history=[],selection=new Set(),connecting=null,editorContext=null;
 let reports;
 let bookmarks=new Set(),savedOnly=false,fullCanvasCamera=null;
 let groupView=null,groupDialogEdge=null;
-const groupOverrides=new Map(),groupAutomatic=new Map();
+let groupsMode=true,pendingGroupFocus=null;
 let camera={x:70,y:90,scale:.72},savedCamera=null,drag=null,hoverTimer=null,hideTimer=null,toastTimer=null;
 let ready=false,busy=false,token="",allEvents=[],artifactRequest=0;
 const getState=id=>flow.states.find(n=>n.id===id);
 const showingSaved=()=>savedOnly&&!reports.active;
 const visibleStates=()=>groupView?.states??(showingSaved()?flow.states.filter(n=>bookmarks.has(n.id)):flow.states);
 const canvasState=id=>groupView?.byId.get(id)??getState(id);
-const overviewOperation=layout=>({op:"edit_overview",layout});
 const getAction=id=>flow.actions.find(a=>a.id===id);
 const artifactURL=id=>"/api/artifacts/"+encodeURIComponent(id);
 const artifacts=n=>(n.artifactIds||[]).map(id=>flow.artifacts[id]).filter(Boolean);
@@ -40,7 +39,8 @@ const request=SaigenAPI.create(()=>token);
 async function loadHistory(){
  allEvents=await request("/api/history");
  const undone=new Set(allEvents.filter(e=>e.kind==="flow.undo").map(e=>e.payload.undoOf));
- history=allEvents.filter(e=>e.kind==="flow.edited"&&e.undoable&&!undone.has(e.revision)).map(e=>e.revision);
+ history=allEvents.filter(e=>e.kind==="flow.edited"&&e.undoable&&!undone.has(e.revision)
+   &&!e.payload.operations?.every(op=>op.op==="edit_overview")).map(e=>e.revision);
  $("#undo").disabled=!history.length;
 }
 function redraw(){
@@ -250,22 +250,12 @@ function renderNodes(){
  positionGroupCards();
  syncSelection();
 }
-function positionOverviewCards(){
- if(groupView?.layout){
-   for(const node of groupView.states)positionStateCard(node);
- }
- positionGroupCards();
-}
 function positionGroupCards(){
  for(const group of groupView?.summaries??[]){
    const card=$("#nodes").querySelector('[data-analysis-group="'+CSS.escape(group.groupId)+'"]');
    Object.assign(card.style,{left:group.x+"px",top:group.y+"px",width:group.width+"px",height:group.height+"px"});
    card.style.setProperty("--group-font-scale",group.fontScale);
  }
-}
-function overviewMove(view, positions){
- const byId=new Map(positions.map(position=>[position.id,position]));
- return overviewOperation({scale:camera.scale,cards:view.placed.map(({id,x,y})=>byId.get(id)??{id,x,y})});
 }
 const {edgeAnchor,edgePath}=SaigenGeometry;
 const actionJunction=a=>SaigenGeometry.actionJunction(a,groupView?.placed??flow.states);
@@ -327,13 +317,8 @@ function renderEdges(){
  $("#edges").innerHTML=html;
 }
 function projectGroups(){
- const groups=flow.analysisGroups||[];
- const ids=new Set(groups.map(group=>group.id));
- for(const preferences of [groupOverrides,groupAutomatic]){
-   for(const id of preferences.keys())if(!ids.has(id))preferences.delete(id);
- }
- groupView=groups.length&&!showingSaved()?SaigenAnalysisGroups.project(flow,{
-   automatic:groupAutomatic,overrides:groupOverrides,full:reports.active||!!connecting,scale:camera.scale,figureFor:firstPlot
+ groupView=flow.analysisGroups?.length&&!showingSaved()?SaigenAnalysisGroups.project(flow,{
+   full:!groupsMode||reports.active||!!connecting,scale:camera.scale,figureFor:firstPlot
  }):null;
 }
 function focusProjectedState(stateId){
@@ -344,28 +329,31 @@ function focusProjectedState(stateId){
    : '[data-state="'+CSS.escape(stateId)+'"]';
  ($("#nodes").querySelector(selector)||$("#fit")).focus({preventScroll:true});
 }
-function renderGraph(recompute=true){
+function renderGraph(){
  const focused=document.activeElement;
  const {state:stateId,analysisGroup:groupId,bookmark}=focused?.dataset??{};
- if(recompute)projectGroups();
+ projectGroups();
  renderNodes();renderEdges();
  if($("#groups-dialog").open)renderGroupDialog();
  if(bookmark&&$("#detail-view").hidden)($("#nodes").querySelector('[data-bookmark="'+CSS.escape(bookmark)+'"]')||$("#saved-toggle")).focus({preventScroll:true});
  else focusProjectedState(stateId??groupView?.groups.find(group=>group.id===groupId)?.anchor.id);
 }
-function render(){$("#reconstruction-notice").hidden=!Object.values(flow.reconstructions||{}).some(p=>["draft","partial"].includes(p.status));reports.render();renderSavedControls();renderGraph();renderPipelineRequests();$("#undo").disabled=!history.length;$("#auto-arrange").disabled=showingSaved()||flow.states.length<2;positionSelection();}
+function render(){
+ $("#reconstruction-notice").hidden=!Object.values(flow.reconstructions||{}).some(p=>["draft","partial"].includes(p.status));
+ $("#canvas-view-switch").hidden=!flow.analysisGroups?.length||reports.active;
+ $("#view-groups").setAttribute("aria-pressed",String(groupsMode&&!showingSaved()&&!connecting));
+ $("#view-individual").setAttribute("aria-pressed",String(!showingSaved()&&(!groupsMode||!!connecting)));
+ reports.render();renderSavedControls();renderGraph();renderPipelineRequests();
+ $("#undo").disabled=!history.length;
+ $("#auto-arrange").disabled=showingSaved()||(groupView?.placed.length??flow.states.length)<2;
+ positionSelection();
+}
 function applyCamera(scaleChanged=false){
  $("#scene").style.transform="translate("+camera.x+"px,"+camera.y+"px) scale("+camera.scale+")";
  $("#zoom-label").textContent=Math.round(camera.scale*100)+"%";
- if(scaleChanged&&groupView){
-   const previous=groupView.summaries;
+ if(scaleChanged&&groupView?.summaries.length){
    projectGroups();
-   const current=groupView.summaries;
-   if(previous.length!==current.length||previous.some((group,i)=>group.id!==current[i].id)){
-     renderGraph(false);
-   }else if(current.length){
-     positionOverviewCards();renderWorkflowLabels();renderEdges();
-   }
+   positionGroupCards();renderEdges();
  }
  positionSelection();
 }
@@ -379,39 +367,32 @@ function centerCanvas(box,scale){
  camera={scale,x:w>box.w*scale?(w-box.w*scale)/2-box.x*scale:65-box.x*scale,
    y:Math.max(90,(h-box.h*scale)/2)-box.y*scale};
 }
-function fitOverview(){
- const viewport=$("#viewport"),box=bounds(groupView.placed);
- const initialScale=camera.scale, layout=groupView.layout, automatic=new Map(groupAutomatic);
- camera.scale=Math.max(.22,Math.min(camera.scale,(viewport.clientWidth-100)/box.w,(viewport.clientHeight-170)/box.h));
- projectGroups();
- if(groupView.layout!==layout){
-   // Fitting a saved view should keep the same groups visible.
-   camera.scale=initialScale;
-   groupAutomatic.clear();
-   for(const [id,value] of automatic)groupAutomatic.set(id,value);
-   projectGroups();
- }
- centerCanvas(bounds(groupView.placed),camera.scale);
- renderGraph(false);
- applyCamera();
-}
-function fit(initial=false){
+function fit(initial=false, nodes=null){
  cancelDrag();
- if(!initial&&groupView?.layout){fitOverview();return;}
- const v=$("#viewport"),box=showingSaved()?bounds(visibleStates()):bounds(),w=v.clientWidth,h=v.clientHeight;
- let scale=Math.min(1,(w-100)/box.w,(h-170)/box.h);
- if(initial&&!flow.analysisGroups?.length)scale=Math.max(scale,w<800?.67:.62);
- centerCanvas(box,Math.max(.22,scale));
+ const v=$("#viewport");
+ const scaleFor=box=>Math.min(1,Math.max(1,v.clientWidth-100)/box.w,Math.max(1,v.clientHeight-170)/box.h);
+ const overview=!nodes&&groupView?.summaries.length;
+ let box=bounds(nodes??groupView?.placed??visibleStates()),scale=scaleFor(box);
+ // The summary cards have a minimum on-screen size and may grow as scale drops.
+ if(overview){
+   for(let pass=0;pass<6;pass++){
+     camera.scale=scale;projectGroups();
+     box=bounds(groupView.placed);
+     const next=scaleFor(box);
+     if(next>=scale*.995)break;
+     scale=next;
+   }
+ }
+ if(initial&&!flow.analysisGroups?.length)scale=Math.max(scale,v.clientWidth<800?.67:.62);
+ centerCanvas(box,scale);
  applyCamera(true);
- if(groupView?.layout)fitOverview();
 }
 function zoom(factor,cx,cy){
  cancelDrag();
  const v=$("#viewport").getBoundingClientRect();
  cx=cx??v.width/2;cy=cy??v.height/2;
- const next=Math.max(.22,Math.min(1.8,camera.scale*factor)),ratio=next/camera.scale;
- const closed=factor<1&&groupView&&SaigenAnalysisGroups.closeInspections(groupView.groups,groupOverrides,next);
- if(ratio===1&&!closed)return;
+ const next=Math.max(Math.min(.02,camera.scale),Math.min(1.8,camera.scale*factor)),ratio=next/camera.scale;
+ if(ratio===1)return;
  camera.x=cx-(cx-camera.x)*ratio;camera.y=cy-(cy-camera.y)*ratio;camera.scale=next;
  hidePopups();applyCamera(true);
 }
@@ -535,6 +516,8 @@ const detailController = SaigenDetailController.create({
  imagePreview, tableMarkup, displayText, displayCommand, displayRecord,
  shortDate, fileRows, workflows, planMarkup, terminalMarkup, bindOriginalCommands,
  openStateEditor, openState, openArtifact, bookmarkButton, toggleBookmark,
+ groupPath: id => SaigenAnalysisGroups.path(flow.analysisGroups??[],id),
+ showGroupMembers: id => showGroupMembers(id),
  activeElement: () => document.activeElement,
  getElementById: id => document.getElementById(id)
 });
@@ -544,7 +527,16 @@ function route(){
  try{const id=match?decodeURIComponent(match[1]):null;n=id?(getState(id)||detailController.state(id)):null;
  if(id&&!n){$("#flow-view").hidden=true;$("#detail-view").hidden=false;$("#detail-content").textContent="Loading recorded state…";detailController.load(id);return;}}catch{}
  if(n){$("#flow-view").hidden=true;$("#detail-view").hidden=false;$("#selection-tools").hidden=true;detailController.render(n);$("#detail-view").scrollTop=0;}
- else{$("#flow-view").hidden=false;$("#detail-view").hidden=true;const restored=!!savedCamera;if(restored){camera={...savedCamera};savedCamera=null;}applyCamera(restored);}
+ else{
+   $("#flow-view").hidden=false;$("#detail-view").hidden=true;
+   if(pendingGroupFocus){
+     const groupId=pendingGroupFocus;pendingGroupFocus=null;savedCamera=null;
+     showGroupMembers(groupId);return;
+   }
+   const restored=!!savedCamera;
+   if(restored){camera={...savedCamera};savedCamera=null;}
+   applyCamera(restored);
+ }
 }
 function field(name,label,value="",type="input",placeholder=""){
  const c=type==="textarea"?'<textarea name="'+name+'" rows="3" placeholder="'+esc(placeholder)+'">'+esc(value)+'</textarea>':'<input name="'+name+'" value="'+esc(value)+'" '+(name==="title"||name==="label"?"required":"")+' maxlength="'+(name==="title"?80:1000)+'" placeholder="'+esc(placeholder)+'">';
@@ -646,6 +638,8 @@ $("#close-editor").onclick=$("#cancel-editor").onclick=()=>$("#editor").close();
 $("#editor").addEventListener("click",e=>{if(e.target===$("#editor")){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();}});
 $("#undo").onclick=async()=>{if(!history.length||busy)return;try{await mutate(null,history.at(-1));}catch(error){toast(error.message);}};
 $("#saved-toggle").onclick=$("#show-all-nodes").onclick=toggleSaved;
+$("#view-groups").onclick=()=>setCanvasView(true);
+$("#view-individual").onclick=()=>setCanvasView(false);
 $("#auto-arrange").onclick=async()=>{
  if(!ready||busy||drag||reports.active||showingSaved()||flow.states.length<2)return;
  const button=$("#auto-arrange");
@@ -653,7 +647,9 @@ $("#auto-arrange").onclick=async()=>{
  try{
    const layout=groupView?.summaries.length ? SaigenAnalysisGroups.arrange(groupView,camera.scale) : null;
    const operations=layout
-     ? (JSON.stringify(layout)===JSON.stringify(groupView.layout) ? [] : [overviewOperation(layout)])
+     ? SaigenAnalysisGroups.translate(groupView,layout.cards.map(({id,x,y})=>{
+        const card=canvasState(id);return {id,dx:x-card.x,dy:y-card.y};
+       }))
      : SaigenGeometry.autoArrange(flow.states,flow.actions)
          .filter(({id,x,y})=>getState(id).x!==x||getState(id).y!==y)
          .map(({id,x,y})=>({op:"edit_state",id,changes:{x,y}}));
@@ -663,7 +659,7 @@ $("#auto-arrange").onclick=async()=>{
  }catch(error){
    toast(error.message);
  }finally{
-   button.disabled=flow.states.length<2;
+   button.disabled=showingSaved()||(groupView?.placed.length??flow.states.length)<2;
  }
 };
 $("#add-state").onclick=()=>addState();
@@ -679,11 +675,24 @@ function openGroupDependencies(edge){
  hidePopups();groupDialogEdge=edge;renderGroupDialog();$("#groups-dialog").showModal();
 }
 function inspectAnalysisGroup(summary){
+ showGroupMembers(summary.groupId);
+}
+function setCanvasView(groups,nodes=null){
+ if(!ready||busy||reports.active)return;
  cancelDrag();
  hidePopups();
- groupOverrides.set(summary.groupId,false);
- renderGraph();
- focusProjectedState(summary.anchorId);
+ groupsMode=groups;savedOnly=false;fullCanvasCamera=null;connecting=null;selection.clear();
+ $("#viewport").classList.remove("connecting");
+ render();
+ fit(false,nodes);
+}
+function showGroupMembers(groupId){
+ if(!ready||busy||reports.active)return;
+ if(!$("#detail-view").hidden){pendingGroupFocus=groupId;location.hash="";return;}
+ const members=SaigenAnalysisGroups.memberIds(flow.analysisGroups??[],groupId);
+ const nodes=flow.states.filter(node=>members.has(node.id));
+ setCanvasView(false,nodes.length?nodes:null);
+ focusProjectedState(nodes[0]?.id);
 }
 function pendingPipelineRequests(){
  return Object.values(flow.pipelineExports?.selections??{}).filter(request=>request.status==="pending");
@@ -764,9 +773,9 @@ $("#nodes").addEventListener("keydown",e=>{
    const node=groupView?.byId.get("group:"+group.dataset.analysisGroup);
    if(!node)return;
    const step=20;
-   const x=node.x+step*(Number(e.key==="ArrowRight")-Number(e.key==="ArrowLeft"));
-   const y=node.y+step*(Number(e.key==="ArrowDown")-Number(e.key==="ArrowUp"));
-   saveLayout([overviewMove(groupView,[{id:node.id,x,y}])]).catch(error=>toast(error.message));
+   const dx=step*(Number(e.key==="ArrowRight")-Number(e.key==="ArrowLeft"));
+   const dy=step*(Number(e.key==="ArrowDown")-Number(e.key==="ArrowUp"));
+   saveLayout(SaigenAnalysisGroups.translate(groupView,[{id:node.id,dx,dy}])).catch(error=>toast(error.message));
    return;
  }
  if(reports.active||connecting||!["Enter"," "].includes(e.key))return;
@@ -818,7 +827,6 @@ function positionDraggedNodes(positions, group = false) {
    if(!group)positionStateCard(node);
  }
  if(group)positionGroupCards();
- else if(groupView?.summaries.length&&!groupView.layout){projectGroups();positionGroupCards();}
  renderEdges();
  renderWorkflowLabels();
  positionSelection();
@@ -889,8 +897,8 @@ $("#viewport").addEventListener("pointerup", async e => {
  const moved=current.originals.map(original=>({original,node:canvasState(original.id)})).filter(({original,node})=>node&&(node.x!==original.x||node.y!==original.y));
  if(!moved.length)return;
  try {
-   const operations=current.group||groupView?.layout
-     ? [overviewMove(groupView,[])]
+   const operations=current.group
+     ? SaigenAnalysisGroups.translate(groupView,moved.map(({original,node})=>({id:node.id,dx:node.x-original.x,dy:node.y-original.y})))
      : moved.map(({node})=>({op:"edit_state",id:node.id,changes:{x:node.x,y:node.y}}));
    await saveLayout(operations);
  } catch (error) {

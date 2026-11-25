@@ -5,19 +5,6 @@ globalThis.SaigenAnalysisGroups = (() => {
   const groupKey = id => "group:" + id;
   const countLabel = (count, noun, plural = noun + "s") => count + " " + (count === 1 ? noun : plural);
 
-  function compactAt(scale, wasCompact, depth = 0) {
-    const offset = .85 * (1 - .8 ** depth);
-    return wasCompact ? scale < .65 + offset : scale <= .55 + offset;
-  }
-
-  function closeInspections(groups, overrides, scale) {
-    let changed = false;
-    for (const group of groups) {
-      if (compactAt(scale, false, group.depth) && overrides.delete(group.id)) changed = true;
-    }
-    return changed;
-  }
-
   const leftmost = (a, b) => !a || b.x < a.x || (b.x === a.x && b.y < a.y) ? b : a;
 
   function newerFigure(current, candidate) {
@@ -27,47 +14,39 @@ globalThis.SaigenAnalysisGroups = (() => {
     return current;
   }
 
-  function groupAt(group, occupied, scale) {
-    // Anchor near a real member. Keep the summary legible at overview scale.
-    const anchor = group.anchor;
+  function groupAt(group, scale) {
     const width = Math.max(W, 112 / scale) + (group.figure ? Math.max(W * .7, 76 / scale) : 0);
     const height = Math.max(H, 65 / scale);
-    const fontScale = Math.max(1, .56 / scale);
-    // Include the offset outline in the clearance around each summary.
-    const clearance = Math.max(10, 8 * fontScale + 2);
-    const x = anchor.x;
-    let y = anchor.y;
-    while (true) {
-      const blockers = occupied.filter(box =>
-        x < box.x + (box.width ?? W) + clearance && x + width + clearance > box.x &&
-        y < box.y + (box.height ?? H) + clearance && y + height + clearance > box.y);
-      if (!blockers.length) break;
-      y = Math.max(...blockers.map(box => box.y + (box.height ?? H) + clearance));
-    }
-    return {...group, id: groupKey(group.id), groupId: group.id, x, y, width, height,
-      fontScale, anchorId: anchor.id};
+    const box = group.bounds;
+    return {...group, id: groupKey(group.id), groupId: group.id,
+      x:(box.left+box.right-width)/2, y:(box.top+box.bottom-height)/2, width, height,
+      fontScale:Math.max(1, .56 / scale)};
   }
 
-  function hierarchy(groups, byId, {overrides, automatic, full, scale, figureFor}) {
+  function childrenByParent(groups) {
     const children = new Map();
     for (const group of groups) {
       const parent = group.parentId ?? null;
       if (!children.has(parent)) children.set(parent, []);
       children.get(parent).push(group);
     }
+    return children;
+  }
+
+  function includeBox(a, b) {
+    return a ? {left:Math.min(a.left,b.left), top:Math.min(a.top,b.top),
+      right:Math.max(a.right,b.right), bottom:Math.max(a.bottom,b.bottom)} : b;
+  }
+
+  function hierarchy(groups, byId, {full, figureFor}) {
+    const children = childrenByParent(groups);
     const endpoint = new Map();
     const ordered = [];
     const stack = (children.get(null) || []).map(group => ({group, parent: null})).reverse();
     while (stack.length) {
       const {group, parent} = stack.pop();
-      const depth = parent ? parent.depth + 1 : 0;
-      const zoom = compactAt(scale, automatic.get(group.id), depth);
-      automatic.set(group.id, zoom);
-      const collapsed = !full && (overrides.get(group.id) ?? zoom);
-      const hiddenBy = parent ? parent.hiddenBy || (parent.collapsed ? parent.id : null) : null;
-      const covering = hiddenBy || (collapsed ? group.id : null);
-      const entry = {...group, depth, collapsed, hiddenBy, parentTitle:parent?.title,
-        count:0, failed:0, running:0, anchor:null, figure:null};
+      const topId = parent?.topId ?? group.id;
+      const entry = {...group, topId, count:0, failed:0, running:0, anchor:null, bounds:null, figure:null};
       for (const id of group.stateIds) {
         const member = byId.get(id);
         if (!member) continue;
@@ -75,8 +54,9 @@ globalThis.SaigenAnalysisGroups = (() => {
         if (member.status === "failed") entry.failed++;
         if (member.status === "running") entry.running++;
         entry.anchor = leftmost(entry.anchor, member);
-        if (covering) {
-          endpoint.set(id, groupKey(covering));
+        entry.bounds = includeBox(entry.bounds,{left:member.x,top:member.y,right:member.x+W,bottom:member.y+H});
+        if (!full) {
+          endpoint.set(id, groupKey(topId));
           if (["completed", "imported", "saved"].includes(member.status)) {
             const artifact = figureFor?.(member);
             if (artifact) {
@@ -97,12 +77,44 @@ globalThis.SaigenAnalysisGroups = (() => {
       parent.failed += entry.failed;
       parent.running += entry.running;
       parent.anchor = leftmost(parent.anchor, entry.anchor);
+      parent.bounds = includeBox(parent.bounds,entry.bounds);
       parent.figure = newerFigure(parent.figure, entry.figure);
     }
     return {groups: ordered.map(({entry}) => entry).filter(group => group.count), endpoint};
   }
 
-  const layoutKey = cards => cards.map(card => card.id).sort().join("|");
+  function path(groups, stateId) {
+    const byId = new Map(groups.map(group => [group.id,group]));
+    const result = [];
+    for(let group=groups.find(item=>item.stateIds.includes(stateId));group;group=byId.get(group.parentId)){
+      result.push(group);
+    }
+    return result.reverse();
+  }
+
+  function memberIds(groups, groupId) {
+    const root = groups.find(group => group.id === groupId);
+    if (!root) return new Set();
+    const children = childrenByParent(groups);
+    const ids = new Set(), queue = [root];
+    while(queue.length){
+      const group=queue.pop();
+      for(const id of group.stateIds)ids.add(id);
+      for(const child of children.get(group.id)??[])queue.push(child);
+    }
+    return ids;
+  }
+
+  function translate(view, moves) {
+    const byId = new Map(moves.map(move => [move.id, move]));
+    const operations = [];
+    for (const node of view.byId.values()) {
+      const move = byId.get(view.endpoint.get(node.id) ?? node.id);
+      if (node.groupId || !move || (!move.dx && !move.dy)) continue;
+      operations.push({op:"edit_state",id:node.id,changes:{x:node.x+move.dx,y:node.y+move.dy}});
+    }
+    return operations;
+  }
 
   function groupSize(scale) {
     return {width:Math.max(W, 112 / scale) + Math.max(W * .7, 76 / scale),
@@ -153,29 +165,10 @@ globalThis.SaigenAnalysisGroups = (() => {
   function project(flow, options) {
     const byId = new Map(flow.states.map(node => [node.id, node]));
     const {groups, endpoint} = hierarchy(flow.analysisGroups || [], byId, options);
-    let states = endpoint.size ? flow.states.filter(node => !endpoint.has(node.id)) : flow.states;
-    let placed = [...states];
-    let summaries = groups.filter(group => group.collapsed && !group.hiddenBy).map(group => {
-      const summary = groupAt(group, placed, options.scale);
-      placed.push(summary);
-      byId.set(summary.id, summary);
-      return summary;
-    });
-    const layout = summaries.length ? flow.overviewLayouts?.[layoutKey(placed)] : null;
-    if (layout) {
-      const positions = new Map(layout.cards.map(card => [card.id, card]));
-      // At low zoom, scale spacing with the minimum readable card size.
-      const stretch = Math.max(1, layout.scale / options.scale);
-      const relocate = card => {
-        const {x,y} = positions.get(card.id);
-        const next = {...card, x:x*stretch, y:y*stretch};
-        byId.set(next.id,next);
-        return next;
-      };
-      states = states.map(relocate);
-      summaries = summaries.map(relocate);
-      placed = [...states, ...summaries];
-    }
+    const states = endpoint.size ? flow.states.filter(node => !endpoint.has(node.id)) : flow.states;
+    const summaries = options.full ? [] : groups.filter(group => !group.parentId).map(group => groupAt(group,options.scale));
+    for(const summary of summaries)byId.set(summary.id,summary);
+    const placed = [...states,...summaries];
     const actions = [];
     const connections = new Map();
     for (const action of flow.actions) {
@@ -192,7 +185,7 @@ globalThis.SaigenAnalysisGroups = (() => {
         connections.get(key).links.push({action, source: byId.get(sourceId), target: byId.get(action.to)});
       }
     }
-    return {states, groups, summaries, actions, connections: [...connections.values()], endpoint, placed, layout, byId};
+    return {states, groups, summaries, actions, connections: [...connections.values()], endpoint, placed, byId};
   }
 
   function card(group, esc, imagePreview) {
@@ -206,14 +199,13 @@ globalThis.SaigenAnalysisGroups = (() => {
     const preview = source && imagePreview ? '<span class="group-card-figure">'+
       imagePreview(source, "group-card-thumbnail")+'<span class="group-card-source" title="'+esc(source.title)+'">'+
       esc(source.title)+'</span></span>' : "";
-    const label = "Expand "+group.title+(group.parentTitle?" in "+group.parentTitle:"")+
+    const label = "Show nodes in "+group.title+
       ", "+countLabel(group.count,"result")+(detail ? ", "+detail : "")+
       (preview ? ", figure from "+source.title : "");
     return '<button type="button" class="analysis-group-card'+(preview?' has-group-figure':'')+
-      '" data-analysis-group="'+esc(group.groupId)+'" aria-expanded="false" aria-label="'+esc(label)+
-      '" aria-keyshortcuts="Shift+ArrowUp Shift+ArrowDown Shift+ArrowLeft Shift+ArrowRight" title="Click to expand. Drag or use Shift+arrow keys to move.">'+
+      '" data-analysis-group="'+esc(group.groupId)+'" aria-label="'+esc(label)+
+      '" aria-keyshortcuts="Shift+ArrowUp Shift+ArrowDown Shift+ArrowLeft Shift+ArrowRight" title="Click to show individual nodes. Drag or use Shift+arrow keys to move.">'+
       '<span class="group-card-summary">'+
-      (group.parentTitle?'<span class="group-card-parent">'+esc(group.parentTitle)+'</span>':"")+
       '<span class="group-card-title">'+esc(group.title)+
       '</span><span class="group-card-meta">'+countLabel(group.count,"result")+
       '</span>'+(status?'<span class="group-card-status">'+status+'</span>':"")+'</span>'+preview+'</button>';
@@ -264,5 +256,5 @@ globalThis.SaigenAnalysisGroups = (() => {
       }).join("")+'</ul>';
   }
 
-  return {compactAt, closeInspections, project, arrange, card, edge, dependencyList};
+  return {project, arrange, card, edge, dependencyList, path, memberIds, translate};
 })();

@@ -31,6 +31,8 @@ globalThis.SaigenDetailController = Object.freeze({
     openArtifact,
     bookmarkButton,
     toggleBookmark,
+    groupPath,
+    showGroupMembers,
     activeElement,
     getElementById,
   }) {
@@ -123,12 +125,19 @@ globalThis.SaigenDetailController = Object.freeze({
             : n.status === "imported"
               ? "Existing files were recorded. Their earlier execution is not established by this import."
               : "Execution status was observed by the recorder. A successful command does not establish scientific correctness.";
+      const parents = groupPath?.(n.id) ?? [];
+      const breadcrumbs = parents.length
+        ? '<nav class="detail-group-path" aria-label="Analysis group path">' +
+          parents.map(group => '<button class="source-link" data-focus-group="' + esc(group.id) + '" title="Show group members on canvas">' +
+            esc(group.title) + '</button>').join('<span aria-hidden="true">›</span>') +
+          '</nav>'
+        : '';
       $("#detail-content").innerHTML =
         '<nav class="detail-nav"><button class="back" id="back-flow">← Back to flow</button><div class="detail-tools"><button class="quiet" id="add-explanation">Add explanation</button>' +
         (story?.archive
           ? ""
           : '<button class="quiet" id="edit-detail">Edit state</button>') +
-        '</div></nav><div class="detail-kicker">' +
+        '</div></nav>' + breadcrumbs + '<div class="detail-kicker">' +
         esc(story?.archive?.label || n.status) +
         '</div><div class="detail-heading"><h1 class="detail-title">' +
         esc(n.title) +
@@ -181,6 +190,9 @@ globalThis.SaigenDetailController = Object.freeze({
                 '[aria-label="' + button.dataset.storyJump + '"]',
               ).scrollIntoView({ block: "start", behavior: "smooth" })),
         );
+      $("#detail-content").querySelectorAll("[data-focus-group]").forEach(button => {
+        button.onclick = () => showGroupMembers(button.dataset.focusGroup);
+      });
       $("#add-explanation").onclick = () => editor.open(n, story);
       $("#correct-explanation")?.addEventListener("click", () =>
         editor.open(n, story, true),
