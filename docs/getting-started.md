@@ -129,6 +129,8 @@ Drag a group card to move all its members together, keeping their relative posit
 
 Each state can be assigned directly to one group or remain ungrouped. A group can hold results, subgroups, or both. Its summary counts results across all descendants and shows running and failed counts when applicable. Archiving or deleting a state removes its membership, and groups with no results anywhere under them disappear. Grouping leaves the original positions, states, actions, and artifacts intact.
 
+Hover over a group node or focus it with the keyboard to preview its results and internal connections in their current layout. On a touch screen, tap **Preview**. Scroll inside a large preview to explore the whole graph. Choose **Open group** to focus those results on the canvas, or press Escape to dismiss the preview.
+
 The agent uses `saigen groups show` to read the saved groups and project revision. To save an agreed arrangement from a terminal, put the complete list in a JSON file such as `groups.json`:
 
 ```json

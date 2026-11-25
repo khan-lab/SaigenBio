@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const elements=new Map();
 const element=selector=>{if(!elements.has(selector))elements.set(selector,{hidden:false,textContent:'',innerHTML:'',showModal(){},focus(){},querySelector(){return {focus(){}};}});return elements.get(selector);};
-const context=vm.createContext({document:{querySelector:element},clearTimeout(){}});
+const context=vm.createContext({document:{querySelector:element},clearTimeout(){},groupPreview:{close(){}}});
 for(const name of ['geometry.js','paths.js','api.js','workflows.js','explanation-editor.js','detail-controller.js'])vm.runInContext(fs.readFileSync('ui/'+name,'utf8'),context);
 const app=fs.readFileSync('ui/app.js','utf8');
 vm.runInContext(app.slice(0,app.indexOf('$("#editor-form").onsubmit')),context);

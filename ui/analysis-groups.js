@@ -105,6 +105,11 @@ globalThis.SaigenAnalysisGroups = (() => {
     return ids;
   }
 
+  function memberStates(flow, groupId) {
+    const members = memberIds(flow.analysisGroups??[], groupId);
+    return flow.states.filter(node => members.has(node.id));
+  }
+
   function translate(view, moves) {
     const byId = new Map(moves.map(move => [move.id, move]));
     const operations = [];
@@ -256,5 +261,5 @@ globalThis.SaigenAnalysisGroups = (() => {
       }).join("")+'</ul>';
   }
 
-  return {project, arrange, card, edge, dependencyList, path, memberIds, translate};
+  return {project, arrange, card, edge, dependencyList, path, memberIds, memberStates, translate};
 })();

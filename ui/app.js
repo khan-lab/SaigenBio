@@ -44,7 +44,7 @@ async function loadHistory(){
  $("#undo").disabled=!history.length;
 }
 function redraw(){
- hidePopups();render();
+ hideStatePopups();render();
  if(!$("#detail-view").hidden){const top=$("#detail-view").scrollTop;const id=decodeURIComponent(location.hash.slice(7)),n=getState(id)||detailController.state(id);if(n)detailController.render(n);else location.hash="";$("#detail-view").scrollTop=top;}
  $("#intro").hidden=flow.states.length>0;
  $(".project-name").textContent=flow.project;
@@ -245,13 +245,14 @@ function renderNodes(){
  renderWorkflowLabels();
  const states=visibleStates();
  $("#nodes").innerHTML=states.map(n=>'<div class="state-slot" style="left:'+n.x+'px;top:'+n.y+'px"><button class="state '+esc(n.status)+(firstPlot(n)?" has-plot":"")+(selection.has(n.id)?" selected":"")+'" data-state="'+esc(n.id)+'" aria-pressed="'+selection.has(n.id)+'" aria-describedby="selection-help" aria-label="'+esc(n.title)+'">'+reportBadge(n.id)+nodeContent(n)+'<span class="port" title="Connect to another state" aria-hidden="true"></span></button>'+(reports.active||connecting?"":bookmarkButton(n))+'</div>').join("")+
-   (groupView?.summaries.map(group=>SaigenAnalysisGroups.card(group,esc,imagePreview)).join("")??"");
+   (groupView?.summaries.map(group=>'<div class="analysis-group-slot">'+SaigenAnalysisGroups.card(group,esc,imagePreview)+
+     '<button type="button" class="group-preview-trigger" data-preview-group aria-controls="group-preview" aria-expanded="false" aria-label="Preview '+esc(group.title)+'">Preview</button></div>').join("")??"");
  positionGroupCards();
  syncSelection();
 }
 function positionGroupCards(){
  for(const group of groupView?.summaries??[]){
-   const card=$("#nodes").querySelector('[data-analysis-group="'+CSS.escape(group.groupId)+'"]');
+   const card=$("#nodes").querySelector('[data-analysis-group="'+CSS.escape(group.groupId)+'"]').parentElement;
    Object.assign(card.style,{left:group.x+"px",top:group.y+"px",width:group.width+"px",height:group.height+"px"});
    card.style.setProperty("--group-font-scale",group.fontScale);
  }
@@ -330,7 +331,9 @@ function focusProjectedState(stateId){
 }
 function renderGraph(){
  const focused=document.activeElement;
- const {state:stateId,analysisGroup:groupId,bookmark}=focused?.dataset??{};
+ const {state:stateId,bookmark}=focused?.dataset??{};
+ const groupId=focused?.closest(".analysis-group-slot")?.querySelector("[data-analysis-group]").dataset.analysisGroup;
+ groupPreview.close();
  projectGroups();
  renderNodes();renderEdges();
  if($("#groups-dialog").open)renderGroupDialog();
@@ -408,7 +411,8 @@ function positionSelection(){
  el.style.left=Math.max(10,Math.min(innerWidth-width-10,left-width/2))+"px";
  el.style.top=Math.max(r.top+10,Math.min(innerHeight-52,top-43))+"px";
 }
-function hidePopups(){clearTimeout(hoverTimer);clearTimeout(hideTimer);$("#preview").hidden=true;$("#action-preview").hidden=true;}
+function hideStatePopups(){clearTimeout(hoverTimer);clearTimeout(hideTimer);$("#preview").hidden=true;$("#action-preview").hidden=true;}
+function hidePopups(){hideStatePopups();groupPreview.close();}
 function placePopup(el,rect){el.hidden=false;const pr=el.getBoundingClientRect();let x=rect.right+13;if(x+pr.width>innerWidth-12)x=rect.left-pr.width-13;if(x<12)x=Math.max(12,Math.min(innerWidth-pr.width-12,rect.left));let y=Math.max(85,Math.min(innerHeight-pr.height-15,rect.top));el.style.left=x+"px";el.style.top=y+"px";}
 
 function renderPreview(n){
@@ -422,7 +426,7 @@ function renderPreview(n){
 function showPreview(id,anchor){
  if(reports.active||connecting||drag||!$("#detail-view").hidden)return;
  const n=getState(id);if(!n)return;
- renderPreview(n);placePopup($("#preview"),anchor.getBoundingClientRect());
+ groupPreview.close();renderPreview(n);placePopup($("#preview"),anchor.getBoundingClientRect());
 }
 function handleImageError(e){
  const img=e.target;if(!(img instanceof HTMLImageElement))return;
@@ -686,11 +690,16 @@ function setCanvasView(groups,nodes=null){
 function showGroupMembers(groupId){
  if(!ready||busy||reports.active)return;
  if(!$("#detail-view").hidden){pendingGroupFocus=groupId;location.hash="";return;}
- const members=SaigenAnalysisGroups.memberIds(flow.analysisGroups??[],groupId);
- const nodes=flow.states.filter(node=>members.has(node.id));
+ const nodes=SaigenAnalysisGroups.memberStates(flow,groupId);
  setCanvasView(false,nodes.length?nodes:null);
  focusProjectedState(nodes[0]?.id);
 }
+const groupPreview=SaigenGroupPreview.create({
+ root:$("#nodes"),panel:$("#group-preview"),getFlow:()=>flow,
+ getGroup:id=>groupView?.byId.get("group:"+id),
+ enabled:()=>ready&&!busy&&!drag&&!connecting&&!reports.active&&$("#detail-view").hidden,
+ openGroup:showGroupMembers,boundsFor:bounds,escape:esc,onShow:hideStatePopups,
+});
 function pendingPipelineRequests(){
  return Object.values(flow.pipelineExports?.selections??{}).filter(request=>request.status==="pending");
 }
@@ -760,7 +769,7 @@ $("#groups-body").onclick=e=>{
  const target=e.target.closest("[data-group-target]");
  if(target){$("#groups-dialog").close();openState(target.dataset.groupTarget);}
 };
-$("#viewport").addEventListener("wheel",e=>{e.preventDefault();const r=e.currentTarget.getBoundingClientRect();zoom(Math.exp(-e.deltaY*.0015),e.clientX-r.left,e.clientY-r.top);},{passive:false});
+$("#viewport").addEventListener("wheel",e=>{if(e.target.closest("#group-preview"))return;e.preventDefault();const r=e.currentTarget.getBoundingClientRect();zoom(Math.exp(-e.deltaY*.0015),e.clientX-r.left,e.clientY-r.top);},{passive:false});
 $("#nodes").addEventListener("pointerover",e=>{const n=e.target.closest("[data-state]");if(reports.active||!n||n.contains(e.relatedTarget))return;clearTimeout(hideTimer);clearTimeout(hoverTimer);hoverTimer=setTimeout(()=>showPreview(n.dataset.state,n),650);});
 $("#nodes").addEventListener("keydown",e=>{
  const group=e.target.closest("[data-analysis-group]");
@@ -786,7 +795,7 @@ $("#preview").onpointerleave=()=>{hideTimer=setTimeout(()=>$("#preview").hidden=
 $("#preview").onclick=e=>{const b=e.target.closest("[data-open]");if(b)openState(b.dataset.open);};
 let suppressClick=false;
 $("#viewport").addEventListener("pointerdown",e=>{
- if(e.button!==0||drag||busy||!ready||e.target.closest("[data-bookmark]"))return;
+ if(e.button!==0||drag||busy||!ready||e.target.closest("[data-bookmark],[data-preview-group],#group-preview"))return;
  const card=e.target.closest("[data-state]");
  const group=e.target.closest("[data-analysis-group]");
  if(e.target.closest(".port")&&!reports.active){e.preventDefault();startConnecting(card.dataset.state);return;}
@@ -915,6 +924,12 @@ document.addEventListener("keyup", updateAlignmentModifier);
 $("#nodes").addEventListener("click",e=>{
  const bookmark=e.target.closest("[data-bookmark]");
  if(bookmark){toggleBookmark(bookmark);return;}
+ const trigger=e.target.closest("[data-preview-group]");
+ if(trigger){
+   if(trigger.getAttribute("aria-expanded")==="true")groupPreview.close();
+   else groupPreview.show(trigger.parentElement.querySelector("[data-analysis-group]"),"touch",trigger);
+   return;
+ }
  if(suppressClick||e.target.closest(".port"))return;
  const group=e.target.closest("[data-analysis-group]");
  if(group){
@@ -943,6 +958,7 @@ $("#edges").addEventListener("keydown",e=>{
 });
 document.addEventListener("pointerdown",e=>{if(!e.target.closest("#action-preview")&&!e.target.closest(".edge-group"))$("#action-preview").hidden=true;});
 document.addEventListener("keydown",e=>{
+ if(e.defaultPrevented)return;
  updateAlignmentModifier(e);
  if(e.key==="Escape"&&document.querySelector('dialog[open]'))return;
  if(e.key==="Escape"&&drag){cancelDrag();selection.clear();syncSelection();return;}
