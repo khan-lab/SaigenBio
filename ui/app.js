@@ -244,7 +244,6 @@ function renderWorkflowLabels(){
 function renderNodes(){
  renderWorkflowLabels();
  const states=visibleStates();
- $("#planned-help").hidden=!states.some(n=>n.status==="planned");
  $("#nodes").innerHTML=states.map(n=>'<div class="state-slot" style="left:'+n.x+'px;top:'+n.y+'px"><button class="state '+esc(n.status)+(firstPlot(n)?" has-plot":"")+(selection.has(n.id)?" selected":"")+'" data-state="'+esc(n.id)+'" aria-pressed="'+selection.has(n.id)+'" aria-describedby="selection-help" aria-label="'+esc(n.title)+'">'+reportBadge(n.id)+nodeContent(n)+'<span class="port" title="Connect to another state" aria-hidden="true"></span></button>'+(reports.active||connecting?"":bookmarkButton(n))+'</div>').join("")+
    (groupView?.summaries.map(group=>SaigenAnalysisGroups.card(group,esc,imagePreview)).join("")??"");
  positionGroupCards();

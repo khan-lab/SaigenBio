@@ -88,8 +88,7 @@ summary{cursor:pointer;padding:9px 0}.history-event{margin:8px 0;padding:0 12px;
 
 .state.failed{background:#eeefeb;border-color:#c7cbc3;box-shadow:none;color:#747b70}.state.failed .node-title,.state.failed .node-excerpt{color:#747b70}.state.failed .node-bottom{color:#777c72!important}.state.failed:hover,.state.failed:focus-visible{border-color:#8e9787;box-shadow:0 3px 10px #35583b13}.related-command{white-space:pre-wrap;overflow-wrap:anywhere;font-size:10px;max-height:90px;overflow:auto;color:#657666}
 
-#planned-help{position:absolute;bottom:22px;left:20px;max-width:300px;font-size:11px;color:var(--muted);pointer-events:none}.plan-details h3{font-size:12px;font-weight:500;margin:16px 0 5px}.plan-details p{white-space:pre-wrap;overflow-wrap:anywhere}.plan-details small{display:block;margin-top:5px;color:var(--muted)}
-@media(max-width:700px){#planned-help{bottom:66px;max-width:220px}}
+.plan-details h3{font-size:12px;font-weight:500;margin:16px 0 5px}.plan-details p{white-space:pre-wrap;overflow-wrap:anywhere}.plan-details small{display:block;margin-top:5px;color:var(--muted)}
 
 /* Workflow context shares canvas coordinates; cards retain stable dimensions. */
 .workflow-label{position:absolute;white-space:nowrap;max-width:540px;overflow:hidden;text-overflow:ellipsis;font-size:11px;font-weight:550;color:var(--ink);padding:4px 0;text-align:left}.workflow-label span{font-weight:400;color:var(--muted)}
