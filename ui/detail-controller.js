@@ -9,6 +9,7 @@ globalThis.SaigenDetailController = Object.freeze({
     getEvents,
     getHash,
     goBack,
+    backLabel = () => "Back to flow",
     request,
     accept,
     toast,
@@ -62,7 +63,7 @@ globalThis.SaigenDetailController = Object.freeze({
           if (getHash() === "#state/" + encodeURIComponent(id)) {
             toast(error.message);
             $("#detail-content").innerHTML =
-              '<button class="back" id="failed-story-back">← Back to flow</button><p>' +
+              '<button class="back" id="failed-story-back">← ' + esc(backLabel()) + '</button><p>' +
               esc(error.message) +
               "</p>";
             $("#failed-story-back").onclick = () => goBack();
@@ -142,7 +143,7 @@ globalThis.SaigenDetailController = Object.freeze({
         workflows,
       }).render(n);
       $("#detail-content").innerHTML =
-        '<nav class="detail-nav"><button class="back" id="back-flow">← Back to flow</button><div class="detail-tools"><button class="quiet" id="add-explanation">Add explanation</button>' +
+        '<nav class="detail-nav"><button class="back" id="back-flow">← ' + esc(backLabel()) + '</button><div class="detail-tools"><button class="quiet" id="add-explanation">Add explanation</button>' +
         (story?.archive
           ? ""
           : '<button class="quiet" id="edit-detail">Edit state</button>') +
