@@ -20,4 +20,6 @@ Optional `historicalAt` is an ISO timestamp with timezone and represents a decla
 
 To correct an explanation, append a full replacement with `supersedes` set to its latest ID, keeping the kind and state scope. Earlier versions remain available. Preserve user corrections and observed execution facts.
 
-Publish retries and changed plans separately. Add kind replacement, earlier `states`, `replacementStateId`, and a summary explaining why. This does not alter status or cancel work; use the dedicated workflow cancellation command when needed. Archived work remains readable through story. Next steps have their own four-section details; do not create a permanent Future section or infer replacement relationships from layout.
+Canvas details show the question and decisions under **Background & purpose**, and findings, interpretations, and limitations under **Results & outputs**. Each statement links to its attribution and evidence. **History & evidence** includes participants, timeline, and original plans. Add a concise question or finding where it helps the reader understand the state, citing the relevant source. The runner captures the actual command, artifacts, and timestamps.
+
+Publish retries and changed plans separately. Add kind replacement, earlier `states`, `replacementStateId`, and a summary explaining why. This does not alter status or cancel work; use the dedicated workflow cancellation command when needed. Archived work remains readable through story. Next steps have their own details; do not infer replacement relationships from layout.
