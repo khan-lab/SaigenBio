@@ -6,7 +6,8 @@ const context = vm.createContext({});
 for (const name of ["geometry", "analysis-groups", "group-preview"]) {
   vm.runInContext(fs.readFileSync("ui/"+name+".js", "utf8"), context);
 }
-const {project, position} = context.SaigenGroupPreview;
+const {position} = context.SaigenGroupPreview;
+const {internalGraph} = context.SaigenAnalysisGroups;
 const saved = [
   {id:"shared", x:0, y:4}, {id:"qc", x:300, y:10},
   {id:"model", x:600, y:60}, {id:"report", x:940, y:180},
@@ -26,12 +27,12 @@ const flow = {
     {id:"other", from:["report"], to:"other"},
   ],
 };
-const top = project(flow,"top");
+const top = internalGraph(flow,"top");
 assert.deepEqual(top.nodes, saved.slice(1,4));
 assert.deepEqual(Array.from(top.actions, a=>[a.id,a.from.join(",")]), [["model","qc"],["report","model,qc"]]);
 assert.deepEqual(flow.actions[1].from, ["qc","shared"]);
-assert.equal(project(flow,"leaf").actions.length, 0);
-assert.equal(project(flow,"unknown").nodes.length, 0);
+assert.equal(internalGraph(flow,"leaf").actions.length, 0);
+assert.equal(internalGraph(flow,"unknown").nodes.length, 0);
 
 assert.equal(position({left:50,right:190,top:200,bottom:270},560,360,1200,800).x,198);
 assert.equal(position({left:1000,right:1140,top:600,bottom:670},560,360,1200,800).x,432);
