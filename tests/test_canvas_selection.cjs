@@ -13,9 +13,10 @@ function element(selector){
  });
  return elements.get(selector);
 }
-const doc={querySelector:s=>s==='dialog[open]'?null:element(s),addEventListener:(type,fn)=>listeners.set('document:'+type,fn)};
+let dialogOpen=false;
+const doc={querySelector:s=>s==='dialog[open]'?(dialogOpen?element('#editor'):null):element(s),addEventListener:(type,fn)=>listeners.set('document:'+type,fn)};
 const fixture={project:'Selection test',revision:0,states:['a','b','c'].map((id,i)=>({id,title:id,x:i*320,y:100,status:'planned',origin:'manual',files:[],artifactIds:[],manifest:[]})),actions:[],artifacts:{}};
-let server=structuredClone(fixture),failure=null,submissions=[];
+let server=structuredClone(fixture),failure=null,submissions=[],undoRequests=[];
 const response=(value,ok=true,status=200)=>({ok,status,json:async()=>structuredClone(value)});
 const context=vm.createContext({document:doc,innerWidth:1280,innerHeight:800,CSS:{escape:v=>v},
  window:{addEventListener:(type,fn)=>listeners.set('window:'+type,fn)},location:{hash:''},
@@ -23,6 +24,7 @@ const context=vm.createContext({document:doc,innerWidth:1280,innerHeight:800,CSS
  fetch:async(path,init)=>{
    if(path==='/api/history')return response([]);
    if(path==='/api/flow')return response(server);
+   if(path==='/api/undo'){undoRequests.push(JSON.parse(init.body));return response(server);}
    assert.equal(path,'/api/edit');const payload=JSON.parse(init.body);submissions.push(payload);
    if(failure==='offline')throw new Error('Offline');
    if(failure==='stale'){server.states[0].x=999;server.revision++;return response({error:'Project changed'},false,409);}
@@ -34,6 +36,7 @@ const context=vm.createContext({document:doc,innerWidth:1280,innerHeight:800,CSS
 for(const name of ['geometry.js','paths.js','api.js','workflows.js','reports.js','explanation-editor.js','detail-controller.js'])vm.runInContext(fs.readFileSync('ui/'+name,'utf8'),context);
 const app=fs.readFileSync('ui/app.js','utf8'),evaluate=code=>vm.runInContext(code,context);
 evaluate(app.slice(0,app.indexOf('$("#editor-form").onsubmit')));
+evaluate(app.slice(app.indexOf('function canUndoCanvas()'),app.indexOf('const macUndo=')));
 evaluate('const originalRenderEdges=renderEdges;render=()=>syncSelection();renderEdges=()=>{};renderWorkflowLabels=()=>{};hidePopups=()=>{};showPreview=()=>{};');
 evaluate(app.slice(app.indexOf('$("#nodes").addEventListener("keydown"'),app.indexOf('$("#nodes").addEventListener("pointerout"')));
 evaluate(app.slice(app.indexOf('let suppressClick=false;'),app.indexOf('window.addEventListener("hashchange",route);')));
@@ -138,5 +141,25 @@ async function drag(id,dx,dy){
  assert.equal(evaluate('flow.actions[0].from.length'),2);
  assert.equal(element('#filter-saved').textContent,'Saved (2)');
  assert.equal(element('#canvas-filter').value,'saved');
+ // Canvas Undo uses the same request for both shortcuts and leaves native undo alone.
+ for(const modifier of ['metaKey','ctrlKey']){
+   evaluate('history=[14]');
+   const undo=event(cards.get('a'),{key:'z',altKey:false,[modifier]:true});
+   call('document','keydown',undo);
+   assert.equal(undo.prevented,true);
+   await new Promise(resolve=>setImmediate(resolve));
+ }
+ assert.deepEqual(undoRequests.map(request=>request.event),[14,14]);
+ evaluate('history=[15]');
+ for(const [target,extra] of [[{isContentEditable:true},{}],[{closest:()=>true},{}],[cards.get('a'),{shiftKey:true}]]){
+   const undo=event(target,{key:'z',metaKey:true,altKey:false,...extra});
+   call('document','keydown',undo);
+   assert.equal(undo.prevented,undefined);
+ }
+ dialogOpen=true;
+ const dialogUndo=event(cards.get('a'),{key:'z',ctrlKey:true,altKey:false});
+ call('document','keydown',dialogUndo);
+ assert.equal(dialogUndo.prevented,undefined);
+ assert.equal(undoRequests.length,2);
  console.log('Canvas selection checks passed: toggling, group save, cancellation, failure/stale recovery, keyboard, report isolation and pruning.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
