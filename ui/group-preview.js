@@ -4,17 +4,7 @@ globalThis.SaigenGroupPreview = (() => {
   const {W, H, edgePath, actionJunction} = SaigenGeometry;
   const OPEN_DELAY = 400, CLOSE_DELAY = 180, GAP = 8, MARGIN = 12, PADDING = 24;
 
-  function project(flow, groupId) {
-    const nodes = SaigenAnalysisGroups.memberStates(flow, groupId);
-    const byId = new Map(nodes.map(node => [node.id, node]));
-    const actions = flow.actions
-      .filter(action => byId.has(action.to))
-      .map(action => ({...action, from: action.from.filter(id => byId.has(id))}))
-      .filter(action => action.from.length);
-    return {nodes, actions, byId};
-  }
-
-  function graphMarkup({nodes, actions, byId}, bounds, esc) {
+  function graphMarkup({nodes, actions, byId}, bounds, esc, renderCard) {
     const path = (d, kind, arrow) => '<path class="edge-line '+kind+'" d="'+d+'"'+
       (arrow?' marker-end="url(#group-preview-arrow)"':'')+'/>';
     const edges = actions.map(action => {
@@ -24,10 +14,9 @@ globalThis.SaigenGroupPreview = (() => {
       return join.inputs.map(input => path(input.d, kind, false)).join("")+
         path(join.output, kind, true)+'<circle class="edge-junction" cx="'+join.junction.x+'" cy="'+join.junction.y+'" r="3.5"/>';
     }).join("");
-    const cards = nodes.map(node => '<li class="group-preview-node '+esc(node.status)+'" style="left:'+
+    const cards = nodes.map(node => '<li class="state-slot" data-preview-node="'+esc(node.id)+'" style="left:'+
       (node.x-bounds.x)+'px;top:'+(node.y-bounds.y)+'px;width:'+(node.width??W)+'px;height:'+(node.height??H)+'px">'+
-      '<strong title="'+esc(node.title)+'">'+esc(node.title)+'</strong>'+
-      (node.status?'<span>'+esc(node.status)+'</span>':'')+'</li>').join("");
+      renderCard(node)+'</li>').join("");
     const dependencies = actions.map(action => '<li>'+esc(action.from.map(id => byId.get(id).title).join(" + "))+
       ' → '+esc(byId.get(action.to).title)+'</li>').join("");
     return '<svg class="group-preview-edges" aria-hidden="true" width="'+bounds.w+'" height="'+bounds.h+'" viewBox="'+
@@ -58,8 +47,9 @@ globalThis.SaigenGroupPreview = (() => {
     };
   }
 
-  function create({root, panel, getFlow, getGroup, enabled, openGroup, boundsFor, escape: esc, onShow}) {
-    if (typeof panel.showPopover !== "function") return Object.freeze({close() {}, show() {}});
+  function create({root, panel, getFlow, getGroup, enabled, openGroup, boundsFor, renderCard, escape: esc, onShow}) {
+    const focus = element => element.focus({preventScroll:true});
+    if (typeof panel.showPopover !== "function") return Object.freeze({close() {}, show() {}, focusWithoutPreview:focus});
     const cardSelector = "[data-analysis-group]";
     const graph = panel.querySelector(".group-preview-graph");
     const scene = panel.querySelector(".group-preview-scene");
@@ -70,6 +60,12 @@ globalThis.SaigenGroupPreview = (() => {
     function cancelPending() {
       if (pending) clearTimeout(pending.timer);
       pending = null;
+    }
+
+    function focusWithoutPreview(element) {
+      restoring = true;
+      focus(element);
+      restoring = false;
     }
 
     function close(restoreFocus = false) {
@@ -83,11 +79,7 @@ globalThis.SaigenGroupPreview = (() => {
       panel.hidePopover();
       panel.hidden = true;
       panel.remove();
-      if (restoreFocus && previous.isConnected) {
-        restoring = true;
-        previous.focus({preventScroll:true});
-        restoring = false;
-      }
+      if (restoreFocus && previous.isConnected) focusWithoutPreview(previous);
       return true;
     }
 
@@ -96,7 +88,7 @@ globalThis.SaigenGroupPreview = (() => {
       if (card === anchor && mode === source) return;
       const group = getGroup(card.dataset.analysisGroup);
       if (!group) return;
-      const view = project(getFlow(), group.groupId);
+      const view = SaigenAnalysisGroups.internalGraph(getFlow(), group.groupId);
       if (!view.nodes.length) return;
       close();
       onShow();
@@ -107,7 +99,7 @@ globalThis.SaigenGroupPreview = (() => {
       panel.querySelector(".group-preview-count").textContent = view.nodes.length+(view.nodes.length === 1 ? " result" : " results");
       const box = boundsFor(view.nodes);
       const bounds = {x:box.x-PADDING, y:box.y-PADDING, w:box.w+2*PADDING, h:box.h+2*PADDING};
-      stage.innerHTML = graphMarkup(view, bounds, esc);
+      stage.innerHTML = graphMarkup(view, bounds, esc, renderCard);
       card.after(panel);
       card.setAttribute("aria-describedby", "group-preview-instructions");
       trigger.closest(".analysis-group-slot")?.querySelector("[data-preview-group]").setAttribute("aria-expanded", "true");
@@ -118,8 +110,8 @@ globalThis.SaigenGroupPreview = (() => {
 
       const width = panel.clientWidth;
       const header = panel.querySelector(".group-preview-header").offsetHeight;
-      // Keep titles at least 13 px. Scroll the full graph when it cannot fit.
-      const scale = Math.max(.85, Math.min(1, (width-2)/bounds.w, graph.clientHeight/bounds.h));
+      // Keep card previews near their original size. Scroll when the graph cannot fit.
+      const scale = Math.max(.9, Math.min(1, (width-2)/bounds.w, graph.clientHeight/bounds.h));
       Object.assign(stage.style, {width:bounds.w+"px", height:bounds.h+"px", transform:"scale("+scale+")"});
       Object.assign(scene.style, {width:Math.ceil(bounds.w*scale)+"px", height:Math.ceil(bounds.h*scale)+"px"});
       graph.style.height = Math.ceil(bounds.h*scale)+"px";
@@ -183,8 +175,8 @@ globalThis.SaigenGroupPreview = (() => {
       close();
       openGroup(id);
     };
-    return Object.freeze({close, show});
+    return Object.freeze({close, show, focusWithoutPreview});
   }
 
-  return Object.freeze({create, project, position});
+  return Object.freeze({create, position});
 })();

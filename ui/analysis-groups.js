@@ -116,6 +116,16 @@ globalThis.SaigenAnalysisGroups = (() => {
     return flow.states.filter(node => members.has(node.id));
   }
 
+  function internalGraph(flow, groupId) {
+    const nodes = memberStates(flow, groupId);
+    const byId = new Map(nodes.map(node => [node.id, node]));
+    const actions = flow.actions
+      .filter(action => byId.has(action.to))
+      .map(action => ({...action, from: action.from.filter(id => byId.has(id))}))
+      .filter(action => action.from.length);
+    return {nodes, actions, byId};
+  }
+
   function translate(view, moves) {
     const byId = new Map(moves.map(move => [move.id, move]));
     const operations = [];
@@ -340,5 +350,5 @@ globalThis.SaigenAnalysisGroups = (() => {
       }).join("")+'</ul>';
   }
 
-  return {project, arrange, readableScale, cardAtScale, overviewBounds, card, edge, dependencyList, path, memberIds, memberStates, translate};
+  return {project, arrange, readableScale, cardAtScale, overviewBounds, card, edge, dependencyList, path, memberIds, internalGraph, translate};
 })();

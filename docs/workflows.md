@@ -92,7 +92,7 @@ Tests and installations belong outside the source repository. Select the particu
 
 ## Export selected Canvas results as a pipeline
 
-Select your final result nodes on the Canvas. Shift-click or use Shift+Space to add nodes to your selection. Open a group or use **Individual nodes** to find a result inside it. Click **Copy node IDs**, then paste the IDs with `$saigen-pipeline` in Codex or `/saigen-pipeline` in Claude Code or OpenCode. Say whether you want Nextflow or Snakemake. If the shortcut is missing or still asks you to use the older chooser, [refresh your agent instructions](agent-integrations.md#refresh-existing-workspace-instructions).
+Select your final result nodes on the Canvas. Shift-click or use Shift+Space to add nodes to your selection. You can also choose **Select nodes** inside a group and click or tap each result. Click **Copy node IDs**, then paste the IDs with `$saigen-pipeline` in Codex or `/saigen-pipeline` in Claude Code or OpenCode. Say whether you want Nextflow or Snakemake. If the shortcut is missing or still asks you to use the older chooser, [refresh your agent instructions](agent-integrations.md#refresh-existing-workspace-instructions).
 
 If an agent already opened a selection request, you can select the results on the Canvas and click **Use selected results** in the request banner. Choose the request identified in chat if more than one is pending.
 

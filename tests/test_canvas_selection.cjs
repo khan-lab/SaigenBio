@@ -4,7 +4,7 @@ const classes=()=>{const values=new Set();return {add:v=>values.add(v),remove:v=
 function element(selector){
  if(!elements.has(selector))elements.set(selector,{
    hidden:false,open:false,disabled:false,textContent:'',innerHTML:'',style:{},dataset:{},classList:classes(),offsetWidth:230,attributes:{},
-   setAttribute(k,v){this.attributes[k]=v;},getBoundingClientRect(){return {left:0,top:76,width:1000,height:650,right:1000,bottom:726};},
+   setAttribute(k,v){this.attributes[k]=v;},removeAttribute(k){delete this.attributes[k];},getBoundingClientRect(){return {left:0,top:76,width:1000,height:650,right:1000,bottom:726};},
    addEventListener(type,fn){listeners.set(selector+':'+type,fn);},
    querySelector(s){const match=s.match(/data-state="([^"]+)"/);return match?cards.get(match[1]):element(selector+' '+s);},
    querySelectorAll(s){return s==='[data-state]'?[...cards.values()]:[];},
@@ -115,6 +115,16 @@ async function drag(id,dx,dy){
  assert.equal(evaluate('reports.position("b")'),0);assert.equal(evaluate('reports.position("a")'),1);
  assert.deepEqual(selected(),[]);
  evaluate('reports.setMode(false)');assert.equal(evaluate('reports.position("a")'),-1);
+ // Selection inside the dedicated group exposes the copy action and excludes outside states.
+ evaluate('groupScope={selecting:true};scopedGraph={byId:new Map([["a",getState("a")],["b",getState("b")]])};');
+ call('#nodes','click',event(cards.get('a')));
+ call('#nodes','keydown',event(cards.get('b'),{key:' ',shiftKey:true}));
+ assert.deepEqual(selected(),['a','b']);
+ assert.equal(element('#selection-tools').hidden,false);
+ assert.equal(element('#single-selection-actions').hidden,true);
+ evaluate('selection.add("c");syncSelection()');
+ assert.deepEqual(selected(),['a','b']);
+ evaluate('groupScope=null;scopedGraph=null;selection.clear();syncSelection()');
  // Updates prune disappeared nodes and hide the toolbar if nothing remains.
  await click('a');evaluate('flow.states=flow.states.filter(n=>n.id!=="a");syncSelection()');
  assert.deepEqual(selected(),[]);assert.equal(element('#selection-tools').hidden,true);
