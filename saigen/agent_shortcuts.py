@@ -37,8 +37,9 @@ def shortcut_files(agents, skill_folders):
             "saigen-pipeline": (
                 "Select Canvas results and review a Nextflow or Snakemake export in this session.",
                 f"Read the Export a pipeline from recorded results section of `{skill}`. "
-                "Open or resume a Canvas selection request for this workspace and session. "
-                "Ask the researcher to choose their target results on the Canvas, then review the pipeline in chat.",
+                "Use any supplied state IDs as targets. If the targets are missing, ask the researcher to select "
+                "results on the Canvas and use Copy node IDs, then paste the IDs here. "
+                "Confirm the resolved targets and review the pipeline in chat.",
             ),
             "saigen-organize": (
                 "Discuss and save analysis groups for the SaigenBio Canvas.",

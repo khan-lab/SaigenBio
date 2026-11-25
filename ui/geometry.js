@@ -148,7 +148,7 @@ function alignment(position, states, scale, previous = {}, bypass = false) {
  return result;
 }
 // Layer each connected group, then order its rows using neighboring layers.
-function autoArrange(states, actions, {boxWidth=W, boxHeight=H}={}) {
+function autoArrange(states, actions, {boxWidth=W, boxHeight=H, columnSpacing=120, rowSpacing=72}={}) {
  const ids = states.map(state => state.id).sort();
  const parents = new Map(ids.map(id => [id, new Set()]));
  const children = new Map(ids.map(id => [id, new Set()]));
@@ -173,7 +173,7 @@ function autoArrange(states, actions, {boxWidth=W, boxHeight=H}={}) {
  if (queue.length !== ids.length) throw new Error("Auto-arrange requires a graph without cycles.");
 
  const positions = new Map(), visited = new Set(), isolated = [];
- const columnGap = boxWidth + 120, rowGap = boxHeight + 72, margin = 64;
+ const columnGap = boxWidth + columnSpacing, rowGap = boxHeight + rowSpacing, margin = 64;
  let top = margin;
  for (const start of ids) {
    if (visited.has(start)) continue;

@@ -297,7 +297,7 @@ globalThis.SaigenDetailController = Object.freeze({
         .querySelectorAll("[data-artifact]")
         .forEach((b) => (b.onclick = () => openArtifact(b.dataset.artifact)));
     }
-    $("#open-archive").onclick = async () => {
+    async function openArchive() {
       try {
         const archived = await request("/api/archive");
         $("#archive-body").innerHTML = archived.length
@@ -327,12 +327,13 @@ globalThis.SaigenDetailController = Object.freeze({
       } catch (error) {
         toast(error.message);
       }
-    };
+    }
     $("#close-archive").onclick = () => $("#archive-dialog").close();
 
     return Object.freeze({
       load: loadStory,
       render: renderDetail,
+      openArchive,
       state: (id) => storyCache.get(id)?.state,
     });
   },
