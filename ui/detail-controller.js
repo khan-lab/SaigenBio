@@ -82,7 +82,7 @@ globalThis.SaigenDetailController = Object.freeze({
       const incoming =
           story?.actions || flow.actions.filter((a) => a.to === n.id),
         plot = firstPlot(n),
-        pending = ["running", "planned"].includes(n.status);
+        pending = n.status === "running";
       let visual = "";
       if (plot)
         visual =
@@ -99,9 +99,7 @@ globalThis.SaigenDetailController = Object.freeze({
           '<div class="run-display"><div class="preview-label">' +
           esc(n.status) +
           "</div><p>" +
-          (n.status === "running"
-            ? "The recorder is waiting for the command to finish."
-            : "This is a plan. No command has been executed.") +
+          "The recorder is waiting for the command to finish." +
           "</p></div>";
       else if (["failed", "cancelled", "unknown"].includes(n.status))
         visual =
@@ -132,6 +130,17 @@ globalThis.SaigenDetailController = Object.freeze({
             esc(group.title) + '</button>').join('<span aria-hidden="true">›</span>') +
           '</nav>'
         : '';
+      const details = SaigenDetails.create({
+        getFlow: () =>
+          story?.archive ? { ...flow, actions: story.actions } : flow,
+        escape: esc,
+        fileRows,
+        displayCommand,
+        displayRecord,
+        displayText,
+        shortDate,
+        workflows,
+      }).render(n);
       $("#detail-content").innerHTML =
         '<nav class="detail-nav"><button class="back" id="back-flow">← Back to flow</button><div class="detail-tools"><button class="quiet" id="add-explanation">Add explanation</button>' +
         (story?.archive
@@ -144,12 +153,17 @@ globalThis.SaigenDetailController = Object.freeze({
         '</h1>' +
         (getState(n.id) ? (bookmarkButton?.(n) ?? "") : "") +
         "</div>" +
-        SaigenStory.create({ escape: esc, shortDate, fileRows }).render(
+        SaigenStory.create({ escape: esc, shortDate }).render(
           story,
           visual,
-          flow.artifacts,
-          {navigation: true},
+          {
+            details,
+            originalPlan: story?.originalPlan ? planMarkup(story.originalPlan) : "",
+            executionPlan: story && n.plan ? planMarkup(n.plan) : "",
+            terminal: terminalMarkup(n.terminal),
+          },
         ) +
+        details.reconstruction +
         (story
           ? SaigenVerification.create({
               escape: esc,
@@ -161,35 +175,9 @@ globalThis.SaigenDetailController = Object.freeze({
         (story?.entries.length
           ? '<button class="quiet" id="correct-explanation">Correct a recorded explanation</button>'
           : "") +
-        SaigenDetails.create({
-          getFlow: () =>
-            story?.archive ? { ...flow, actions: story.actions } : flow,
-          escape: esc,
-          fileRows,
-          displayCommand,
-          displayRecord,
-          displayText,
-          shortDate,
-          workflows,
-        }).render(n) +
-        (n.plan
-          ? '<details class="detail-section detail-card"><summary>Plan at execution start</summary>' +
-            planMarkup(n) +
-            "</details>"
-          : "") +
         '<p class="origin-note">' +
         esc(origin) +
-        "</p>" +
-        terminalMarkup(n.terminal);
-      $("#detail-content")
-        .querySelectorAll("[data-story-jump]")
-        .forEach(
-          (button) =>
-            (button.onclick = () =>
-              $(
-                '[aria-label="' + button.dataset.storyJump + '"]',
-              ).scrollIntoView({ block: "start", behavior: "smooth" })),
-        );
+        "</p>";
       $("#detail-content").querySelectorAll("[data-focus-group]").forEach(button => {
         button.onclick = () => showGroupMembers(button.dataset.focusGroup);
       });

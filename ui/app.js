@@ -476,18 +476,16 @@ function terminalMarkup(activity){
  (c.pipelineExitCodes?.length>1?' · Pipeline exits '+c.pipelineExitCodes.map(esc).join(", "):"")+
  '</div><div class="action-meta">'+esc(shortDate(c.startedAt))+' → '+esc(shortDate(c.finishedAt))+'</div><div class="action-meta mono">'+esc(displayPath(c.cwd,c))+'</div></article>').join("")+'</details>';
 }
-function planMarkup(n){
- const p=n.status==="planned"?n:n.plan;
- if(!p)return "";
+function planMarkup(p){
  const expected=p.expectedSummary||p.note||"";
- const parents=(p.planParents||[]).map(id=>getState(id)).filter(Boolean);
- return '<section class="detail-section plan-details"><div class="section-label">'+(n.status==="planned"?"Plan":"Original plan")+'</div>'+
+ const parents=p.planParents||p.parents||[];
+ return (p.title?'<h3>'+esc(p.title)+'</h3>':"")+
    (expected?'<h3>Expected result</h3><p>'+esc(expected)+'</p>':"")+
-   (p.planDetails?'<h3>Proposed method</h3><p>'+esc(p.planDetails)+'</p>':"")+
+   (p.planDetails||p.method?.summary?'<h3>Proposed method</h3><p>'+esc(p.planDetails||p.method.summary)+'</p>':"")+
    (p.planRequires?'<h3>Prerequisite</h3><p>'+esc(p.planRequires)+'</p><small>Recorded condition; SaigenBio does not enforce it.</small>':"")+
    (p.note&&p.note!==expected?'<h3>Notes</h3><p>'+esc(p.note)+'</p>':"")+
-   (parents.length?'<h3>Planned inputs</h3><p>'+parents.map(s=>'<button class="source-link" data-open="'+esc(s.id)+'">'+esc(s.title)+'</button>').join(" + ")+'</p>':"")+
-   (p.expectedFiles?.length?'<h3>Expected files</h3><ul class="files">'+p.expectedFiles.map(f=>'<li>'+esc(f)+'</li>').join("")+'</ul>':"")+'</section>';
+   (parents.length?'<h3>Planned inputs</h3><p>'+parents.map(id=>'<button class="source-link" data-open="'+esc(id)+'">'+esc(getState(id)?.title||id)+'</button>').join(" + ")+'</p>':"")+
+   (p.expectedFiles?.length?'<h3>Expected files</h3><ul class="files">'+p.expectedFiles.map(f=>'<li>'+esc(f)+'</li>').join("")+'</ul>':"");
 }
 async function openArtifact(id){
  const a=flow.artifacts[id];if(!a)return;

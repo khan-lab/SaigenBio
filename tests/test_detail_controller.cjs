@@ -51,7 +51,9 @@ function dom() {
   flow = {...flow, revision: 2};
 
   for (const name of ['SaigenStory', 'SaigenVerification', 'SaigenDetails']) {
-    context[name] = {create: () => ({render: () => ''})};
+    context[name] = {create: () => ({
+      render: () => name === 'SaigenDetails' ? {reconstruction: ''} : ''
+    })};
   }
   const reviewDom = dom();
   const review = {dataset: {reconstruction:'p', decision:'accept', stateId:'a'}};

@@ -51,7 +51,7 @@ After upgrading the installation used by the workspace:
 4. Retain the workspace's project, input, and viewer settings. If its CLI location changed, update the cli and python paths in saigen-workspace.json to the new installation. Review generated project instructions if needed rather than replacing existing instructions wholesale.
 5. Rerun setup in the original workspace with its saved project and inputs to add new generated files, including the reconstruction or organization shortcuts. If setup flags a file you customized, merge it deliberately. Open a fresh agent session so it loads the updated skill. Check a planning-only request before approving execution.
 
-For concise planned nodes, the shared skill now separates short result titles, one-sentence expected results, proposed methods, and prerequisites. All supported agents receive this same guidance.
+The shared skill asks all supported agents to record the question, purpose, inputs, proposed method, and expected outputs for meaningful plans. After inspecting results, agents should record supported findings and limitations and explain the important parts of the method or script in plain language.
 
 ## Permissions and planning
 

@@ -15,6 +15,8 @@ For files already present, use snapshot and describe unknown upstream provenance
 
 ## Publish progress and plans
 
+Give each meaningful proposed result enough context to understand on the Canvas. Record its question or purpose, the intended input states, the proposed procedure and key settings, and the expected result and files. Use the fields below. When a question or decision rationale matters beyond the procedure, append a concise `question` or `decision` with `saigen explain`. Record this context proactively as part of planning or execution without waiting for a request to document it.
+
 When recording a wrapped run or acquisition, supply `--explanation` with a short plain-English description of the actual method, important operations, and relevant parameter values. Keep `--reason` for why the analysis is being done. When selected source lines help explain the method, use repeatable `--script-excerpt PATH:START:END` before `-- COMMAND` (1–40 lines per excerpt). Select meaningful lines, not an arbitrary prefix; the recorder preserves the script and attributes your explanation and selection. Full scripts remain available. Do not invent explanations for historical records or treat workflow-wide input bindings as observed per-stage file consumption. Workflow stages already support a declared `method.summary`; keep it specific to each stage.
 
 For ordinary execution, provide `saigen run --expect "…"` with a brief description of the output. The wrapper publishes a running placeholder and animated incoming edge before launching the command; completion attaches actual results to that same state.
@@ -149,7 +151,9 @@ Execution is foreground and stage cards finalize at engine exit. Check `workflow
 
 ## Explain results and decisions
 
-Use `saigen story STATE_ID` to inspect What, Why, Who and When evidence. When the user supplies findings, interpretations, limitations or a decision rationale, record it as an optional attributed explanation rather than rewriting execution facts. Follow the [result and decision reference](references/story.md) for `saigen explain`, evidence citations, participant roles, corrections and replacement links. Do not invent missing scientific conclusions or agreement history; these records do not grant execution permission.
+After inspecting the preserved outputs, use `saigen story STATE_ID` to check what is already recorded. For a meaningful result, proactively save the main supported finding with `saigen explain`, citing a specific table, figure, or event where available. Record interpretation and material limitations separately when supported. Skip empty sections and avoid repeating the command, file list, or timestamps that SaigenBio already captures. If the result is uncertain or the attempt failed, describe what the evidence establishes and leave unsupported conclusions absent.
+
+Keep method explanations educational. Explain what the command or key lines do in terms of the inputs, transformation, and outputs. Include the settings that matter to the result and why they were chosen when that rationale is known. Cite the source when recording a historical claim or a user's decision. Use the [result and decision reference](references/story.md) for evidence citations, participant roles, corrections, and replacement links. These records do not grant execution permission.
 
 ## Organize analysis groups
 
