@@ -126,6 +126,7 @@ async function drag(id,dx,dy){
  assert.match(element('#edges').innerHTML,/data-action="join".*Join from a to c/);
  assert.doesNotMatch(element('#edges').innerHTML,/data-action="hidden"/);
  assert.equal(evaluate('flow.actions[0].from.length'),2);
- assert.equal(element('#saved-toggle').textContent,'Saved (2)');
+ assert.equal(element('#filter-saved').textContent,'Saved (2)');
+ assert.equal(element('#canvas-filter').value,'saved');
  console.log('Canvas selection checks passed: toggling, group save, cancellation, failure/stale recovery, keyboard, report isolation and pruning.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

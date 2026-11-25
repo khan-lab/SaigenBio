@@ -111,7 +111,7 @@ Open the viewer address shown by serve.
 
 Choose **Auto-arrange** to lay out the visible Canvas by its dependencies. In **Groups**, it moves each top-level group as a unit. In **Individual nodes**, it arranges each result separately. Each arrangement saves as one edit, and **Undo** restores the previous positions.
 
-Bookmark a state from its card or details. Click **Saved** to show only bookmarked states, including ones inside collapsed groups. The view shows direct connections between visible states. Click **Saved** again to return to the full Canvas. Bookmarks are shared across viewers of the same local project and persist after a reload.
+Bookmark a state from its card or details. Choose **Saved** from **Filter** to show only bookmarked states, including ones inside collapsed groups. The view shows direct connections between visible states. Choose **All** to return to the full Canvas, or **Archived** to browse archived work. Bookmarks are shared across viewers of the same local project and persist after a reload.
 
 Drag a card to arrange the canvas. Temporary alignment guides appear as it snaps into a row or column with nearby cards. Hold **Option** on Mac or **Alt** on other keyboards to position it freely. Press **Esc** to cancel the drag, or choose **Undo** after dropping the card.
 
@@ -245,7 +245,7 @@ Setup saves source locations without reading the analysis or executing historica
 
 The agent uses `saigen reconstruct propose --file proposal.json --revision REV` to publish evidence-linked draft cards. Inspect their details, source copies, classifications and unresolved gaps. Edit titles and notes in the normal editor.
 
-Accept useful states independently of uncertain relationships. A relationship can be accepted once its endpoints are accepted. Rejecting a draft state also archives its pending relationships; accepted work stays intact. Review decisions retain the reviewer, time and any supplied reason. Use **Archive** to inspect rejected work.
+Accept useful states independently of uncertain relationships. A relationship can be accepted once its endpoints are accepted. Rejecting a draft state also archives its pending relationships; accepted work stays intact. Review decisions retain the reviewer, time and any supplied reason. Choose **Archived** from **Filter** to inspect rejected work.
 
 The agent can record your decisions with `saigen reconstruct accept --id ID --state STATE --revision REV` or `--connection ACTION`. Omitting selectors reviews remaining draft items. Acceptance records a review decision, not proof that a historical command ran.
 

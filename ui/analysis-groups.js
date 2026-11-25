@@ -14,9 +14,15 @@ globalThis.SaigenAnalysisGroups = (() => {
     return current;
   }
 
+  function groupSize(group, scale) {
+    return {
+      width: Math.max(W, 112 / scale) + (group.figure ? Math.max(W * .7, 76 / scale) : 0),
+      height: Math.max(H, 65 / scale),
+    };
+  }
+
   function groupAt(group, scale) {
-    const width = Math.max(W, 112 / scale) + (group.figure ? Math.max(W * .7, 76 / scale) : 0);
-    const height = Math.max(H, 65 / scale);
+    const {width, height} = groupSize(group, scale);
     const box = group.bounds;
     return {...group, id: groupKey(group.id), groupId: group.id,
       x:(box.left+box.right-width)/2, y:(box.top+box.bottom-height)/2, width, height,
@@ -121,12 +127,55 @@ globalThis.SaigenAnalysisGroups = (() => {
     return operations;
   }
 
-  function groupSize(scale) {
-    return {width:Math.max(W, 112 / scale) + Math.max(W * .7, 76 / scale),
-      height:Math.max(H, 65 / scale)};
+  const stackOffset = scale => 6 * Math.max(1, .56 / scale);
+  function cardAtScale(card, scale) {
+    if (!card.groupId) return {...card, width:W, height:H, stack:0};
+    const {width, height} = groupSize(card, scale);
+    return {
+      ...card, width, height, stack:stackOffset(scale),
+      x:(card.bounds.left+card.bounds.right-width)/2,
+      y:(card.bounds.top+card.bounds.bottom-height)/2,
+    };
   }
 
-  function arrange(view, scale) {
+  function overviewBounds(cards) {
+    const left = Math.min(...cards.map(card => card.x));
+    const top = Math.min(...cards.map(card => card.y-(card.stack??0)));
+    return {x:left, y:top,
+      w:Math.max(...cards.map(card => card.x+card.width+(card.stack??0)))-left,
+      h:Math.max(...cards.map(card => card.y+card.height))-top};
+  }
+
+  function readableScale(view, desired) {
+    const cards = view.placed;
+    const natural = cards.map(card => cardAtScale(card, 1));
+    const clear = (a, b, scale) => Math.max(
+      b.x-a.x-a.width-a.stack, a.x-b.x-b.width-b.stack,
+      b.y-b.stack-a.y-a.height, a.y-a.stack-b.y-b.height,
+    )*scale >= 12;
+    // Zoom cannot separate groups whose saved centers already overlap at full size.
+    // Keep the clearance of the remaining pairs when fitting a dense overview.
+    const pairs = [];
+    for (let i=0; i<cards.length; i++) {
+      for (let j=i+1; j<cards.length; j++) {
+        if ((cards[i].groupId || cards[j].groupId) && clear(natural[i], natural[j], 1)) pairs.push([i,j]);
+      }
+    }
+    const fits = scale => {
+      const scaled = cards.map(card => cardAtScale(card, scale));
+      return pairs.every(([i,j]) => clear(scaled[i], scaled[j], scale));
+    };
+    if (desired>=1 || fits(desired)) return desired;
+    let low=desired, high=1;
+    for (let i=0; i<12; i++) {
+      const mid = (low+high)/2;
+      if (fits(mid)) high=mid;
+      else low=mid;
+    }
+    return high;
+  }
+
+  function arrange(view, scale, available) {
     const ids = view.placed.map(card => card.id).sort();
     const children = new Map(ids.map(id => [id, new Set()]));
     const parentCounts = new Map(ids.map(id => [id, 0]));
@@ -161,10 +210,40 @@ globalThis.SaigenAnalysisGroups = (() => {
         }
       }
     }
-    const {width, height} = groupSize(scale);
-    return {scale, cards:SaigenGeometry.autoArrange(view.placed, ordered, {
-      boxWidth:Math.ceil(width), boxHeight:Math.ceil(height)
-    })};
+    function layoutAt(targetScale) {
+      const sizes = view.placed.map(card => cardAtScale(card, targetScale));
+      const byId = new Map(sizes.map(card => [card.id, card]));
+      const positions = SaigenGeometry.autoArrange(view.placed, ordered, {
+        boxWidth:Math.ceil(Math.max(...sizes.map(card => card.width+card.stack))),
+        boxHeight:Math.ceil(Math.max(...sizes.map(card => card.height+card.stack))),
+        columnSpacing:Math.max(120, 42/targetScale),
+        rowSpacing:Math.max(72, 30/targetScale),
+      });
+      const placed = positions.map(position => ({...byId.get(position.id), ...position}));
+      return {
+        scale:targetScale,
+        bounds:overviewBounds(placed),
+        cards:positions.map(({id,x,y})=>{
+          const original=view.byId.get(id), resized=byId.get(id);
+          return {id,x:x+original.x-resized.x,y:y+original.y-resized.y};
+        }),
+      };
+    }
+    if (!available) return layoutAt(scale);
+    const fits = layout => layout.bounds.w*layout.scale<=available.width &&
+      layout.bounds.h*layout.scale<=available.height;
+    const full = layoutAt(1);
+    if (fits(full)) return full;
+    // At narrow widths the card minimum sizes can make a complete fit impossible.
+    // Leave room to pan while keeping a legible overview at this scale.
+    let low=.25, high=1, best=layoutAt(low);
+    if (!fits(best)) return best;
+    for (let i=0; i<10; i++) {
+      const middle = layoutAt((low+high)/2);
+      if (fits(middle)) { best=middle; low=middle.scale; }
+      else high=middle.scale;
+    }
+    return best;
   }
 
   function project(flow, options) {
@@ -261,5 +340,5 @@ globalThis.SaigenAnalysisGroups = (() => {
       }).join("")+'</ul>';
   }
 
-  return {project, arrange, card, edge, dependencyList, path, memberIds, memberStates, translate};
+  return {project, arrange, readableScale, cardAtScale, overviewBounds, card, edge, dependencyList, path, memberIds, memberStates, translate};
 })();

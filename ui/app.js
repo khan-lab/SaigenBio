@@ -195,24 +195,24 @@ async function toggleBookmark(button){
    bookmarks=new Set(saved);redraw();
    if(document.activeElement===document.body){
      const scope=$("#detail-view").hidden?$("#nodes"):$("#detail-content");
-     (scope.querySelector('[data-bookmark="'+CSS.escape(stateId)+'"]')||$("#saved-toggle")).focus({preventScroll:true});
+     (scope.querySelector('[data-bookmark="'+CSS.escape(stateId)+'"]')||$("#canvas-filter")).focus({preventScroll:true});
    }
  }catch(error){toast(error.message);}
  finally{busy=false;button.disabled=false;}
 }
 function renderSavedControls(){
  const count=flow.states.filter(n=>bookmarks.has(n.id)).length;
- const active=showingSaved(),button=$("#saved-toggle");
- button.disabled=!ready;
- button.setAttribute("aria-pressed",String(active));
- button.textContent="Saved ("+count+")";
+ const active=showingSaved(),filter=$("#canvas-filter");
+ filter.disabled=!ready;
+ filter.value=$("#archive-dialog").open?"archived":active?"saved":"all";
+ $("#filter-saved").textContent="Saved ("+count+")";
  $("#saved-empty").hidden=!active||count>0;
 }
-function toggleSaved(){
- if(!ready||busy)return;
+function setSavedView(saved){
+ if(!ready||busy||saved===savedOnly)return;
  cancelDrag();hidePopups();selection.clear();connecting=null;
  $("#viewport").classList.remove("connecting");
- savedOnly=!savedOnly;
+ savedOnly=saved;
  if(savedOnly)fullCanvasCamera={...camera};
  else if(fullCanvasCamera){camera=fullCanvasCamera;fullCanvasCamera=null;}
  render();
@@ -228,7 +228,7 @@ function selectNode(id,additive=false){
 function syncSelection(){
  selection=new Set([...selection].filter(id=>getState(id)&&!groupView?.endpoint.has(id)&&(!showingSaved()||bookmarks.has(id))));
  $("#viewport").classList.toggle("multi-select",selection.size>1);
- $("#use-pipeline-targets").textContent=selection.size?"Use selected results":"Choose results…";
+ $("#use-pipeline-targets").disabled=!selection.size||!$("#pipeline-session").value;
  $("#nodes").querySelectorAll("[data-state]").forEach(card=>{
    const selected=selection.has(card.dataset.state);
    card.classList.toggle("selected",selected);card.setAttribute("aria-pressed",String(selected));
@@ -337,12 +337,13 @@ function renderGraph(){
  projectGroups();
  renderNodes();renderEdges();
  if($("#groups-dialog").open)renderGroupDialog();
- if(bookmark&&$("#detail-view").hidden)($("#nodes").querySelector('[data-bookmark="'+CSS.escape(bookmark)+'"]')||$("#saved-toggle")).focus({preventScroll:true});
+ if(bookmark&&$("#detail-view").hidden)($("#nodes").querySelector('[data-bookmark="'+CSS.escape(bookmark)+'"]')||$("#canvas-filter")).focus({preventScroll:true});
  else focusProjectedState(stateId??groupView?.groups.find(group=>group.id===groupId)?.anchor.id);
 }
 function render(){
  $("#reconstruction-notice").hidden=!Object.values(flow.reconstructions||{}).some(p=>["draft","partial"].includes(p.status));
  $("#canvas-view-switch").hidden=!flow.analysisGroups?.length||reports.active;
+ $("#canvas-filter-control").hidden=reports.active;
  $("#view-groups").setAttribute("aria-pressed",String(groupsMode&&!showingSaved()&&!connecting));
  $("#view-individual").setAttribute("aria-pressed",String(!showingSaved()&&(!groupsMode||!!connecting)));
  reports.render();renderSavedControls();renderGraph();renderPipelineRequests();
@@ -384,6 +385,8 @@ function fit(initial=false, nodes=null){
      if(next>=scale*.995)break;
      scale=next;
    }
+   scale=SaigenAnalysisGroups.readableScale(groupView,scale);
+   box=SaigenAnalysisGroups.overviewBounds(groupView.placed.map(card=>SaigenAnalysisGroups.cardAtScale(card,scale)));
  }
  if(initial&&!flow.analysisGroups?.length)scale=Math.max(scale,v.clientWidth<800?.67:.62);
  centerCanvas(box,scale);
@@ -565,7 +568,7 @@ function planFields(n={}){
  return field("expectedSummary","Expected result · one short sentence",n.expectedSummary||"","textarea")+field("planDetails","Proposed method",n.planDetails||"","textarea")+field("planRequires","Prerequisite",n.planRequires||"","textarea")+'<p class="field-hint">Prerequisites describe when to proceed; SaigenBio does not enforce them.</p>';
 }
 function addState(parent=null){
- if(showingSaved())toggleSaved();
+ if(showingSaved())setSavedView(false);
  showEditor({type:"add",parent:parent?.id},parent?"Add a branch":"Add a state",field("title","State name","","input","Short result name")+planFields()+field("note","Notes","","textarea")+field("files","Expected output names · one per line","","textarea")+(parent?field("label","Action label","","input","Script or tool")+field("command","Proposed command","","textarea")+field("reason","Why take this branch?","","textarea"):""));
 }
 function openActionEditor(a){
@@ -638,7 +641,23 @@ $("#delete-item").onclick=async()=>{
 $("#close-editor").onclick=$("#cancel-editor").onclick=()=>$("#editor").close();
 $("#editor").addEventListener("click",e=>{if(e.target===$("#editor")){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();}});
 $("#undo").onclick=async()=>{if(!history.length||busy)return;try{await mutate(null,history.at(-1));}catch(error){toast(error.message);}};
-$("#saved-toggle").onclick=$("#show-all-nodes").onclick=toggleSaved;
+$("#canvas-filter").onchange=async event=>{
+ const filter=event.currentTarget;
+ if(filter.value==="archived"&&!busy&&ready){
+   hidePopups();
+   filter.disabled=true;
+   try{await detailController.openArchive();}
+   finally{renderSavedControls();}
+ }else{
+   setSavedView(filter.value==="saved");
+   renderSavedControls();
+ }
+};
+$("#archive-dialog").addEventListener("close",()=>{
+ renderSavedControls();
+ if($("#detail-view").hidden)$("#canvas-filter").focus({preventScroll:true});
+});
+$("#show-all-nodes").onclick=()=>setSavedView(false);
 $("#view-groups").onclick=()=>setCanvasView(true);
 $("#view-individual").onclick=()=>setCanvasView(false);
 $("#auto-arrange").onclick=async()=>{
@@ -646,7 +665,10 @@ $("#auto-arrange").onclick=async()=>{
  const button=$("#auto-arrange");
  button.disabled=true;
  try{
-   const layout=groupView?.summaries.length ? SaigenAnalysisGroups.arrange(groupView,camera.scale) : null;
+   const viewport=$("#viewport");
+   const layout=groupView?.summaries.length ? SaigenAnalysisGroups.arrange(groupView,camera.scale,{
+     width:Math.max(1,viewport.clientWidth-100),height:Math.max(1,viewport.clientHeight-170),
+   }) : null;
    const operations=layout
      ? SaigenAnalysisGroups.translate(groupView,layout.cards.map(({id,x,y})=>{
         const card=canvasState(id);return {id,dx:x-card.x,dy:y-card.y};
@@ -656,7 +678,8 @@ $("#auto-arrange").onclick=async()=>{
          .map(({id,x,y})=>({op:"edit_state",id,changes:{x,y}}));
    if(operations.length)await saveLayout(operations);
    else toast("The canvas is already arranged.");
-   fit();
+   if(layout){centerCanvas(layout.bounds,layout.scale);applyCamera(true);}
+   else fit();
  }catch(error){
    toast(error.message);
  }finally{
@@ -664,7 +687,22 @@ $("#auto-arrange").onclick=async()=>{
  }
 };
 $("#add-state").onclick=()=>addState();
-$("#selection-tools").onclick=e=>{if(e.target.closest("#create-pipeline")){openPipeline(selectedStates());return;}if(selection.size!==1)return;const mode=e.target.closest("[data-edit-action]")?.dataset.editAction,n=selectedStates()[0];if(!n)return;if(mode==="edit")openStateEditor(n);if(mode==="branch")addState(n);if(mode==="connect")startConnecting(n.id);};
+$("#selection-tools").onclick=e=>{if(e.target.closest("#copy-node-ids")){copyNodeIds();return;}if(selection.size!==1)return;const mode=e.target.closest("[data-edit-action]")?.dataset.editAction,n=selectedStates()[0];if(!n)return;if(mode==="edit")openStateEditor(n);if(mode==="branch")addState(n);if(mode==="connect")startConnecting(n.id);};
+async function copyNodeIds(){
+ const ids=selectedStates().map(node=>node.id);
+ if(!ids.length)return;
+ const text=ids.join("\n");
+ try{
+   await navigator.clipboard.writeText(text);
+   toast(ids.length===1?"Copied 1 node ID.":"Copied "+ids.length+" node IDs.");
+ }catch{
+   const field=$("#node-ids-text");
+   field.value=text;
+   $("#node-ids-dialog").showModal();
+   field.focus();field.select();
+ }
+}
+$("#close-node-ids").onclick=()=>$("#node-ids-dialog").close();
 $("#fit").onclick=()=>{hidePopups();fit();};
 $("#zoom-in").onclick=()=>zoom(1.2);$("#zoom-out").onclick=()=>zoom(1/1.2);
 function renderGroupDialog(){
@@ -710,59 +748,22 @@ function renderPipelineRequests(){
  control.innerHTML=placeholder+requests.map(item=>'<option value="'+esc(item.id)+'">'+
    esc(item.agent+" · "+shortDate(item.requestedAt)+" · "+item.id.slice(-6))+'</option>').join("");
  if(requests.some(item=>item.id===previous))control.value=previous;
+ $("#use-pipeline-targets").disabled=!selection.size||!control.value;
 }
-function pipelineChoice(node, checked=false){
- return '<label><input type="checkbox" name="pipeline-target" value="'+esc(node.id)+'"'+(checked?" checked":"")+'>'+esc(node.title)+'</label>';
-}
-function browsePipelineTargets(){
- const branches=new Map(), assigned=new Set(), nodes=new Map(flow.states.map(node=>[node.id,node]));
- for(const group of [...(groupView?.groups??[])].reverse()){
-   const children=branches.get(group.id)??[];
-   const choices=group.stateIds.filter(id=>nodes.has(id)).map(id=>{
-     assigned.add(id);return pipelineChoice(nodes.get(id));
-   }).join("");
-   const parent=group.parentId??null;
-   if(!branches.has(parent))branches.set(parent,[]);
-   branches.get(parent).unshift('<details><summary>'+esc(group.title)+'</summary>'+choices+children.join("")+'</details>');
- }
- return (branches.get(null)??[]).join("")+flow.states.filter(node=>!assigned.has(node.id)).map(node=>pipelineChoice(node)).join("");
-}
-function openPipeline(nodes){
- if(busy||reports.active)return;
- if(!pendingPipelineRequests().length){
-   toast("Start with $saigen-pipeline in Codex or /saigen-pipeline in your agent.");
-   return;
- }
- const control=$("#pipeline-session");
- if(!control.value){toast("Choose an agent request on the Canvas.");control.focus();return;}
- if(!flow.states.length){toast("There are no Canvas results to choose.");return;}
- hidePopups();
- const form=$("#pipeline-form");
- form.dataset.revision=flow.revision;
- form.dataset.request=control.value;
- $("#pipeline-targets").innerHTML=nodes.length?nodes.map(node=>pipelineChoice(node,true)).join(""):browsePipelineTargets();
- $("#pipeline-error").textContent="";
- $("#pipeline-dialog").showModal();
-}
-$("#use-pipeline-targets").onclick=()=>openPipeline(selectedStates());
-$("#close-pipeline").onclick=()=>$("#pipeline-dialog").close();
-$("#pipeline-form").onsubmit=async event=>{
- event.preventDefault();
- const button=$("#prepare-pipeline");
- if(button.disabled)return;
- const error=$("#pipeline-error");
- const targets=[...$("#pipeline-targets").querySelectorAll("input:checked")].map(input=>input.value);
- if(!targets.length){error.textContent="Choose at least one target result.";return;}
- const {request: requestId, revision}=event.currentTarget.dataset;
- button.disabled=true;error.textContent="";
+$("#pipeline-session").onchange=()=>{
+ $("#use-pipeline-targets").disabled=!selection.size||!$("#pipeline-session").value;
+};
+$("#use-pipeline-targets").onclick=async()=>{
+ const button=$("#use-pipeline-targets"), requestId=$("#pipeline-session").value;
+ const targets=selectedStates().map(node=>node.id);
+ if(busy||reports.active||button.disabled||!requestId||!targets.length)return;
+ busy=true;button.disabled=true;
  try{
-   await request("/api/pipelines/selections",{request:requestId,targets,revision:Number(revision)});
-   $("#pipeline-dialog").close();
-   await poll();
+   await request("/api/pipelines/selections",{request:requestId,targets,revision:flow.revision});
    toast("Results saved for your agent. Return to the same chat to review the pipeline.");
  }catch(failure){
-   error.textContent=failure.status===409?"The Canvas changed. Reopen this window to confirm the results.":failure.message;
- }finally{button.disabled=false;}
+   toast(failure.status===409?"The Canvas changed. Review your selection and try again.":failure.message);
+ }finally{busy=false;await poll();renderPipelineRequests();}
 };
 $("#close-groups").onclick=()=>$("#groups-dialog").close();
 $("#groups-body").onclick=e=>{

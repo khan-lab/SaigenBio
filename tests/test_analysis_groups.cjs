@@ -117,6 +117,36 @@ const savedFlow={...cycleFlow,overviewLayouts:{[overviewKey]:overviewLayout}};
 assert.deepEqual(project(savedFlow,cycleOptions).placed,cycleView.placed,"old separate layout does not displace the current group centers");
 assert.deepEqual(project(savedFlow,{...cycleOptions,full:true}).states,states);
 
+// Dense thumbnail cards retain a gap even when Auto-arrange and Fit use
+// different scales. Fit prioritizes clearance when the viewport is narrow.
+const dense = {
+  states:Array.from({length:8},(_,i)=>({id:"s"+i,x:i*200,y:0,status:"completed"})),
+  analysisGroups:Array.from({length:7},(_,i)=>({id:"g"+i,title:"Group "+i,stateIds:["s"+i]})),
+  actions:[{id:"edge",from:["s0"],to:"s1"}],
+};
+const denseOptions={full:false,figureFor:node=>Number(node.id.slice(1))%2===0?{id:"plot"}:null};
+const {cardAtScale,readableScale}=globalThis.SaigenAnalysisGroups;
+const initial=project(dense,{...denseOptions,scale:.9});
+for(const width of [980,320]){
+  const layout=arrange(initial,.9,{width,height:550});
+  const revisions=translate(initial,layout.cards.map(({id,x,y})=>{
+    const card=initial.byId.get(id);
+    return {id,dx:x-card.x,dy:y-card.y};
+  }));
+  const revised={...dense,states:dense.states.map(node=>({...node,...revisions.find(op=>op.id===node.id)?.changes}))};
+  const placed=project(revised,{...denseOptions,scale:layout.scale});
+  const checkGap=(scale,minGap)=>{
+    const rects=placed.placed.map(card=>cardAtScale(card,scale));
+    for(let i=0;i<rects.length;i++)for(let j=i+1;j<rects.length;j++){
+      const a=rects[i],b=rects[j];
+      const gap=Math.max(b.x-a.x-a.width-a.stack,a.x-b.x-b.width-b.stack,b.y-b.stack-a.y-a.height,a.y-a.stack-b.y-b.height);
+      assert.ok(gap*scale>=minGap,"group cards must not overlap");
+    }
+  };
+  checkGap(layout.scale,28);
+  checkGap(readableScale(placed,layout.scale*.5),11.9);
+}
+
 // Keep failure emphasis independent of the running count, including when
 // the two counts originate in different descendants of a collapsed group.
 for(const [running,failed] of [[0,0],[2,0],[0,1],[2,1]]){

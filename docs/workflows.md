@@ -92,9 +92,9 @@ Tests and installations belong outside the source repository. Select the particu
 
 ## Export selected Canvas results as a pipeline
 
-Start with `$saigen-pipeline` in Codex or `/saigen-pipeline` in Claude Code or OpenCode. You can also ask your agent with the SaigenBio skill loaded to create a pipeline from your Canvas selection. If the shortcut is missing in an existing workspace, [refresh its agent instructions](agent-integrations.md#refresh-existing-workspace-instructions).
+Select your final result nodes on the Canvas. Shift-click or use Shift+Space to add nodes to your selection. Open a group or use **Individual nodes** to find a result inside it. Click **Copy node IDs**, then paste the IDs with `$saigen-pipeline` in Codex or `/saigen-pipeline` in Claude Code or OpenCode. Say whether you want Nextflow or Snakemake. If the shortcut is missing or still asks you to use the older chooser, [refresh your agent instructions](agent-integrations.md#refresh-existing-workspace-instructions).
 
-When the agent opens a request, the Canvas displays **Select pipeline results**. Select individual results and click **Use selected results**. To browse results by group, click **Choose results…** before selecting any Canvas cards. Open the groups and subgroups in the target chooser to find the results you want. If more than one agent request is pending, choose the one identified in your chat. The confirmed targets are saved for that session. If the agent's wait finishes before you select them, return to the same chat and say **Done**.
+If an agent already opened a selection request, you can select the results on the Canvas and click **Use selected results** in the request banner. Choose the request identified in chat if more than one is pending.
 
 The agent traces recorded file inputs and proposes a workflow in Nextflow or Snakemake. You can choose an intermediate result as the starting point and use its artifact as an input. Review the concrete steps, parameters, inputs, outputs, and gaps in chat. The agent records your explicit agreement to the reviewed proposal before generating the bundle. The agreement records the declared agent session and researcher.
 
