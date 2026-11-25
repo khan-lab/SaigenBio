@@ -109,7 +109,7 @@ Open the viewer address shown by serve.
 - When a command uses several input states, their paths meet at a small junction with one outgoing arrow and one command label. Longer ancestor-input paths route above intermediate cards. The execution details retain every recorded input.
 - Failed attempts stay available in gray. A successful retry is a separate attempt.
 
-Choose **Auto-arrange** to lay out the visible Canvas by its dependencies. In **Groups**, it moves each top-level group as a unit. In **Individual nodes**, it arranges each result separately. Each arrangement saves as one edit, and **Undo** restores the previous positions.
+Choose **Auto-arrange** to lay out the visible Canvas by its dependencies. In **Groups**, it moves each top-level group as a unit. In **Individual nodes**, it arranges each result separately. Each arrangement saves as one edit. Press **⌘Z** on Mac or **Ctrl+Z** on Windows or Linux to undo a Canvas edit, or choose **Undo** from the **⋯** menu.
 
 Bookmark a state from its card or details. Choose **Saved** from **Filter** to show only bookmarked states, including ones inside collapsed groups. The view shows direct connections between visible states. Choose **All** to return to the full Canvas, or **Archived** to browse archived work. Bookmarks are shared across viewers of the same local project and persist after a reload.
 

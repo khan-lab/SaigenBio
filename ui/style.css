@@ -162,6 +162,15 @@ summary{cursor:pointer;padding:9px 0}.history-event{margin:8px 0;padding:0 12px;
 .detail-heading{display:flex;align-items:center;gap:10px}
 #canvas-filter-control{display:inline-flex;align-items:center;gap:6px;padding:4px 7px;color:var(--ink)}
 #canvas-filter{max-width:115px;background:white;border:0;border-radius:4px;padding:4px 2px}
+#canvas-menu{position:relative}
+#canvas-menu-toggle{list-style:none;cursor:pointer;display:grid;place-items:center;min-width:36px;line-height:1;font-size:16px}
+#canvas-menu-toggle::-webkit-details-marker{display:none}
+#canvas-menu-toggle:focus-visible{outline:2px solid var(--green);outline-offset:3px}
+.canvas-menu-panel{position:absolute;top:calc(100% + 6px);right:0;min-width:138px;padding:4px;background:#fff;border:1px solid var(--line);border-radius:7px;box-shadow:var(--shadow)}
+#canvas-menu:not([open]) .canvas-menu-panel{display:none}
+#undo{display:flex;justify-content:space-between;align-items:center;gap:14px;width:100%;padding:9px 8px;border-radius:4px;text-align:left}
+#undo:enabled:hover,#canvas-menu[open]>summary{background:var(--soft)}
+#undo-shortcut{white-space:nowrap;color:var(--muted);font-size:11px}
 #saved-empty{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;font-size:13px;color:var(--muted)}
 #saved-empty button{margin-top:12px}
 @media(hover:none){.state-slot>.bookmark{opacity:1}}
