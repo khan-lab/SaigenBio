@@ -16,6 +16,8 @@ def execute(service, proposal_id, revision):
     store = service.store
     proposal = service.show(proposal_id)
     repo.require_active(proposal)
+    if not proposal['approval'] or proposal['approval']['executionDigest'] != proposal['executionDigest']:
+        raise RecordError('A matching approval is required before execution')
     engine = adapter(proposal['spec']['engine']['name'])
     launch = engine.prepare(proposal)
     # Verify artifacts before any process runs; stage immutable copies in this attempt.
@@ -35,9 +37,8 @@ def execute(service, proposal_id, revision):
         params[binding['name']] = str(path)
     staged = engine.stage(proposal, folder, params, launch)
     argv = list(staged.argv)
-    config = folder / 'saigen.config'
     snapshots = [store.capture(p, role='code') for p in (folder / 'pipeline').rglob('*') if p.is_file()]
-    snapshots += [store.capture(folder / 'params.json', role='environment'), store.capture(config, role='environment')]
+    snapshots += [store.capture(folder / name, role='environment') for name in staged.environment_files]
     def reserve(flow):
         current = repo.proposal(flow, proposal_id)
         repo.require_active(current)
@@ -66,7 +67,7 @@ def execute(service, proposal_id, revision):
             'status': 'running', 'registeredAt': now(), 'events': {}, 'stages': {}, 'stageNodes': nodes,
             'engine': {**copy.deepcopy(current['spec']['engine']), 'source': 'version-verified-before-launch'},
             'stageMethods': {s['key']: {**copy.deepcopy(s.get('method', {})), 'source': 'proposal-declared'} for s in current['spec']['stages']},
-            'argv': argv, 'cwd': str(folder), 'runnerPid': os.getpid(), 'sourceArtifacts': [a['id'] for a in snapshots]}
+            'argv': argv, 'cwd': str(folder), 'launchCwd': staged.cwd, 'runnerPid': os.getpid(), 'sourceArtifacts': [a['id'] for a in snapshots]}
         repo.collection(flow)['runs'][run_id] = record
         flow['artifacts'].update({a['id']: a for a in snapshots})
         return {'run': copy.deepcopy(record)}, None
@@ -84,7 +85,8 @@ def execute(service, proposal_id, revision):
         signal.signal(signal.SIGTERM, interrupted)
     try:
         with (folder / 'stdout.log').open('wb') as out, (folder / 'stderr.log').open('wb') as err:
-            proc = subprocess.Popen(argv, cwd=folder, stdout=out, stderr=err, start_new_session=True)
+            env = {**os.environ, **staged.env} if staged.env else None
+            proc = subprocess.Popen(argv, cwd=staged.cwd, env=env, stdout=out, stderr=err, start_new_session=True)
             exit_code = proc.wait()
     except KeyboardInterrupt:
         cancelled = True
@@ -102,7 +104,7 @@ def execute(service, proposal_id, revision):
             signal.signal(signal.SIGTERM, old_handler)
     try:
         observations = list(engine.collect(str(folder), None).events)
-        return finish(store, run_id, observations, exit_code, cancelled, error)
+        return finish(store, run_id, engine, staged.evidence_locations, observations, exit_code, cancelled, error)
     except Exception as exc:
         def uncertain(flow):
             record = repo.run(flow, run_id)
@@ -112,40 +114,45 @@ def execute(service, proposal_id, revision):
         raise
 
 
-def finish(store, run_id, observations, exit_code, cancelled=False, error=None):
+def finish(store, run_id, engine, evidence_locations, observations, exit_code, cancelled=False, error=None):
     run = repo.run(store.flow(), run_id)
     proposal = repo.proposal(store.flow(), run['proposalId'])
     folder = Path(run['cwd'])
-    captured = [store.capture(folder / name, role='log') for name in ('stdout.log', 'stderr.log', 'trace.tsv', '.nextflow.log', '.nextflow/history') if (folder / name).is_file()]
-    history = folder / '.nextflow/history'
-    engine_identity = None
-    if history.is_file():
-        columns = history.read_text().strip().split('\n')[-1].split('\t')
-        if len(columns) >= 6:
-            engine_identity = columns[5]
+    captured = [store.capture(folder / name, role='log')
+                for name in ('stdout.log', 'stderr.log', *evidence_locations)
+                if (folder / name).is_file()]
+    engine_identity = engine.run_identity(folder)
+    base = (folder / engine.work_directory).resolve()
     results = {}
     for stage in proposal['spec']['stages']:
-        rows = [r for r in observations if r['process'] == stage['mapping']['process']]
+        rows = [r for r in observations if r[engine.mapping_key] == stage['mapping'][engine.mapping_key]]
         result = {'status': 'unknown', 'rows': rows, 'outputs': [], 'error': None, 'scripts': []}
-        for row in rows:
-            work = Path(row.get('workdir', '')).resolve()
-            script = work / '.command.sh'
-            if work.is_relative_to((folder / 'work').resolve()) and script.is_file() and script.resolve().is_relative_to(work):
-                result['scripts'].append(store.capture(script, role='code'))
+        if engine.task_script:
+            for row in rows:
+                work = Path(row.get('workdir', '')).resolve()
+                script = work / engine.task_script
+                if work.is_relative_to(base) and script.is_file() and script.resolve().is_relative_to(work):
+                    result['scripts'].append(store.capture(script, role='code'))
+        result['command'] = '\n'.join(store.artifact_path(a).read_text() for a in result['scripts'])
+        if not result['command']:
+            result['command'] = '\n'.join(dict.fromkeys(row['command'] for row in rows if row.get('command')))
         # This release deliberately requires exactly one observed task, no guessed aggregation.
         if len(rows) == 1:
             row = rows[0]
             status = row['status']
             result['status'] = {'FAILED': 'failed', 'ABORTED': 'cancelled'}.get(status, 'unknown')
             if status == 'COMPLETED' and row.get('exit') == '0':
-                work = Path(row.get('workdir', '')).resolve()
-                base = (folder / 'work').resolve()
-                if not work.is_relative_to(base) or not work.is_dir():
-                    result['error'] = 'Trace work directory is outside this attempt'
+                work = Path(row.get('workdir', '')).resolve() if engine.task_script else base
+                if not base.is_relative_to(folder.resolve()) or not work.is_relative_to(base) or not work.is_dir():
+                    result['error'] = 'Job work directory is outside this attempt'
                 else:
                     try:
                         for name in stage['expectedFiles']:
                             output = (work / name).resolve()
+                            if 'declaredOutputs' in row and os.path.abspath(work / name) not in {
+                                os.path.abspath(work / path) for path in row['declaredOutputs']
+                            }:
+                                raise RecordError(f'Expected output is not declared by the observed job: {name}')
                             if not output.is_relative_to(work) or not output.is_file():
                                 raise RecordError(f'Missing or external expected output: {name}')
                             result['outputs'].append(store.capture(output, name=name))
@@ -154,6 +161,8 @@ def finish(store, run_id, observations, exit_code, cancelled=False, error=None):
                         result['status'] = 'completed'
                     except (OSError, RecordError) as exc:
                         result.update(status='failed', error=str(exc), outputs=[])
+        if len(rows) != 1:
+            result['error'] = f'Expected one observed job for this stage, found {len(rows)}'
         if cancelled and result['status'] == 'unknown':
             result['status'] = 'cancelled'
         results[stage['key']] = result
@@ -169,17 +178,17 @@ def finish(store, run_id, observations, exit_code, cancelled=False, error=None):
             result = results[key]
             node = entity(flow, 'states', record['stageNodes'][key])
             node['plan'] = {k: copy.deepcopy(node[k]) for k in ('title','expectedSummary','expectedFiles','planParents','writtenBy','createdAt','origin') if k in node}
-            node.update(status=result['status'], origin='workflow-recorded', performedBy='Nextflow', finishedAt=now(),
-                workflowEvidence={'source': 'Nextflow trace; stage dependencies use the approved mapping', 'rows': result['rows'], 'error': result['error']},
+            node.update(status=result['status'], origin='workflow-recorded', performedBy=engine.display_name, finishedAt=now(),
+                workflowEvidence={'source': f'{engine.evidence_source}; stage dependencies use the approved mapping', 'rows': result['rows'], 'error': result['error']},
                 artifactIds=[a['id'] for a in result['outputs']], files=[a['name'] for a in result['outputs']])
             node['manifest'] = list(dict.fromkeys([b['artifactId'] for b in proposal['spec']['inputBindings']] + node['artifactIds']))
             flow['artifacts'].update({a['id']: a for a in result['outputs'] + result['scripts']})
             record['stages'][key] = {'stateId': node['id'], 'status': result['status'], 'error': result['error']}
             if result['rows']:
                 flow['actions'].append({'id': uid('wa'), 'from': node['planParents'], 'to': node['id'],
-                    'label': stage['mapping']['process'], 'command': '\n'.join(store.artifact_path(a).read_text() for a in result['scripts']) or 'Task script unavailable; inspect workflow trace', 'status': result['status'],
-                    'origin': 'recorded', 'writtenBy': 'Recorder', 'performedBy': 'Nextflow', 'reason': 'Approved workflow stage mapping',
-                    'methodSource': 'Nextflow trace; dependency edges are proposed stage mapping, not observed file-level lineage.',
+                    'label': stage['mapping'][engine.mapping_key], 'command': result['command'] or 'Command unavailable; inspect workflow evidence', 'status': result['status'],
+                    'origin': 'recorded', 'writtenBy': 'Recorder', 'performedBy': engine.display_name, 'reason': 'Approved workflow stage mapping',
+                    'methodSource': f'{engine.evidence_source}; dependency edges use the approved stage mapping.',
                     'workflowRun': run_id, 'code': {'scriptArtifacts': [a['id'] for a in result['scripts']]}, 'inputArtifacts': [b['artifactId'] for b in proposal['spec']['inputBindings']],
                     'startedAt': record['registeredAt'], 'finishedAt': now(), 'exitCode': int(result['rows'][0]['exit']) if result['rows'][0].get('exit', '').lstrip('-').isdigit() else None, 'logs': record['logs']})
         return {'run': copy.deepcopy(record)}, None

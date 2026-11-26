@@ -1,6 +1,6 @@
 # Workflow integration foundation
 
-SaigenBio is developing engine-independent workflow integration. The current foundation publishes workflow proposals, records declared approval, and stores normalized execution evidence through an internal service. A first local Nextflow adapter now supports static source inspection and synchronous execution of explicitly mapped single-task stages. Snakemake is not yet supported. Engines are installed separately. See [local Nextflow](nextflow.md) for the supported subset. Approval never launches a process.
+SaigenBio is developing engine-independent workflow integration. The current foundation publishes workflow proposals, records declared approval, and stores normalized execution evidence through an internal service. Local Nextflow and Snakemake adapters support static source inspection and synchronous execution of explicitly mapped stages with one observed job per stage. Engines are installed separately. See [local Nextflow](nextflow.md) and [local Snakemake](snakemake.md) for their supported configuration. Approval never launches a process.
 
 Start from existing data and analysis context at any stage; EDA is optional. The intended interaction is: the agent prepares a concrete proposal and displays it, obtains the user's agreement, records that approval, and initiates the workflow through the integration. The engine performs computation. Users need not run the commands themselves.
 
@@ -13,7 +13,7 @@ saigen workflow show PROPOSAL_ID
 saigen workflow approve PROPOSAL_ID --digest EXECUTION_DIGEST --revision PROJECT_REVISION
 ```
 
-Use the active project's `saigen flow` revision when saving. Supply `--project PATH` before `workflow` to choose another project. Spec file paths are relative to the invoking shell directory. Results are JSON. `workflow engines` reports the Nextflow integration and whether a usable local engine was detected. `executionSupported` describes the implemented feature; engine availability is reported separately.
+Use the active project's `saigen flow` revision when saving. Supply `--project PATH` before `workflow` to choose another project. Spec file paths are relative to the invoking shell directory. Results are JSON. `workflow engines` reports each adapter, the detected engine version, and whether it supports local execution. `executionSupported` describes the implemented feature; engine availability is reported separately.
 
 `approve` declares that the user agreed to that proposal. It does not authenticate a human identity or override the agent host's permissions. A planned workflow review checkpoint still requires agreement even in Flexible mode. The agent must obtain agreement before recording approval.
 
@@ -76,14 +76,14 @@ Workflow records live under an optional `workflows` field in the existing projec
 
 Internal adapter-facing operations register an observed engine run and reconcile uniquely identified evidence events. Evidence is distinct from observed SaigenBio command actions. Replayed event IDs retain one observation; conflicting payloads are rejected atomically. A replay can append an audit event but never duplicates graph states or artifacts. Run identities distinguish separate engine runs, and task attempts are retained in observations.
 
-Evidence statuses include running, completed, failed, cached, skipped, unknown, and cancelled. Generic evidence ingestion does not promote canvas cards to completed results. The local Nextflow execution path verifies task evidence and promised outputs before completing its mapped cards. An engine-reported completion without the promised artifact evidence cannot become a successful scientific result merely through reconciliation.
+Evidence statuses include running, completed, failed, cached, skipped, unknown, and cancelled. Generic evidence ingestion does not promote canvas cards to completed results. The local execution path verifies job evidence and promised outputs before completing its mapped cards. An engine-reported completion without the promised artifact evidence cannot become a successful scientific result merely through reconciliation.
 
 ## Development sequence
 
 1. Foundation: shared contract, atomic proposals, declared approval, and evidence persistence (this release).
 2. Nextflow: initial local single-task-stage support is implemented; broaden task aggregation and monitoring after the constrained integration is reviewed.
 3. Workflow review UI: configuration, limitations, task evidence and progress through explicit service interfaces.
-4. Snakemake: validate the same abstractions with a second engine.
+4. Snakemake: local execution for one observed job per mapped rule is implemented.
 5. Optional MCP and onboarding: expose the tested service without duplicating its logic.
 
 Engine setup and downloads are deliberate choices. Inspection may evaluate pipeline code or fetch dependencies; adapters must report these requirements. Local source, schemas and documentation take priority over repeated web searches. Inspection caches must include engine version, pipeline content and configuration.

@@ -7,7 +7,7 @@ from .adapters.registry import engines
 
 
 def register(command):
-    parser = command("workflow", help="Publish and review workflow proposals (local Nextflow execution)")
+    parser = command("workflow", help="Publish and review workflow proposals (local Nextflow and Snakemake execution)")
     commands = parser.add_subparsers(dest="workflow_command", required=True)
     commands.add_parser("engines")
     commands.add_parser("recover")
