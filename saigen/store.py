@@ -287,6 +287,9 @@ class Store:
 
     def _operation(self, f, op, actor, internal=False):
         kind=op.get("op")
+        if kind in {"archive_states", "restore_archived_states"}:
+            from .state_archive import edit_archive
+            return edit_archive(f, op, actor, internal)
         if kind == "edit_overview":
             return edit_overview(f, op, internal)
         ident=op.get("id")

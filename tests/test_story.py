@@ -10,6 +10,7 @@ import urllib.error
 import urllib.request
 
 from saigen.records import RecordError, Conflict
+from saigen.state_archive import set_archived
 from saigen.store import Store
 from saigen.story import append, read, archive_index
 from saigen.server import Server
@@ -117,6 +118,57 @@ class StoryTests(unittest.TestCase):
             self.store.snapshot('Unrelated', [], ident='plan')
         self.store.undo(flow['revision'], flow['revision'])
         self.assertIsNone(read(self.store, 'plan')['archive'])
+
+    def test_manual_archive_restores_recorded_states_and_relationships(self):
+        from saigen.analysis_groups import replace
+        from saigen.bookmarks import canvas_status, set_saved
+        from saigen.views import CanvasView
+
+        aid, done = self.store.begin('Completed result', ['input'], ['synthetic'], 'Runner', '', [], [], {}, {}, planned='plan')
+        self.store.finish(aid, 'completed', 0, [], [])
+        aid, failed = self.store.begin('Failed follow-up', [done], ['synthetic'], 'Runner', '', [], [], {}, {})
+        before = self.store.finish(aid, 'failed', 1, [], [])
+        replace(self.store, [{'id': 'results', 'title': 'Results', 'stateIds': [done, failed]}], before['revision'], 'Human')
+        view = CanvasView(self.store)
+        before = self.store.flow()
+        set_saved(self.store, done, True)
+        self.assertIn(done, view.flow()['archivableStateIds'])
+        operation = {'op': 'archive_states', 'stateIds': [done, failed]}
+        with self.assertRaises(RecordError):
+            self.store.edit([{**operation, 'stateIds': [done, 'input_missing']}], before['revision'])
+        self.assertNotIn('stateArchives', self.store.flow())
+        archived = self.store.edit([operation], before['revision'])
+        self.assertEqual(archived['revision'], before['revision'] + 1)
+        for sid, status in [(done, 'completed'), (failed, 'failed')]:
+            self.assertEqual(read(self.store, sid)['state']['status'], status)
+            self.assertTrue(read(self.store, sid)['archive']['manual'])
+            self.assertEqual(read(self.store, failed)['actions'][0]['from'], [done])
+            with self.assertRaises(Conflict):
+                set_archived(self.store, sid, False, archived['revision'] - 1, 'Human')
+        reopened = Store(self.root)
+        self.assertEqual({entry['status'] for entry in archive_index(reopened)}, {'completed', 'failed'})
+        reopened.undo(archived['revision'], archived['revision'])
+        self.assertNotIn('stateArchives', reopened.flow())
+        hidden = reopened.edit([operation], reopened.flow()['revision'])
+        set_archived(reopened, done, False, hidden['revision'], 'Human')
+        self.assertEqual([entry['id'] for entry in archive_index(reopened)], [failed])
+        set_archived(reopened, failed, False, reopened.flow()['revision'], 'Human')
+        after = reopened.flow()
+        for key in ('states', 'actions', 'artifacts', 'analysisGroups'):
+            self.assertEqual(after[key], before[key])
+        self.assertEqual(archive_index(reopened), [])
+        self.assertEqual(canvas_status(reopened)['bookmarks'], [done])
+        self.assertEqual([event['kind'] for event in read(reopened, done)['timeline'] if event['kind']=='flow.edited' and any(done in op.get('stateIds', []) for op in event['payload'].get('operations', []))],
+                         ['flow.edited', 'flow.edited', 'flow.edited'])
+
+    def test_manual_archive_keeps_active_plans_and_legacy_archives_separate(self):
+        revision = self.store.flow()['revision']
+        with self.assertRaises(RecordError):
+            set_archived(self.store, 'plan', True, revision, 'Human')
+        flow = self.store.edit([{'op': 'delete_state', 'id': 'plan'}], revision)
+        self.assertEqual(archive_index(self.store), [{'id': 'plan', 'title': 'Initial plan', 'label': 'Removed plan'}])
+        with self.assertRaises(RecordError):
+            set_archived(self.store, 'plan', False, flow['revision'], 'Human')
 
     def test_replacement_cycle_is_rejected(self):
         self.add({'kind':'replacement','states':['input'],'summary':'Use proposed work','replacementStateId':'plan'})

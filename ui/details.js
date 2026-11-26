@@ -6,7 +6,7 @@ globalThis.SaigenDetails=Object.freeze({create({getFlow,escape:esc,fileRows,disp
  const summary=value=>value?.trim()?'<p class="method-summary">'+esc(value)+'</p>':'';
  const unique=items=>[...new Map(items.filter(Boolean).map(a=>[a.id,a])).values()];
  const files=items=>items.length?'<ul class="files">'+fileRows(items)+'</ul>':'';
- function sources(ids){const flow=getFlow();return ids.map(id=>{const n=flow.states.find(s=>s.id===id);return '<button class="source-link" data-open="'+esc(id)+'">'+esc(n?.title||id)+'</button>';}).join(' ');}
+ function sources(ids){const flow=getFlow();return ids.map(id=>{const n=flow.states.find(s=>s.id===id);return '<button class="source-link" data-open="'+esc(id)+'">'+esc(n?.title||id)+(flow.stateArchives?.[id]?' · Archived':'')+'</button>';}).join(' ');}
  function render(n){
   const flow=getFlow(),actions=flow.actions.filter(a=>a.to===n.id),planned=n.status==='planned',c=workflows.context(n);
   const own=(n.artifactIds||[]).map(id=>flow.artifacts[id]).filter(Boolean);

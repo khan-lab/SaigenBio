@@ -129,11 +129,11 @@ class Handler(BaseHTTPRequestHandler):
             if path=="/api/explanations":
                 from .story import append
                 flow=append(self.store,body.get("entry"),body["revision"],"Human")
-                return self.reply(200,self.server.canvas.with_removal_options(flow))
+                return self.reply(200,self.server.canvas.decorate(flow))
             if path.startswith("/api/verifications/") and path.endswith("/approve") and len(path.split("/"))==5:
                 from .verification import approve
                 flow=approve(self.store,path.split("/")[3],body.get("digest"),body["revision"],"Human")
-                return self.reply(200,self.server.canvas.with_removal_options(flow))
+                return self.reply(200,self.server.canvas.decorate(flow))
             if path=="/api/reports":
                 options={"template":body["template"]} if "template" in body else {}
                 return self.reply(202,self.server.reports.start(body.get("selected"),body["revision"],**options))
@@ -151,7 +151,7 @@ class Handler(BaseHTTPRequestHandler):
                 flow=self.store.flow()
             elif path=="/api/undo": flow=self.store.undo(body.get("event"),body["revision"])
             else: return self.reply(404,{"error":"Not found"})
-            self.reply(200,self.server.canvas.with_removal_options(flow))
+            self.reply(200,self.server.canvas.decorate(flow))
         except Conflict as exc: self.reply(409,{"error":str(exc)})
         except (RecordError,ValueError,TypeError,KeyError) as exc: self.reply(400,{"error":str(exc)})
 

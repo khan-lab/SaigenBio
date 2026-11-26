@@ -14,7 +14,8 @@ def locate(flow, ident, events=()):
         raise RecordError('State ID must be text')
     for state in flow['states']:
         if state['id'] == ident:
-            return state, None
+            manual = flow.get('stateArchives', {}).get(ident)
+            return state, ({'label': 'Archived state', 'manual': True, **manual} if manual else None)
     for proposal in flow.get('workflows', {}).get('proposals', {}).values():
         retirement = proposal.get('retirement', {})
         for state in retirement.get('states', []):
@@ -35,22 +36,34 @@ def locate(flow, ident, events=()):
 
 
 def archive_index(store):
-    flow, events = store.flow(), store.events()
-    events = [e for e in events if e['revision'] <= flow['revision']]
-    ids = set()
-    for proposal in flow.get('workflows', {}).get('proposals', {}).values():
-        ids.update(n['id'] for n in proposal.get('retirement', {}).get('states', []))
+    flow = store.flow()
+    # Only edit inverses can supply removed standalone plans.
+    with store.connect() as db:
+        inverses = db.execute(
+            "SELECT inverse FROM events WHERE inverse IS NOT NULL AND revision <= ? ORDER BY revision",
+            (flow['revision'],),
+        ).fetchall()
+    records = {}
+    for row in inverses:
+        for op in json.loads(row['inverse']):
+            if op.get('op') == 'restore_state':
+                records[op['id']] = (op['value'], 'Removed plan')
     for proposal in flow.get('reconstructions', {}).values():
-        ids.update(n['id'] for n in proposal.get('archivedStates', []))
-    for event in events:
-        inverse = event.get('inverse') or []
-        ids.update(op['id'] for op in (json.loads(inverse) if isinstance(inverse, str) else inverse)
-                   if op.get('op') == 'restore_state')
-    result = []
-    for ident in sorted(ids - {n['id'] for n in flow['states']}):
-        state, archive = locate(flow, ident, events)
-        result.append({'id': ident, 'title': state['title'], 'label': archive['label']})
-    return result
+        for state in proposal.get('archivedStates', []):
+            records[state['id']] = (state, 'Rejected reconstruction')
+    for proposal in flow.get('workflows', {}).get('proposals', {}).values():
+        for state in proposal.get('retirement', {}).get('states', []):
+            records[state['id']] = (state, 'Cancelled proposal')
+    manual = flow.get('stateArchives', {})
+    for state in flow['states']:
+        records.pop(state['id'], None)
+        if state['id'] in manual:
+            records[state['id']] = (state, 'Archived state')
+    return [
+        {'id': ident, 'title': state['title'], 'label': label,
+         **({'restorable': True, 'status': state['status']} if ident in manual else {})}
+        for ident, (state, label) in sorted(records.items())
+    ]
 
 
 def append(store, document, revision, actor='AI agent'):
@@ -179,6 +192,8 @@ def read(store, ident):
     for event in events:
         payload = event['payload']
         relevant = (payload.get('state', {}).get('id') == ident or payload.get('action', {}).get('to') == ident
+                    or any(ident in op.get('stateIds', []) for op in payload.get('operations', [])
+                           if op.get('op') in {'archive_states', 'restore_archived_states'})
                     or any(op.get('id') in aids | {ident} for op in payload.get('operations', []))
                     or any(a in aids for a in payload.get('actions', []))
                     or ident in payload.get('explanation', {}).get('states', [])

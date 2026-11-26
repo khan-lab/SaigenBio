@@ -119,7 +119,7 @@ async function drag(id,dx,dy){
  assert.deepEqual(selected(),[]);
  evaluate('reports.setMode(false)');assert.equal(evaluate('reports.position("a")'),-1);
  // Selection inside the dedicated group exposes the copy action and excludes outside states.
- evaluate('groupScope={selecting:true};scopedGraph={byId:new Map([["a",getState("a")],["b",getState("b")]])};');
+ evaluate('groupScope={};selectingNodes=true;scopedGraph={byId:new Map([["a",getState("a")],["b",getState("b")]])};');
  call('#nodes','click',event(cards.get('a')));
  call('#nodes','keydown',event(cards.get('b'),{key:' ',shiftKey:true}));
  assert.deepEqual(selected(),['a','b']);
@@ -127,7 +127,7 @@ async function drag(id,dx,dy){
  assert.equal(element('#single-selection-actions').hidden,true);
  evaluate('selection.add("c");syncSelection()');
  assert.deepEqual(selected(),['a','b']);
- evaluate('groupScope=null;scopedGraph=null;selection.clear();syncSelection()');
+ evaluate('groupScope=null;scopedGraph=null;selectingNodes=false;selection.clear();syncSelection()');
  // Updates prune disappeared nodes and hide the toolbar if nothing remains.
  await click('a');evaluate('flow.states=flow.states.filter(n=>n.id!=="a");syncSelection()');
  assert.deepEqual(selected(),[]);assert.equal(element('#selection-tools').hidden,true);
@@ -141,6 +141,21 @@ async function drag(id,dx,dy){
  assert.equal(evaluate('flow.actions[0].from.length'),2);
  assert.equal(element('#filter-saved').textContent,'Saved (2)');
  assert.equal(element('#canvas-filter').value,'saved');
+ // Archived intermediates leave no shortcut edge and bookmarks remain stored.
+ evaluate('savedOnly=false;flow.stateArchives={b:{at:"now"}};flow.actions=[{id:"ab",from:["a"],to:"b"},{id:"bc",from:["b"],to:"c"}];renderNodes();renderEdges();');
+ assert.doesNotMatch(element('#nodes').innerHTML,/data-state="b"/);
+ assert.doesNotMatch(element('#edges').innerHTML,/data-action=/);
+ assert.equal(evaluate('flow.actions.length'),2);
+ // Selection mode toggles with plain clicks and does not start a drag.
+ evaluate('delete flow.stateArchives;selectingNodes=true;selection.clear();syncSelection()');
+ for(const id of ['a','b','a']){
+   const tap=event(cards.get(id));
+   call('#viewport','pointerdown',tap);
+   assert.equal(evaluate('drag'),null);
+   call('#nodes','click',tap);
+ }
+ assert.deepEqual(selected(),['b']);
+ evaluate('selectingNodes=false;selection.clear();syncSelection()');
  // Canvas Undo uses the same request for both shortcuts and leaves native undo alone.
  for(const modifier of ['metaKey','ctrlKey']){
    evaluate('history=[14]');

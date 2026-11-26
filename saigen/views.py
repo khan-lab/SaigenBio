@@ -4,6 +4,7 @@ from pathlib import Path
 from .records import RecordError
 from .lineage import legacy_actions
 from .store import table_preview
+from .state_archive import can_archive
 from .workflows.service import removal_options
 
 
@@ -27,13 +28,17 @@ class CanvasView:
                 except (RecordError, OSError):
                     continue
             artifact['tablePreview'] = self.preview_cache[key]
-        return self.with_removal_options(flow)
+        return self.decorate(flow)
 
-    @staticmethod
-    def with_removal_options(flow):
+    def decorate(self, flow):
         # Operates on the caller's detached response, never on stored records.
         flow['actions'] = legacy_actions(flow)
         flow['removalOptions'] = removal_options(flow)
+        archived = flow.get('stateArchives', {})
+        flow['archivableStateIds'] = [
+            state['id'] for state in flow['states']
+            if can_archive(state) and state['id'] not in archived
+        ]
         return flow
 
     def history(self):
