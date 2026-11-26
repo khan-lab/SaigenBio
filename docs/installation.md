@@ -1,6 +1,16 @@
 # Installation
 
-SaigenBio requires Python 3.10 or newer. Its recorder and viewer use the Python standard library. Choose the installation method that fits your existing Python setup; uv is optional.
+SaigenBio requires Python 3.10 or newer with the standard-library `sqlite3` module. The recorder uses this module to create and manage `.saigen/project.sqlite`.
+
+A separate SQLite installation is usually unnecessary. macOS includes a SQLite command-line tool, and SaigenBio uses the `sqlite3` module in the Python environment that runs it.
+
+Check with the same Python interpreter you plan to use for SaigenBio. Replace `python3` with that interpreter’s path or command if needed.
+
+```sh
+python3 -c 'import sqlite3; print(sqlite3.sqlite_version)'
+```
+
+If the import fails, select or install a Python build that includes [the `sqlite3` module](https://docs.python.org/3/library/sqlite3.html).
 
 ## Obtain the source
 
