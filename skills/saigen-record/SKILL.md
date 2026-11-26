@@ -181,4 +181,18 @@ For an existing Canvas handoff, read it with `saigen pipeline wait ID` after the
 
 Use `saigen pipeline propose --selection ID --engine nextflow --revision REV` once the request is ready, or use one or more `--target STATE` options for identified targets. Pass the same `--agent-session SESSION` when the host does not supply it. Repeat `--start-from STATE` to treat upstream results as supplied input files. Show concrete targets, required inputs, included steps, argv settings, evidence gaps, and engine. A revised boundary, engine, or script needs a new proposal. Use `--provide-script STATE=PATH` for a replacement with the same recorded input/output interface. Identify the newly supplied code during review. For an unresolved gap, discuss choosing an existing artifact as an input or exporting an incomplete draft. Preserve the recorded scientific defaults. Discuss changes such as making a single-sample workflow run over multiple samples.
 
-Wait for the researcher to explicitly agree to the exact proposal in this agent session. Use `saigen pipeline approve ID --digest DIGEST --researcher NAME --agent-session SESSION --revision REV` to record that decision. Use the host's current session ID when available, or a stable reference declared for this conversation. Add `--draft` only when the researcher agrees to the incomplete draft. After recording agreement, use `saigen pipeline generate ID --revision REV` and give the researcher the bundle location and status. Use `saigen pipeline show ID` to inspect the proposal, approval, and generated files. Obtain a separate decision before any test or execution, and record any approved attempt separately from the original analysis.
+Wait for the researcher to explicitly agree to the exact proposal in this agent session. Use the configured CLI and analysis project from `saigen-workspace.json`. Read the reviewed proposal with `saigen pipeline show "$proposal_id" --project "$project"`. Fill `proposal_id`, `digest`, and `revision` from its `id`, `digest`, and current `revision`. The `sourceRevision` identifies the recorded graph used to build the proposal. Use the researcher’s declared name and the same agent session reference used for review.
+
+```sh
+saigen pipeline approve "$proposal_id" --project "$project" \
+  --digest "$digest" --researcher "$researcher" \
+  --agent-session "$agent_session" --revision "$revision"
+```
+
+Add `--draft` only when the researcher approved an incomplete draft. Use the `revision` returned by the successful approval as `approved_revision`:
+
+```sh
+saigen pipeline generate "$proposal_id" --project "$project" --revision "$approved_revision"
+```
+
+If the CLI reports a revision conflict, read the proposal again. Continue only if the reviewed digest and approval state still match the intended operation. If an approval or bundle already exists, inspect it with `pipeline show` before retrying. Give the researcher the bundle location and status. Obtain a separate decision before any test or execution, and record any approved attempt separately from the original analysis.
