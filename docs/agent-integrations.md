@@ -25,7 +25,7 @@ Sources: [Claude Code](https://claude.com/blog/steering-claude-code-skills-hooks
 
 ## Git workspaces
 
-With an agent selected, `saigen init` and `saigen setup` add rules to the workspace’s `.gitignore` for the generated `saigen-record` directories and any generated reconstruction or organization shortcuts. The rules are relative to that workspace, including when it sits in a subdirectory of a repository.
+With an agent selected, `saigen init` and `saigen setup` add rules to the workspace’s `.gitignore` for the generated `saigen-record` directories and any generated SaigenBio shortcuts. The rules are relative to that workspace, including when it sits in a subdirectory of a repository.
 
 After cloning a workspace with ignored skills, run `saigen setup` with the workspace’s agent, analysis path, and saved input paths to recreate them. If a team wants to pin a generated copy, review it and use `git add -f` on that agent’s `saigen-record` directory to include `SKILL.md` and its references. Git continues tracking files already in the index.
 
@@ -49,7 +49,7 @@ After upgrading the installation used by the workspace:
 2. Generate the current instructions in a new temporary directory outside the software checkout: `saigen setup --workspace /absolute/path/to/new-temporary-directory --agent codex --analysis-project /absolute/path/to/existing-analysis`. Substitute your agent and paths; repeat --agent for multiple agents. If the existing project uses a saved permissionMode, also supply its matching --permissions ask or --permissions flexible option so generated instructions retain that authorization. This generates instructions only; it does not initialize or execute analysis.
 3. Compare the generated skill, its reference files, and project instructions with the workspace copies at the agent-specific paths in the table above. Back up existing files and merge updated guidance while retaining intentional local customizations. Replace unmodified skill and reference files with the generated versions. Review project instructions separately to preserve local rules and workflow permissions.
 4. Retain the workspace's project, input, and viewer settings. If its CLI location changed, update the cli and python paths in saigen-workspace.json to the new installation. Review generated project instructions if needed rather than replacing existing instructions wholesale.
-5. Rerun setup in the original workspace with its saved project and inputs to add new generated files, including the reconstruction or organization shortcuts. If setup flags a file you customized, merge it deliberately. Open a fresh agent session so it loads the updated skill. Check a planning-only request before approving execution.
+5. Rerun setup in the original workspace with its saved project and inputs to add new generated files, including newly added shortcuts. If setup flags a file you customized, merge it deliberately. Open a fresh agent session so it loads the updated skill. Check a planning-only request before approving execution.
 
 The shared skill asks all supported agents to record the question, purpose, inputs, proposed method, and expected outputs for meaningful plans. After inspecting results, agents should record supported findings and limitations and explain the important parts of the method or script in plain language.
 

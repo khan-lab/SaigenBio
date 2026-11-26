@@ -141,9 +141,19 @@ The recorder captures declared files and the launched command. It does not autom
 - A successful wrapped run becomes the next starting state. Use --from to branch elsewhere; this selects a record, not a filesystem checkout.
 
 
+## Find a published workflow
+
+Use this when the researcher wants to find a third-party workflow for their data. Read the active workspace and configured CLI from `saigen-workspace.json`. Resolve supplied Canvas state IDs with `saigen flow` and check their recorded artifacts. If the researcher refers to selected results without providing IDs and their intended inputs are unclear, ask them to use **Copy node IDs**. A description of the goal and data is also enough to start discovery. Ask about missing details only when they could change the recommendation, such as the input format or sample design.
+
+Start with the [nf-core pipeline catalog](https://nf-co.re/pipelines/), the [Snakemake Workflow Catalog](https://snakemake.github.io/snakemake-workflow-catalog/), or a source the researcher specifies. Search using general analysis and format terms. Verify candidates against their versioned documentation or release source. Check that the workflow accepts the available data at its current processing stage. Identify any missing inputs, metadata, software, or compute requirements that affect the choice.
+
+Recommend one workflow when the fit is clear. Give its release or commit and source link, the reason it fits, which existing artifacts it can use, what else it needs, and what it should produce. Offer alternatives when the tradeoff matters. Say when no suitable match was found. Report SaigenBio tracking support independently of scientific fit. Check the installed CLI with `saigen workflow engines` and the adapter's constraints before claiming support for the exact workflow and configuration.
+
+Keep discovery in chat using documentation and recorded workspace context. If the researcher asks to preview a chosen workflow, follow **Existing workflow pipelines** to publish a concrete proposal when the adapter supports it. If support is uncertain or unavailable, explain the gap in chat. The chosen version, inputs, parameters, stage mappings, and expected outputs need review before execution.
+
 ## Existing workflow pipelines
 
-Start from existing data and analysis context; EDA is optional. For pipeline requests, inspect `saigen workflow --help`, `workflow engines`, and local source with `workflow inspect --engine nextflow --source PATH` before searching the web. Static inspection does not resolve a task DAG. The first adapter supports local pipeline directories and one observed task per mapped stage; do not claim general nf-core, resume or many-sample stage support.
+Start from existing data and analysis context; EDA is optional. For a selected local pipeline, inspect `saigen workflow --help`, `workflow engines`, and the source with `workflow inspect --engine nextflow --source PATH` before searching the web. Static inspection does not resolve a task DAG. The first adapter supports local pipeline directories and one observed task per mapped stage; do not claim general nf-core, resume or many-sample stage support.
 
 Publish the concrete configuration and stage mappings with `workflow propose`, inspect `workflow show`, and obtain the user's agreement. Record that agreement with `workflow approve` using its digest and current project revision, then initiate `workflow execute` with the new revision. Approval never runs the pipeline by itself. Flexible mode still respects this explicit workflow review checkpoint. The user need not enter these commands; the agent performs them after agreement. Changing source, engine version, inputs or configuration requires inspection and a matching new proposal. Do not amend launch parameters outside the approved proposal.
 

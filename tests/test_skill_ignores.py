@@ -6,7 +6,9 @@ import unittest
 from pathlib import Path
 
 from saigen.workspace import setup
-from saigen.agent_shortcuts import ORGANIZATION_PATHS, PIPELINE_PATHS, RECONSTRUCTION_PATHS
+from saigen.agent_shortcuts import (
+    ORGANIZATION_PATHS, PIPELINE_PATHS, RECONSTRUCTION_PATHS, WORKFLOW_DISCOVERY_PATHS,
+)
 
 REPO = Path(__file__).resolve().parent.parent
 RULES = [
@@ -51,11 +53,18 @@ class SkillIgnoreTests(unittest.TestCase):
                 self.assertEqual(self.git("check-ignore", "-q", path).returncode, 0)
         for path in (*RECONSTRUCTION_PATHS.values(), *ORGANIZATION_PATHS.values(), *PIPELINE_PATHS.values()):
             self.assertEqual(self.git("check-ignore", "-q", f"analysis/{path}").returncode, 0)
+        for path in WORKFLOW_DISCOVERY_PATHS.values():
+            generated = workspace / path
+            self.assertIn("Find a published workflow", generated.read_text())
+            self.assertEqual(self.git("check-ignore", "-q", f"analysis/{path}").returncode, 0)
         for path in (".agents/skills/saigen-record/SKILL.md",
                      "analysis/.agents/skills/another/SKILL.md",
                      "analysis/AGENTS.md", "analysis/saigen-workspace.json"):
             self.assertEqual(self.git("check-ignore", "-q", path, check=False).returncode, 1)
+        previous_shortcut = workspace / WORKFLOW_DISCOVERY_PATHS["codex"]
+        previous_shortcut.unlink()
         setup(workspace, "codex", ".", [])
+        self.assertIn("Find a published workflow", previous_shortcut.read_text())
         self.assertEqual((workspace / ".gitignore").read_bytes(), ignore)
         self.assertFalse((self.root / ".gitignore").exists())
 
@@ -69,7 +78,9 @@ class SkillIgnoreTests(unittest.TestCase):
         setup(self.root, "opencode", ".", [])
         self.assertEqual(self.git("ls-files", skill).stdout.strip(), skill)
         self.assertEqual(ignore.read_text().splitlines(), RULES[1:] + [
+            "/" + WORKFLOW_DISCOVERY_PATHS["claude"],
             "/" + ORGANIZATION_PATHS["claude"], "/" + PIPELINE_PATHS["claude"], "/" + RECONSTRUCTION_PATHS["claude"],
+            "/" + WORKFLOW_DISCOVERY_PATHS["opencode"],
             "/" + ORGANIZATION_PATHS["opencode"], "/" + PIPELINE_PATHS["opencode"], "/" + RECONSTRUCTION_PATHS["opencode"],
         ])
         self.git("check-ignore", "-q", ".opencode/skills/saigen-record/SKILL.md")
