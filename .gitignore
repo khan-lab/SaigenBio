@@ -14,3 +14,6 @@ dist/
 
 # Personal memoranda and draft plans; not shared project documentation.
 /docs/local/
+
+.worktrees/
+AGENTS.md
