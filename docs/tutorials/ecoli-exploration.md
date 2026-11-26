@@ -4,16 +4,21 @@ Explore how a scientific conclusion responds to analysis choices: acquire data, 
 
 ## 1. Prepare a workspace
 
-[Install or update SaigenBio](../installation.md) and verify the init options as described in the [first-run walkthrough](../getting-started.md). Create an empty external workspace, using another name if ecoli-tutorial already exists. This example selects Claude Code; substitute your agent or omit --agent to choose during the interview.
+[Install or update SaigenBio](../installation.md). Choose an empty workspace outside the SaigenBio source checkout. If you need to create the folder, replace the example path with a location you choose.
 
 ```sh
-mkdir -p ~/saigenbio-projects
-cd ~/saigenbio-projects
-mkdir ecoli-tutorial && cd ecoli-tutorial
-saigen init --name "E. coli threshold exploration" --agent claude
+mkdir -p "/path/to/your/project" && cd "/path/to/your/project"
 ```
 
-If directory creation reports that the name already exists, stop and choose an unused name before running init. Complete the remaining interview questions for workflow permissions, viewer port, and startup. Open the printed viewer address and leave its terminal running. If you decline startup, use `saigen serve` later; it reuses the saved port. Use a new directory for each independent attempt.
+From a terminal in the workspace, run the interactive setup to choose the project name, agent, and viewer settings.
+
+```sh
+saigen init
+```
+
+**Optional.** If you already know the project name or agent, pass `--name` or `--agent` when you run `saigen init`. Agent values are `codex`, `claude` (Claude Code), `opencode`, and `antigravity`. For example, you can run `saigen init --name "E. coli threshold exploration" --agent claude`.
+
+Open the printed viewer address and leave its terminal running. If you decline startup, use `saigen serve` later to reuse the saved port. Use a new directory for each independent attempt. See the [first-run walkthrough](../getting-started.md) for help with setup.
 
 Open a fresh session of your chosen agent in that workspace. See [agent integrations](../agent-integrations.md) for instruction locations and permissions. The agent should use the CLI path recorded in the workspace configuration.
 
