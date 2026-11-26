@@ -81,6 +81,8 @@ def main():
     p.add_argument("--expect",required=True);p.add_argument("--output",action="append",default=[])
     p.add_argument("--details",default="",help="Proposed method or fuller explanation")
     p.add_argument("--requires",default="",help="Prerequisite for proceeding; descriptive, not enforced")
+    p.add_argument("--plan-name", help="Name of the agreed ordered plan (requires --step)")
+    p.add_argument("--step", type=int, help="Position in the agreed plan (requires --plan-name)")
     p=command("run",aliases=["acquire"])
     p.add_argument("--plan",help="Reuse a proposed state after user approval")
     p.add_argument("--approved",action="store_true",help="Declare that the user approved the plan or inferred input connections")
@@ -172,7 +174,7 @@ def main():
                 if len(matches)!=1: raise RecordError("Planned input is missing or ambiguous")
                 parents.append(matches[0]["id"])
             result=store.plan(args.title,parents,args.expect,args.output,args.actor or "AI agent",args.id,
-                              details=args.details,requires=args.requires)
+                              details=args.details,requires=args.requires,plan_name=args.plan_name,step=args.step)
         elif args.command in {"run","acquire"}:
             if args.command=="acquire" and (args.parents or args.plan): raise RecordError("Acquisition has no parent or planned target")
             if args.plan and not args.approved:

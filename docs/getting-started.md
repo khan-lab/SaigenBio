@@ -162,6 +162,10 @@ Ask the agent to propose an analysis and wait for your approval. Proposed result
 
 Planned and running nodes have dotted rectangular outlines, with the same size and connection points as solid result cards. The status label distinguishes "Planned" from "Running". Hover to read the expected result; choose **Show detail →** for the proposed method, prerequisites, inputs, and expected files. These descriptions remain available as the original plan once execution starts. Aligned cards connect with straight paths; cards on different rows can use curves.
 
+Use **Canvas options → Show execution order** to display run numbers in recorded start order. Failed attempts keep their numbers, and retries get new ones. Stages from one managed workflow launch share a run number. For an agreed ordered plan, the agent can publish steps with `saigen plan --plan-name "Plan name" --step N` alongside the usual plan arguments. The original step remains in the result details after it starts.
+
+Use **Canvas options → Highlight latest run** to bring the most recently started run and its recorded inputs into view. Choose **Clear highlight** or press Escape to return to your previous view. If the latest run is archived, the action opens its details.
+
 Use status names such as planned, running, completed, imported, and failed when describing states. Dotted and solid describe their outlines; all nodes are rectangular. Use the Report interface to export selected results rather than adding a report-only node.
 
 Permission to publish a plan is separate from approval to execute it. Native agent plan modes that prohibit writes may prevent canvas publication. See [permission guidance](agent-integrations.md#permissions-and-planning).

@@ -80,3 +80,22 @@ class CanvasViewTests(unittest.TestCase):
         set_saved(self.store, 'plan', True)
         self.store.edit([{'op': 'delete_state', 'id': 'plan'}], self.store.flow()['revision'])
         self.assertEqual(canvas_status(self.store)['bookmarks'], [])
+
+    def test_run_order_uses_start_events_and_preserves_the_original_plan(self):
+        self.store.plan('First step', ['counts'], 'Expected', ident='first',
+                        plan_name='Ordered analysis', step=1)
+        self.store.plan('Later step', ['counts'], 'Expected', ident='later',
+                        plan_name='Ordered analysis', step=2)
+        self.assertEqual(self.view.flow()['runOrder'], [])
+        action, _ = self.store.begin('First step', ['counts'], ['tool'], 'Test',
+                                     '', [], [], {}, {}, planned='first')
+        self.store.begin('Retry', ['counts'], ['tool'], 'Test', '', [], [], {}, {}, ident='retry')
+        self.assertEqual(self.view.flow()['runOrder'], [
+            {'number': 1, 'stateIds': ['first']}, {'number': 2, 'stateIds': ['retry']},
+        ])
+        flow = self.store.flow()
+        first = next(state for state in flow['states'] if state['id'] == 'first')
+        self.assertEqual(first['plan']['planStep'], {'name': 'Ordered analysis', 'number': 1})
+        self.assertNotIn('planStep', first)
+        self.assertNotIn('runOrder', flow)
+        self.assertEqual(flow['actions'][0]['id'], action)

@@ -76,6 +76,15 @@ class Store:
     def events(self):
         with self.connect() as db:
             return [{**dict(r), "payload":json.loads(r["payload"]), "undoable":bool(r["inverse"])} for r in db.execute("SELECT revision,at,actor,kind,payload,inverse FROM events ORDER BY revision")]
+    def run_starts(self, revision):
+        """Read the start ledger in transaction order, including equal timestamps."""
+        with self.connect() as db:
+            rows = db.execute(
+                """SELECT kind, payload FROM events
+                   WHERE revision <= ? AND kind IN ('run.started', 'workflow.launch_reserved')
+                   ORDER BY revision""", (revision,))
+            return [(row["kind"], json.loads(row["payload"])) for row in rows]
+
     def update(self, kind, actor, change, expected=None):
         text(actor, "actor", 120, True)
         with self.connect() as db:
@@ -165,7 +174,12 @@ class Store:
         flow = self.update("snapshot.imported",actor,change)
         return entity(flow,"states",ident)
 
-    def plan(self, title, parents, expected, outputs=(), actor="AI agent", ident=None, *, details="", requires=""):
+    def plan(self, title, parents, expected, outputs=(), actor="AI agent", ident=None, *, details="", requires="", plan_name=None, step=None):
+        plan_step = None
+        if plan_name is not None or step is not None:
+            if type(step) is not int or not 1 <= step <= 2**53 - 1:
+                raise RecordError("Supply a positive step number with the plan name")
+            plan_step = {"name": text(plan_name, "plan name", 120, True), "number": step}
         ident = ident or uid("st")
         def change(f):
             if any(n["id"] == ident for n in f["states"]):
@@ -184,6 +198,8 @@ class Store:
                  "status":"planned", "origin":"agent-plan", "writtenBy":actor,
                  "performedBy":None, "createdAt":now(), "x":x, "y":y,
                  "artifactIds":[], "manifest":[], "files":[], "references":[]}
+            if plan_step:
+                n["planStep"] = plan_step
             f["states"].append(n)
             return {"state":n}, None
         return entity(self.update("plan.proposed",actor,change),"states",ident)
@@ -228,7 +244,7 @@ class Store:
             if existing:
                 n["x"], n["y"] = existing["x"], existing["y"]
                 n["plan"] = {k:copy.deepcopy(existing[k]) for k in
-                             ("title","expectedSummary","planDetails","planRequires","note","expectedFiles","planParents","createdAt","writtenBy","origin") if k in existing}
+                             ("title","expectedSummary","planDetails","planRequires","note","expectedFiles","planParents","createdAt","writtenBy","origin","planStep") if k in existing}
                 f["states"][f["states"].index(existing)] = n
             else:
                 f["states"].append(n)
