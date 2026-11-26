@@ -90,6 +90,12 @@ Engine setup and downloads are deliberate choices. Inspection may evaluate pipel
 
 Tests and installations belong outside the source repository. Select the particular Data Carpentry example before the real Nextflow integration test; that example has not yet been agreed. No biological analysis is run by foundation tests.
 
+## Find a published workflow for your data
+
+Ask your agent “Is there a published workflow I can use from here?” or invoke `$saigen-find-workflow` in Codex or `/saigen-find-workflow` in Claude Code or OpenCode. Describe your goal and inputs, or select results on the Canvas and paste their IDs using **Copy node IDs**. If the shortcut is missing, [refresh your agent instructions](agent-integrations.md#refresh-existing-workspace-instructions).
+
+The agent recommends a versioned workflow in chat and explains how it fits your existing inputs, what else it requires, what it produces, and whether SaigenBio can track that configuration. Ask to see the chosen workflow on the Canvas when you're ready to review it. For supported workflows, the agent publishes planned stages and waits for approval of the specific proposal before running it.
+
 ## Export selected Canvas results as a pipeline
 
 Select your final result nodes on the Canvas. Shift-click or use Shift+Space to add nodes to your selection. You can also choose **Select nodes** inside a group and click or tap each result. Click **Copy node IDs**, then paste the IDs with `$saigen-pipeline` in Codex or `/saigen-pipeline` in Claude Code or OpenCode. Say whether you want Nextflow or Snakemake. If the shortcut is missing or still asks you to use the older chooser, [refresh your agent instructions](agent-integrations.md#refresh-existing-workspace-instructions).
