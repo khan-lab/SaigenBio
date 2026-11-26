@@ -37,6 +37,8 @@ saigen plan --project PATH --from INPUT_STATE --id qc_plan \
 
 A later proposal may use an earlier planned state's ID as its --from value. This stores intended dependencies without drawing execution edges. Present the scientific plan in chat and wait for the user's approval. Publishing nodes does not execute or approve the plan. If an agent's plan mode forbids writes, provide the plan in chat and explain that canvas publication must wait until writes are allowed; never bypass that restriction.
 
+When the researcher agrees to an ordered plan, add `--plan-name "Plan name" --step N` to each numbered `saigen plan` command. Use a distinct name for each plan. Leave standalone proposals and unordered parallel steps unnumbered. If a retry follows the same agreed step, publish a separate plan node with the same plan name and step.
+
 After explicit user approval, execute one step at a time with `saigen run --plan qc_plan --approved --from INPUT_STATE … -- COMMAND`. Use actual completed parents and the planned state's exact ID. The approval flag declares approval; it does not obtain approval from the user. Keep remaining nodes planned until their respective commands start. Do not interpret a plan written in chat as automatically synchronized: use the plan command.
 
 A failed planned execution remains a failed result. Retry through a new run rather than overwriting it. If the scientific plan changes, explain which remaining proposals are obsolete; do not execute stale proposals automatically.

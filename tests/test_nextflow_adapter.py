@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from saigen.store import RecordError, Store
+from saigen.views import CanvasView
 from saigen.workflows.adapters.nextflow import NextflowAdapter, source_digest
 from saigen.workflows.adapters.base import EngineInfo
 from saigen.workflows.execution import execute
@@ -69,6 +70,10 @@ class NextflowTests(unittest.TestCase):
         spec = copy.deepcopy(self.spec)
         spec.update(schemaVersion=1, inputBindings=[{'name': 'input', 'stateId': state['id'], 'artifactId': state['artifactIds'][0]}])
         spec['stages'][0].update(key='filter', title='Filtered', dependsOn=[], expectedSummary='Filtered table')
+        spec['stages'].append({
+            'key': 'summary', 'title': 'Summary', 'mapping': {'process': 'SUMMARY'},
+            'dependsOn': ['filter'], 'expectedSummary': 'Summary table', 'expectedFiles': ['summary.tsv'],
+        })
         service = WorkflowService(store)
         p = service.propose(spec, revision=store.flow()['revision'])
         with patch('saigen.workflows.execution.adapter', return_value=self.adapter), patch.object(self.adapter, 'discover', return_value=self.info), patch('saigen.workflows.execution.subprocess.Popen') as proc:
@@ -102,3 +107,8 @@ class NextflowTests(unittest.TestCase):
             retry = execute(service, p['id'], store.flow()['revision'])
         new_ids = set(retry['stageNodes'].values())
         self.assertTrue(all(n['y'] > previous_y for n in store.flow()['states'] if n['id'] in new_ids))
+
+        self.assertEqual(CanvasView(store).flow()['runOrder'], [
+            {'number': 1, 'stateIds': list(result['stageNodes'].values())},
+            {'number': 2, 'stateIds': list(retry['stageNodes'].values())},
+        ])

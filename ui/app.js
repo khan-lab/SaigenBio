@@ -12,11 +12,11 @@ let reports;
 let bookmarks=new Set(),savedOnly=false,fullCanvasCamera=null;
 let groupView=null,groupDialogEdge=null;
 let groupsMode=true,pendingGroupFocus=null;
-let groupScope=null,scopedGraph=null,selectingNodes=false;
+let groupScope=null,scopedGraph=null,selectingNodes=false,latestFocus=null;
 let camera={x:70,y:90,scale:.72},savedCamera=null,drag=null,hoverTimer=null,hideTimer=null,toastTimer=null;
 let ready=false,busy=false,token="",allEvents=[],artifactRequest=0;
 const getState=id=>flow.states.find(n=>n.id===id);
-const showingSaved=()=>!groupScope&&savedOnly&&!reports.active;
+const showingSaved=()=>!groupScope&&savedOnly&&!reports.active&&!latestFocus;
 const isArchived=id=>Object.hasOwn(flow.stateArchives??{},id);
 const activeStates=()=>flow.states.filter(n=>!isArchived(n.id));
 function activeGraph(){
@@ -88,6 +88,7 @@ async function start(){
    const session=await request("/api/session");token=session.token;projectRoot=session.projectRoot||"";
    const [next,preferences]=await Promise.all([request("/api/flow"),request("/api/revision")]);
    bookmarks=new Set(preferences.bookmarks);await accept(next);ready=true;
+   renderSelectButtons();
    renderSavedControls();
    $("#connection").textContent="";$("#connection").hidden=true;
    $("#report-toggle").disabled=false;fit(true);route();
@@ -188,10 +189,20 @@ function bindArtifactButtons(el){
  el.querySelectorAll("[data-artifact]").forEach(b=>b.onclick=()=>{el.hidden=true;openArtifact(b.dataset.artifact);});
 }
 
+let runNumbers=new Map(),showExecutionOrder=false;
+const orderPreference="saigen.showExecutionOrder";
+function numberLabel(n){
+ if(!showExecutionOrder||reports.active)return "";
+ const number=runNumbers.get(n.id);
+ if(number)return "Run #"+number;
+ return n.status==="planned"&&n.planStep?"Step "+n.planStep.number:"";
+}
+const numberedStatus=(n,status)=>esc([numberLabel(n),status].filter(Boolean).join(" · "));
+
 function nodeContent(n){
- if(n.status==="running"||n.status==="planned")return '<span class="node-title">'+esc(n.title)+'</span>'+workflows.card(n)+'<span class="node-bottom">'+(n.status==="running"?"Running":"Planned")+'</span>';
+ if(n.status==="running"||n.status==="planned")return '<span class="node-title">'+esc(n.title)+'</span>'+workflows.card(n)+'<span class="node-bottom">'+numberedStatus(n,n.status==="running"?"Running":"Planned")+'</span>';
  const plot=firstPlot(n),bad=["failed","cancelled","unknown"].includes(n.status);
- return '<span class="node-title">'+esc(n.title)+'</span>'+workflows.card(n)+(plot?'<span class="mini-plot">'+imagePreview(n)+'</span>':firstTable(n)?tableMarkup(n,true):'<span class="node-excerpt">'+esc(decisionSummary(n))+'</span>')+'<span class="node-bottom">'+(n.reconstruction?"Reconstruction · "+esc(n.reconstruction.review):bad?esc(n.status):n.status==="imported"?"Imported · "+n.files.length+" files":n.files.length+" saved outputs")+'</span>';
+ return '<span class="node-title">'+esc(n.title)+'</span>'+workflows.card(n)+(plot?'<span class="mini-plot">'+imagePreview(n)+'</span>':firstTable(n)?tableMarkup(n,true):'<span class="node-excerpt">'+esc(decisionSummary(n))+'</span>')+'<span class="node-bottom">'+numberedStatus(n,n.reconstruction?"Reconstruction · "+n.reconstruction.review:bad?n.status:n.status==="imported"?"Imported · "+n.files.length+" files":n.files.length+" saved outputs")+'</span>';
 }
 
 function reportBadge(id){const i=reports.position(id);return reports.active&&i>=0?'<span class="report-badge" aria-label="Report position '+(i+1)+'">'+(i+1)+'</span>':"";}
@@ -231,7 +242,9 @@ function renderSavedControls(){
  $("#saved-empty").hidden=!active||count>0;
 }
 function setSavedView(saved){
- if(!ready||busy||saved===savedOnly)return;
+ if(!ready||busy||saved===(savedOnly&&!latestFocus))return;
+ clearLatestRun(false);
+ if(saved===savedOnly){render();applyCamera(true);return;}
  cancelDrag();hidePopups();selection.clear();connecting=null;
  $("#viewport").classList.remove("connecting");
  selectingNodes=false;
@@ -275,7 +288,7 @@ function renderNodes(){
  renderWorkflowLabels();
  const states=visibleStates();
  $("#nodes").innerHTML=states.map(n=>'<div class="state-slot" style="left:'+n.x+'px;top:'+n.y+'px"><button class="'+stateClass(n)+(selection.has(n.id)?" selected":"")+'" data-state="'+esc(n.id)+'" '+
-   (groupScope?"":'aria-pressed="'+selection.has(n.id)+'" aria-describedby="selection-help" ')+'aria-label="'+esc(n.title)+'">'+
+   (groupScope?"":'aria-pressed="'+selection.has(n.id)+'" aria-describedby="selection-help" ')+'aria-label="'+esc([n.title,numberLabel(n)].filter(Boolean).join(', '))+'">'+
    reportBadge(n.id)+nodeContent(n)+(groupScope?"":'<span class="port" title="Connect to another state" aria-hidden="true"></span>')+
    '</button>'+(reports.active||connecting?"":bookmarkButton(n))+'</div>').join("")+
    (groupView?.summaries.map(group=>'<div class="analysis-group-slot">'+SaigenAnalysisGroups.card(group,esc,imagePreview)+
@@ -345,12 +358,17 @@ function renderEdges(){
  html+='</g>';});}
  if(groupView)html+=groupView.connections.map((edge,index)=>SaigenAnalysisGroups.edge(edge,index,esc)).join("");
  $("#edges").innerHTML=html;
+ if(latestFocus&&!reports.active){
+   $("#edges").querySelectorAll("[data-action]").forEach(edge=>{
+     edge.classList.toggle("latest-input-edge",latestFocus.actions.has(edge.dataset.action));
+   });
+ }
 }
 function projectGroups(){
  const graph=activeGraph();
  scopedGraph=groupScope?SaigenAnalysisGroups.internalGraph(graph,groupScope.id):null;
  groupView=!groupScope&&flow.analysisGroups?.length&&!showingSaved()?SaigenAnalysisGroups.project(graph,{
-   full:!groupsMode||reports.active||!!connecting,scale:camera.scale,figureFor:firstPlot
+   full:!groupsMode||reports.active||!!connecting||!!latestFocus,scale:camera.scale,figureFor:firstPlot
  }):null;
 }
 function focusProjectedState(stateId){
@@ -362,12 +380,31 @@ function focusProjectedState(stateId){
  ($("#nodes").querySelector(selector)||$("#fit")).focus({preventScroll:true});
 }
 function renderGraph(){
+ if(latestFocus){
+   const actions=flow.actions.filter(action=>latestFocus.targets.has(action.to)&&action.status!=="planned");
+   latestFocus.inputs=new Set(actions.flatMap(action=>action.from));
+   latestFocus.actions=new Set(actions.map(action=>action.id));
+   $("#latest-run-status").textContent="Run #"+latestFocus.number+" highlighted"+
+     ([...latestFocus.inputs].some(isArchived)?" · Archived inputs are listed in result details":"");
+ }
+ runNumbers=new Map((flow.runOrder??[]).flatMap(run=>run.stateIds.map(id=>[id,run.number])));
  const focused=document.activeElement;
  const {state:stateId,bookmark}=focused?.dataset??{};
  const groupId=focused?.closest(".analysis-group-slot")?.querySelector("[data-analysis-group]").dataset.analysisGroup;
  groupPreview.close();
  projectGroups();
  renderNodes();renderEdges();
+ const highlight=!!latestFocus&&!reports.active;
+ $("#viewport").classList.toggle("latest-run-active",highlight);
+ if(highlight){
+   $("#nodes").querySelectorAll("[data-state]").forEach(card=>{
+     const id=card.dataset.state;
+     if(latestFocus.targets.has(id)){
+       card.classList.add("latest-run-target");
+       card.setAttribute("aria-label","Latest run, "+card.getAttribute("aria-label"));
+     }else if(latestFocus.inputs.has(id))card.classList.add("latest-run-input");
+   });
+ }
  if($("#groups-dialog").open)renderGroupDialog();
  if(bookmark&&$("#detail-view").hidden)($("#nodes").querySelector('[data-bookmark="'+CSS.escape(bookmark)+'"]')||$("#canvas-filter")).focus({preventScroll:true});
  else focusProjectedState(stateId??groupView?.groups.find(group=>group.id===groupId)?.anchor.id);
@@ -385,9 +422,10 @@ function render(){
  $("#canvas-view-switch").hidden=!flow.analysisGroups?.length||reports.active;
  $("#canvas-filter-control").hidden=reports.active;
  $("#canvas-menu").hidden=reports.active;
+ $("#latest-run-controls").hidden=!latestFocus||reports.active;
  if(reports.active)$("#canvas-menu").open=false;
- $("#view-groups").setAttribute("aria-pressed",String(groupsMode&&!showingSaved()&&!connecting));
- $("#view-individual").setAttribute("aria-pressed",String(!showingSaved()&&(!groupsMode||!!connecting)));
+ $("#view-groups").setAttribute("aria-pressed",String(groupsMode&&!showingSaved()&&!connecting&&!latestFocus));
+ $("#view-individual").setAttribute("aria-pressed",String(!showingSaved()&&(!groupsMode||!!connecting||!!latestFocus)));
  reports.render();renderSavedControls();renderGraph();renderPipelineRequests();
  $("#undo").disabled=!history.length;
  $("#auto-arrange").disabled=showingSaved()||(groupView?.placed.length??activeStates().length)<2;
@@ -543,7 +581,8 @@ function terminalMarkup(activity){
 function planMarkup(p){
  const expected=p.expectedSummary||p.note||"";
  const parents=p.planParents||p.parents||[];
- return (p.title?'<h3>'+esc(p.title)+'</h3>':"")+
+ return (p.planStep?'<p>Step '+esc(p.planStep.number)+' · '+esc(p.planStep.name)+'</p>':"")+
+   (p.title?'<h3>'+esc(p.title)+'</h3>':"")+
    (expected?'<h3>Expected result</h3><p>'+esc(expected)+'</p>':"")+
    (p.planDetails||p.method?.summary?'<h3>Proposed method</h3><p>'+esc(p.planDetails||p.method.summary)+'</p>':"")+
    (p.planRequires?'<h3>Prerequisite</h3><p>'+esc(p.planRequires)+'</p><small>Recorded condition; SaigenBio does not enforce it.</small>':"")+
@@ -721,6 +760,49 @@ function closeCanvasMenu(restoreFocus=false){
  $("#canvas-menu").open=false;
  if(restoreFocus)$("#canvas-menu-toggle").focus({preventScroll:true});
 }
+function highlightLatestRun(){
+ const run=flow.runOrder?.at(-1);
+ if(!run||!ready||busy||drag||connecting||reports.active||selectingNodes)return;
+ closeCanvasMenu();
+ hidePopups();
+ const targets=new Set(run.stateIds.filter(id=>!isArchived(id)));
+ if(!targets.size){
+   clearLatestRun();
+   openState(run.stateIds[0]);
+   toast("Run #"+run.number+" is archived.");
+   return;
+ }
+ latestFocus={targets,number:run.number,returnCamera:latestFocus?.returnCamera??{...camera}};
+ const target=getState(targets.values().next().value);
+ render();
+ const branch=bounds(activeStates().filter(n=>targets.has(n.id)||latestFocus.inputs.has(n.id)));
+ const viewport=$("#viewport");
+ const scale=Math.min(1,(viewport.clientWidth-80)/branch.w,(viewport.clientHeight-180)/branch.h);
+ if(scale>=.8)centerCanvas(branch,scale);
+ else centerCanvas(bounds([target]),Math.max(camera.scale,.85));
+ applyCamera(true);
+ focusProjectedState(target.id);
+}
+function clearLatestRun(redraw=true){
+ if(!latestFocus)return;
+ camera=latestFocus.returnCamera;
+ latestFocus=null;
+ if(redraw){
+   render();
+   applyCamera(true);
+   $("#canvas-menu-toggle").focus({preventScroll:true});
+ }
+}
+$("#highlight-latest-run").onclick=highlightLatestRun;
+$("#clear-latest-run").onclick=()=>clearLatestRun();
+const orderToggle=$("#show-execution-order");
+try{showExecutionOrder=localStorage.getItem(orderPreference)==="true";}catch{}
+orderToggle.checked=showExecutionOrder;
+orderToggle.onchange=()=>{
+ showExecutionOrder=orderToggle.checked;
+ try{localStorage.setItem(orderPreference,String(showExecutionOrder));}catch{}
+ renderGraph();
+};
 const macUndo=/^Mac/i.test(navigator.userAgentData?.platform||navigator.platform);
 $("#undo").setAttribute("aria-keyshortcuts",macUndo?"Meta+Z":"Control+Z");
 $("#undo-shortcut").textContent=macUndo?"⌘Z":"Ctrl+Z";
@@ -817,6 +899,7 @@ function setCanvasView(groups){
  if(!ready||busy||reports.active)return;
  cancelDrag();
  hidePopups();
+ clearLatestRun(false);
  groupsMode=groups;savedOnly=false;fullCanvasCamera=null;connecting=null;selection.clear();selectingNodes=false;
  $("#viewport").classList.remove("connecting");
  render();
@@ -827,6 +910,7 @@ function showGroupMembers(groupId){
  if(!$("#detail-view").hidden){pendingGroupFocus=groupId;location.hash="";return;}
  if(!flow.analysisGroups?.some(group=>group.id===groupId)){applyCamera();return;}
  cancelDrag();hidePopups();
+ clearLatestRun(false);
  if(!groupScope)groupScope={id:groupId,originGroup:groupId,returnCamera:{...camera},returnSelection:selection};
  groupScope.id=groupId;
  groupScope.activeResult=null;
@@ -855,7 +939,8 @@ $("#back-to-canvas").onclick=()=>{
 };
 function renderSelectButtons(){
  const individual=$("#select-canvas-nodes"), group=$("#select-group-nodes");
- individual.hidden=reports.active||(!showingSaved()&&groupsMode&&!!flow.analysisGroups?.length);
+ $("#highlight-latest-run").disabled=!ready||selectingNodes||!flow.runOrder?.length;
+ individual.hidden=reports.active||(!showingSaved()&&groupsMode&&!latestFocus&&!!flow.analysisGroups?.length);
  for(const button of [individual,group]){
    button.textContent=selectingNodes?"Done":"Select nodes";
    button.setAttribute("aria-pressed",String(selectingNodes));
@@ -1113,6 +1198,7 @@ document.addEventListener("keydown",e=>{
  if(e.key==="Escape"&&$("#selection-menu").open){e.preventDefault();$("#selection-menu").open=false;$("#selection-menu summary").focus();return;}
  if(e.key==="Escape"&&selectingNodes){e.preventDefault();setNodeSelection(false);return;}
  if(e.key==="Escape"&&drag){cancelDrag();selection.clear();syncSelection();return;}
+ if(e.key==="Escape"&&latestFocus&&!reports.active&&!connecting&&$("#detail-view").hidden){e.preventDefault();clearLatestRun();return;}
  if(e.key==="Escape"){if(reports.active)reports.setMode(false);hidePopups();const wasConnecting=!!connecting;connecting=null;$("#viewport").classList.remove("connecting");selection.clear();if(wasConnecting)renderGraph();else syncSelection();}
  if((e.metaKey||e.ctrlKey)&&!e.altKey&&!e.shiftKey&&!e.isComposing&&!e.repeat&&e.key.toLowerCase()==="z"&&
     !e.target.isContentEditable&&!e.target.closest?.("input,textarea,select")&&canUndoCanvas()){
@@ -1123,7 +1209,7 @@ document.addEventListener("keydown",e=>{
 window.addEventListener("hashchange",route);
 window.addEventListener("resize",()=>{hidePopups();applyCamera();});
 reports=SaigenReports.create({query:$,getFlow:()=>({...flow,states:activeStates()}),getToken:()=>token,request,render,hidePopups,
- clearSelection:()=>{cancelDrag();selection.clear();selectingNodes=false;connecting=null;},toast});
+ clearSelection:()=>{cancelDrag();if(latestFocus){clearLatestRun(false);applyCamera();}selection.clear();selectingNodes=false;connecting=null;},toast});
 render();start();setInterval(poll,1000);
 $("#close-artifact").onclick=()=>{artifactRequest++;$("#artifact-dialog").close();};
 document.addEventListener("error",handleImageError,true);
