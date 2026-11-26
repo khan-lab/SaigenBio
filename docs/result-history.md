@@ -67,4 +67,8 @@ A failed attempt remains failed. Record a retry separately. To explain a replace
 
 This records a relationship and reason; it does not change execution status or cancel work. Replacement cycles are rejected. **Archive** on the canvas opens removed standalone plans, cancelled workflow proposals and rejected reconstructions. Their details remain accessible, including through replacement links. Undo can restore an eligible removed plan. IDs referenced by explanation history cannot be reused for unrelated new states.
 
+Use **Select nodes** in Individual nodes or an opened group. Click or tap cards to toggle selection, then choose **Archive** from the selection menu. A single result also offers **Archive from canvas** in its detail menu. The change takes effect immediately, and **⌘Z / Ctrl+Z** restores a batch in one step.
+
+In **Filter → Archived**, open a result to inspect its evidence or choose **Restore to canvas**. Archived results still appear as linked inputs in downstream details. They return to their recorded group and position on restoration, and bookmarked results return to **Saved**.
+
 Next steps are linked plans with their own details, rather than a permanent Future section. Reasons and chronology are never inferred from canvas position, commands or later outcomes. See [existing-analysis reconstruction](getting-started.md#bring-in-an-existing-analysis) for importing historical evidence.

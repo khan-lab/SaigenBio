@@ -235,3 +235,13 @@ summary{cursor:pointer;padding:9px 0}.history-event{margin:8px 0;padding:0 12px;
 .group-card-figure{display:flex;flex:0 0 40%;min-width:0;height:100%;flex-direction:column;justify-content:center;gap:4px}
 .group-card-thumbnail{display:block;width:100%;flex:1;min-height:0;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:4px}
 .group-card-source{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#4c6354;font-size:calc(12px * var(--group-font-scale,1))}
+
+.archive-menu{position:relative}
+.archive-menu summary{list-style:none;cursor:pointer;padding:4px 8px;border-radius:4px;font-size:16px;line-height:1}
+.archive-menu summary::-webkit-details-marker{display:none}
+.archive-menu summary:hover,.archive-menu[open]>summary{background:var(--soft)}
+.archive-menu:not([open]) .canvas-menu-panel,.archive-hint:empty{display:none}
+.archive-menu .canvas-menu-panel{z-index:1;width:max-content;max-width:min(240px,calc(100vw - 30px))}
+.archive-menu .canvas-menu-panel button{padding:6px 8px;text-align:left}
+.archive-menu .canvas-menu-panel button:disabled{opacity:.55}
+.archive-hint{padding:4px 8px;color:var(--muted);overflow-wrap:anywhere}

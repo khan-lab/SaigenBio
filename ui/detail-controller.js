@@ -8,6 +8,7 @@ globalThis.SaigenDetailController = Object.freeze({
     getState,
     getEvents,
     getHash,
+    changeArchive,
     goBack,
     backLabel = () => "Back to flow",
     request,
@@ -79,6 +80,8 @@ globalThis.SaigenDetailController = Object.freeze({
         storyCache.get(n.id)?.revision === flow.revision
           ? storyCache.get(n.id)
           : null;
+      const manuallyArchived = Object.hasOwn(flow.stateArchives ?? {}, n.id);
+      const canArchive = flow.archivableStateIds?.includes(n.id);
       loadStory(n.id);
       const incoming =
           story?.actions || flow.actions.filter((a) => a.to === n.id),
@@ -133,7 +136,7 @@ globalThis.SaigenDetailController = Object.freeze({
         : '';
       const details = SaigenDetails.create({
         getFlow: () =>
-          story?.archive ? { ...flow, actions: story.actions } : flow,
+          story?.archive && !manuallyArchived ? { ...flow, actions: story.actions } : flow,
         escape: esc,
         fileRows,
         displayCommand,
@@ -143,16 +146,17 @@ globalThis.SaigenDetailController = Object.freeze({
         workflows,
       }).render(n);
       $("#detail-content").innerHTML =
-        '<nav class="detail-nav"><button class="back" id="back-flow">← ' + esc(backLabel()) + '</button><div class="detail-tools"><button class="quiet" id="add-explanation">Add explanation</button>' +
-        (story?.archive
-          ? ""
-          : '<button class="quiet" id="edit-detail">Edit state</button>') +
+        '<nav class="detail-nav"><button class="back" id="back-flow">← ' + esc(backLabel()) + '</button><div class="detail-tools">' +
+        (story?.archive || manuallyArchived ? "" :
+          '<button class="quiet" id="add-explanation">Add explanation</button><button class="quiet" id="edit-detail">Edit state</button>') +
+        (manuallyArchived ? '<button class="outline" id="restore-detail">Restore to canvas</button>' :
+          canArchive ? '<details class="archive-menu"><summary aria-label="Result actions">⋯</summary><div class="canvas-menu-panel"><button id="archive-detail">Archive from canvas</button></div></details>' : "") +
         '</div></nav>' + breadcrumbs + '<div class="detail-kicker">' +
-        esc(story?.archive?.label || n.status) +
+        esc(manuallyArchived ? n.status + " · Archived" : story?.archive?.label || n.status) +
         '</div><div class="detail-heading"><h1 class="detail-title">' +
         esc(n.title) +
         '</h1>' +
-        (getState(n.id) ? (bookmarkButton?.(n) ?? "") : "") +
+        (getState(n.id) && !manuallyArchived ? (bookmarkButton?.(n) ?? "") : "") +
         "</div>" +
         SaigenStory.create({ escape: esc, shortDate }).render(
           story,
@@ -182,7 +186,7 @@ globalThis.SaigenDetailController = Object.freeze({
       $("#detail-content").querySelectorAll("[data-focus-group]").forEach(button => {
         button.onclick = () => showGroupMembers(button.dataset.focusGroup);
       });
-      $("#add-explanation").onclick = () => editor.open(n, story);
+      if ($("#add-explanation")) $("#add-explanation").onclick = () => editor.open(n, story);
       $("#correct-explanation")?.addEventListener("click", () =>
         editor.open(n, story, true),
       );
@@ -290,6 +294,18 @@ globalThis.SaigenDetailController = Object.freeze({
         if (restoreBookmarkFocus) bookmark.focus({preventScroll: true});
       }
       $("#edit-detail")?.addEventListener("click", () => openStateEditor(n));
+      $("#archive-detail")?.addEventListener("click", async () => {
+        try {
+          await changeArchive([n.id], true);
+          goBack();
+        } catch (error) { toast(error.message); }
+      });
+      $("#restore-detail")?.addEventListener("click", async () => {
+        try {
+          await changeArchive([n.id], false);
+          $("#back-flow").focus();
+        } catch (error) { toast(error.message); }
+      });
       $("#detail-content")
         .querySelectorAll("[data-open]")
         .forEach((b) => (b.onclick = () => openState(b.dataset.open)));
@@ -309,7 +325,7 @@ globalThis.SaigenDetailController = Object.freeze({
                   '">' +
                   esc(n.title) +
                   "</button> · " +
-                  esc(n.label) +
+                  esc(n.restorable ? n.status + " · Archived" : n.label) +
                   "</p>",
               )
               .join("")
