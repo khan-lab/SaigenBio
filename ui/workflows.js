@@ -9,13 +9,14 @@ globalThis.SaigenWorkflows=Object.freeze({create({getFlow,escape:esc,displayPath
   return {flow,proposal,stage,run};
  }
  const pipelineName=p=>p.spec.pipeline.name||p.spec.pipeline.source.replace(/[\\/]+$/,"").split(/[\\/]/).pop()||"Workflow";
- const engineName=p=>(p.spec.engine.name==="nextflow"?"Nextflow":p.spec.engine.name)+" "+p.spec.engine.version;
+ const engineLabel=name=>({nextflow:"Nextflow",snakemake:"Snakemake"})[name]||name;
+ const engineName=p=>engineLabel(p.spec.engine.name)+" "+p.spec.engine.version;
  function execution(node){
   const c=context(node);if(!c)return null;
   const method=c.run?.stageMethods?.[node.workflowStage]||c.stage?.method||{};
   const engine=c.run?.engine||c.proposal.spec.engine;
   return {tool:method.tool||"Tool unknown",version:method.version,summary:method.summary||c.stage?.expectedSummary||"",
-   engine:engine.name==="nextflow"?"Nextflow":engine.name,
+   engine:engineLabel(engine.name),
    engineVerified:c.run?.engine?.source==="version-verified-before-launch",
    toolSource:method.source||"proposal-declared",planned:!c.run};
  }

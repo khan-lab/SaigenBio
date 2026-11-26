@@ -1,7 +1,6 @@
 """Local Nextflow adapter. Static inspection never evaluates workflow code."""
 import csv
 from dataclasses import asdict
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -10,30 +9,38 @@ import shutil
 import subprocess
 from ...records import RecordError
 from .base import EngineInfo, LaunchSpec, EvidenceBatch
+from . import source as inventory
 
 
 def source_files(source):
     root = Path(source).expanduser().resolve()
     if not root.is_dir() or not (root / 'main.nf').is_file():
         raise RecordError('Select a local pipeline directory containing main.nf')
-    files = []
-    for path in sorted(root.rglob('*')):
-        if '.git' in path.relative_to(root).parts:
-            continue
-        if path.is_symlink():
-            raise RecordError('Pipeline source must contain regular files, not symlinks')
-        if path.is_file():
-            files.append(path)
-    return root, files
+    return root, inventory.source_files(root)
 
 
 def source_digest(source):
-    root, files = source_files(source)
-    entries = [(str(p.relative_to(root)), hashlib.sha256(p.read_bytes()).hexdigest()) for p in files]
-    return hashlib.sha256(json.dumps(entries, separators=(',', ':')).encode()).hexdigest()
+    root, _ = source_files(source)
+    return inventory.source_digest(root)
 
 
 class NextflowAdapter:
+    display_name = 'Nextflow'
+    mapping_key = 'process'
+    evidence_source = 'Nextflow trace'
+    work_directory = 'work'
+    task_script = '.command.sh'
+
+    def run_identity(self, folder):
+        history = folder / '.nextflow/history'
+        if history.is_file():
+            columns = history.read_text().strip().splitlines()[-1:]
+            if columns:
+                fields = columns[0].split('\t')
+                if len(fields) >= 6:
+                    return fields[5]
+        return None
+
     def __init__(self):
         self.executable = shutil.which(os.environ.get('SAIGEN_NEXTFLOW', 'nextflow'))
 
@@ -89,7 +96,7 @@ class NextflowAdapter:
         if len(set(processes)) != len(processes):
             raise RecordError('Each process must map to exactly one stage')
         return LaunchSpec((self.executable, 'run', 'pipeline/main.nf', '-ansi-log', 'false',
-            '-work-dir', 'work', '-params-file', 'params.json', '-with-trace', 'trace.tsv'), '', ('trace.tsv',))
+            '-work-dir', 'work', '-params-file', 'params.json', '-with-trace', 'trace.tsv'), '', ('trace.tsv', '.nextflow.log', '.nextflow/history'))
 
     def stage(self, proposal, folder, parameters, launch):
         """Materialize this adapter's launch files without executing scientific code."""
